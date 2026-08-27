@@ -1,0 +1,29 @@
+#tomcat server http/https port
+server-port: 8080
+
+#tomcat server host
+server-host: localhost
+
+#tomcat server min heap memory
+min-memory : 1024
+
+#tomcat server max heap memory
+max-memory : 2048
+
+#mariadb host
+db-host: localhost
+
+#mariadb port
+db-port: 3306
+
+#max ping check timeout (seconds)
+max-ping-check-timeout: 10
+
+#max ping check retry count
+max-ping-check-retry-count: 2
+
+#max concurrent ping
+max-concurrent-ping: 500
+
+#process request timeout (seconds)
+process-request-timeout: 1200
