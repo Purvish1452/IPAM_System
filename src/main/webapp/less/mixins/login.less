@@ -1,0 +1,145 @@
+body.login {
+  margin: 0;
+  padding: 0;
+  background:#2f8ead url("../images/login-bg.png") center fixed no-repeat;
+  /*background-position: fixed;*/
+  background-size: 100% auto;
+  & div {
+    box-sizing: border-box;
+  }
+  & .login-main-panel {
+    .width100;
+    & .login-box-panel {
+      width: 500px;
+      position:absolute;
+      background: rgba(47,142,173,0.6);
+      color:#fff;
+      top:0;
+      right:50px;
+      padding:30px 50px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border: solid 1px #fff;
+      box-shadow: 0px 0px 5px 0px #000;
+      /*-ms-transform: translateX(-50%) translateY(-50%);
+      -webkit-transform: translate(-50%,-50%);
+      transform: translate(-50%,-50%);
+      box-shadow: 0px 0px 10px -3px #000;
+      border-radius: 5px;*/
+      & .login-title-main {
+        .width100;
+        text-align: center;
+        & h1 {
+          font-size: 26px;
+          color: @brand-color1;
+          font-weight: 600;
+          text-transform: uppercase;
+          margin: 0 0 10px 0;
+        }
+        & p {
+          font-size: @fontSize15;
+          color: @brand-color1;
+        }
+      }
+      & .login-footer-copy {
+        text-align: center;
+        .width100;
+        margin-top: 30px;
+        & p {
+          font-size: @fontSize12;
+          color: @brand-color1;
+          opacity: 0.7;
+        }
+      }
+      & .login-middle-panel {
+        .width100;
+        background: @brand-color1;
+        padding: 40px;
+        border-radius: 5px;
+        box-shadow: 0px 0px 6px 0px #0000002b;
+        margin-top: 30px;
+        & .form-group {
+          & .forgot-password {
+            color: @brand-color9;
+            float: right;
+            font-size: @fontSize12;
+            margin-top: -10px;
+            cursor: pointer;
+            &:hover {
+              color: @brand-color10;
+            }
+          }
+          &.reminder-me {
+            margin-top: 18px;
+          }
+          & .fa {
+            color: #abb0b7;
+            font-size: @fontSize12;
+            position: absolute;
+            right: 26px;
+            top: 26px;
+            cursor: pointer;
+            &:hover {
+              color: @brand-color9;
+            }
+          }
+        }
+      }
+      & .error-msg {
+        .width100;
+        line-height: 20px;
+        padding: 0 5px;
+        background: #ff000021;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      & .success-msg {
+        .width100;
+        line-height: 20px;
+        padding: 0 5px;
+        background: #0c924221;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      & .login-header {
+        font-size: @fontSize18;
+        color: @brand-color20;
+        width: 57%;
+        float: left;
+        /*border-bottom: dotted 1px @brand-color5;*/
+        padding-bottom: 10px;
+        margin-bottom: 21px;
+        position: relative;
+        text-transform: uppercase;
+      }
+      & .k-primary {
+        padding: 5px 40px;
+        &:hover {
+          background: @brand-color1;
+          color: @brand-color5;
+          border-color: @brand-color5;
+          box-shadow: none;
+        }
+        &:focus {
+          box-shadow: none;
+        }
+      }
+      & .logo-brand-login {
+        position: absolute;
+        top: 140px;
+        right: 90px;
+        height: 35px;
+        width: 130px;
+        & img {
+          max-width: 100%;
+          max-height: 50px;
+          float: right;
+        }
+      }
+    }
+  }
+  & fieldset.errorMessageShow {
+    .width100;
+  }
+}
