@@ -1,0 +1,265 @@
+// Button variants
+//
+// Easily pump out default styles, as well as :hover, :focus, :active,
+// and disabled options for all buttons
+
+.button-variant(@color; @background; @border) {
+  color: @color;
+  background-color: @background;
+  border-color: @border;
+
+  &:focus,
+  &.focus {
+    color: @color;
+    background-color: darken(@background, 10%);
+        border-color: darken(@border, 25%);
+  }
+  &:hover {
+    color: @color;
+    background-color: darken(@background, 10%);
+        border-color: darken(@border, 12%);
+  }
+  &:active,
+  &.active,
+  .open > .dropdown-toggle& {
+    color: @color;
+    background-color: darken(@background, 10%);
+        border-color: darken(@border, 12%);
+
+    &:hover,
+    &:focus,
+    &.focus {
+      color: @color;
+      background-color: darken(@background, 17%);
+          border-color: darken(@border, 25%);
+    }
+  }
+  &:active,
+  &.active,
+  .open > .dropdown-toggle& {
+    background-image: none;
+  }
+  &.disabled,
+  &[disabled],
+  fieldset[disabled] & {
+    &:hover,
+    &:focus,
+    &.focus {
+      background-color: @background;
+          border-color: @border;
+    }
+  }
+
+  .badge {
+    color: @background;
+    background-color: @color;
+  }
+}
+
+// Button sizes
+.button-size(@padding-vertical; @padding-horizontal; @font-size; @line-height; @border-radius) {
+  padding: @padding-vertical @padding-horizontal;
+  font-size: @font-size;
+  line-height: @line-height;
+  border-radius: @border-radius;
+}
+body {
+  & div {
+    & .k-grid-add {
+      border:@buttonPrimeryBorder;
+      border-radius: @buttonPrimeryBorderRedius;
+      font-size:@buttonPrimeryFontSize;
+      font-weight:@buttonPrimeryFontWeight;
+      color:@buttonPrimeryColor;
+      line-height:23px;
+      padding: @buttonPrimeryPadding;
+      background: @buttonPrimeryBgColor;
+      cursor: pointer;
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      & span.fa {
+        font-family: @font-family-base;
+        &:before {
+          font:@font-icon-base;
+        }
+      }
+      &:hover {
+        background: @buttonDefualtBgColorHover;
+        border: @buttonDefualtBorderHover;
+        color: @buttonDefualtBgColorWhite;
+      }
+      &:focus {
+        border: solid 1px transparent;
+      }
+    }
+    & .k-grid-DeleteMultiple {
+      border:@buttonPrimeryBorder;
+      border-radius: @buttonPrimeryBorderRedius;
+      font-size:@buttonPrimeryFontSize;
+      font-weight:@buttonPrimeryFontWeight;
+      color:@buttonPrimeryColor;
+      line-height:@buttonPrimeryFontLineHeight;
+      padding: @buttonPrimeryPadding;
+      background: @buttonPrimeryBgColor;
+      cursor: pointer;
+      position: absolute;
+      top: 25px;
+      right: 155px;
+      &:hover {
+        background: @buttonDefualtBgColorHover;
+        border: @buttonDefualtBorderHover;
+        color: @buttonDefualtBgColorWhite;
+      }
+      &:focus {
+        border: solid 1px transparent;
+      }
+    }
+  }
+  & .defualt-btn {
+    border:@buttonDefualtBorder;
+    border-radius: @buttonDefualtBorderRedius;
+    font-size:@buttonDefualtFontSize;
+    font-weight:@buttonDefualtFontWeight;
+    color:@buttonDefualtColor;
+    line-height:@buttonDefualtFontLineHeight;
+    padding: @buttonDefualtPadding;
+    background: @buttonDefualtBgColor;
+    cursor: pointer;
+    &:hover {
+      background: @buttonDefualtBgColorHover;
+      border: @buttonDefualtBorderHover;
+      color: @buttonDefualtBgColorWhite;
+    }
+    &:focus {
+      border: solid 1px transparent;
+    }
+  }
+  & .primery-btn {
+    border:@buttonPrimeryBorder;
+    border-radius: @buttonPrimeryBorderRedius;
+    font-size:@buttonPrimeryFontSize;
+    font-weight:@buttonPrimeryFontWeight;
+    color:@buttonPrimeryColor;
+    line-height:@buttonPrimeryFontLineHeight;
+    padding: @buttonPrimeryPadding;
+    background: @buttonPrimeryBgColor;
+    cursor: pointer;
+    height: @inputCommonHeight;
+    &:hover {
+      background: @buttonDefualtBgColorHover;
+      border: @buttonDefualtBorderHover;
+      color: @buttonDefualtBgColorWhite;
+    }
+    &:focus {
+      border: solid 1px transparent;
+    }
+  }
+}
+body {
+  & form {
+    & .defualt-btn {
+      border:@buttonDefualtBorder;
+      border-radius: @buttonDefualtBorderRedius;
+      font-size:@buttonDefualtFontSize;
+      font-weight:@buttonDefualtFontWeight;
+      color:@buttonDefualtColor;
+      line-height:@buttonDefualtFontLineHeight;
+      padding: @buttonDefualtPadding;
+      background: @buttonDefualtBgColor;
+      cursor: pointer;
+      height: @inputCommonHeight;
+      line-height: @inputCommonHeight;
+      display: inline-block;
+      &:hover {
+        background: @buttonDefualtBgColorHover;
+        border: @buttonDefualtBorderHover;
+        color: @buttonDefualtBgColorWhite;
+      }
+      &:focus {
+        border: solid 1px transparent;
+      }
+    }
+    & .primery-btn {
+      border:@buttonPrimeryBorder;
+      border-radius: @buttonPrimeryBorderRedius;
+      font-size:@buttonPrimeryFontSize;
+      font-weight:@buttonPrimeryFontWeight;
+      color:@buttonPrimeryColor;
+      line-height:@buttonPrimeryFontLineHeight;
+      padding: @buttonPrimeryPadding;
+      background: @buttonPrimeryBgColor;
+      cursor: pointer;
+      height: @inputCommonHeight;
+      line-height: @inputCommonLineHeight;
+      display: inline-block;
+      &:hover {
+        background: @buttonDefualtBgColorHover;
+        border: @buttonDefualtBorderHover;
+        color: @buttonDefualtBgColorWhite;
+      }
+      &:focus {
+        border: solid 1px transparent;
+      }
+    }
+  }
+  & .k-button-icontext {
+    border:@buttonDefualtBorder;
+    border-radius: @buttonDefualtBorderRedius;
+    font-size:@buttonDefualtFontSize;
+    font-weight:@buttonDefualtFontWeight;
+    color:@buttonDefualtColor;
+    line-height:@buttonDefualtFontLineHeight;
+    padding: @buttonPrimeryPadding;
+    background: @buttonDefualtBgColor;
+    cursor: pointer;
+    height: @inputCommonHeight;
+    line-height: @inputCommonLineHeight;
+    display: inline-block;
+    margin-left: 6px;
+    & .k-icon {
+      margin-right: 5px;
+      display: inline-block;
+      display: none;
+    }
+    &:hover {
+      background: @buttonDefualtBgColorHover;
+      border: @buttonDefualtBorderHover;
+      color: @buttonDefualtBgColorWhite;
+    }
+    &:focus {
+      border: solid 1px transparent;
+    }
+  }
+  & .k-primary {
+    border:@buttonPrimeryBorder;
+    border-radius: @buttonPrimeryBorderRedius;
+    font-size:@buttonPrimeryFontSize;
+    font-weight:@buttonPrimeryFontWeight;
+    color:@brand-color1;
+    line-height:@buttonPrimeryFontLineHeight;
+    padding: @buttonPrimeryPadding;
+    background: @buttonPrimeryColor;
+    cursor: pointer;
+    margin-left: 10px;
+    height: @inputCommonHeight;
+    line-height: @inputCommonLineHeight;
+    display: inline-block;
+    box-shadow: none !important;
+    & .k-icon {
+      margin-right: 5px;
+      display: inline-block;
+      display: none;
+    }
+    &:hover {
+      background: @buttonDefualtBgColorHover;
+      border: @buttonDefualtBorderHover;
+      color: @buttonDefualtBgColorWhite;
+    }
+    &:focus {
+      border: solid 1px @buttonPrimeryColor;
+    }
+  }
+
+}
+button:focus {outline: none;}
