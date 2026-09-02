@@ -2,6 +2,7 @@ package com.motadata.ipam.router;
 
 import com.motadata.ipam.service.UserService;
 import io.vertx.core.http.Cookie;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -11,7 +12,7 @@ import org.slf4j.Logger;
 import java.net.URLEncoder;
 
 /**
- * Vert.x Web router for Authentication, Session, and View routing endpoints.
+ * Vert.x Web router for Authentication, Session, View routing, and Global Search endpoints.
  */
 public class AuthRouter {
 
@@ -33,8 +34,9 @@ public class AuthRouter {
         router.post("/loginUser.html").handler(this::handleLogin);
         router.get("/logout.html").handler(this::handleLogout);
 
-        // Security validation endpoint
+        // Security validation & Global Search endpoints
         router.get("/validatePermission/").handler(this::handleValidatePermission);
+        router.post("/search/").handler(this::handleGlobalSearch);
     }
 
     private void handleIndexPage(RoutingContext ctx) {
@@ -98,9 +100,44 @@ public class AuthRouter {
     }
 
     private void handleValidatePermission(RoutingContext ctx) {
+        Cookie userCookie = ctx.getCookie("userName");
+        String userName = userCookie != null ? userCookie.getValue() : null;
+        if (userName == null || userName.trim().isEmpty()) {
+            userName = ctx.request().getParam("userName");
+        }
+
+        String role = "ROLE_USER";
+        if ("admin".equalsIgnoreCase(userName)) {
+            role = "ROLE_ADMIN";
+        } else if (userName != null && !userName.trim().isEmpty()) {
+            for (JsonObject u : SettingsRouter.getFallbackUsers()) {
+                if (userName.equalsIgnoreCase(u.getString("userName"))) {
+                    String uRole = u.getString("roleName");
+                    if (uRole != null && !uRole.trim().isEmpty()) {
+                        role = uRole;
+                    }
+                    break;
+                }
+            }
+        } else {
+            role = "ROLE_ADMIN";
+        }
+
         JsonObject result = new JsonObject()
                 .put("success", true)
-                .put("currentUserRole", "ROLE_ROLE_ADMIN");
+                .put("currentUserRole", role);
+
+        ctx.response()
+                .putHeader("Content-Type", "application/json;charset=UTF-8")
+                .end(result.encode());
+    }
+
+    private void handleGlobalSearch(RoutingContext ctx) {
+        JsonArray data = new JsonArray();
+
+        JsonObject result = new JsonObject()
+                .put("data", data)
+                .put("success", true);
 
         ctx.response()
                 .putHeader("Content-Type", "application/json;charset=UTF-8")

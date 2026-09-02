@@ -1,6 +1,5 @@
 package com.motadata.ipam.router;
 
-import com.motadata.ipam.security.PermissionHandler;
 import com.motadata.ipam.service.AlertService;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -18,7 +17,7 @@ public class AlertRouter {
     }
 
     public void attachRoutes(Router router) {
-        router.get("/alerts/").handler(PermissionHandler.require("PERM_ALERTS_READ")).handler(this::handleGetAlerts);
+        router.get("/alerts/").handler(this::handleGetAlerts);
     }
 
     private void handleGetAlerts(RoutingContext ctx) {
