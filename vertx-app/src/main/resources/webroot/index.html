@@ -23,7 +23,7 @@
             <div id="loginContainer">
                 <form name="sentMessage" action="/loginUser.html" method="post" id="loginForm">
                     <div class="login-header">Sign In</div>
-                    <div class="msg error-msg" id="loginErrorMsg" style="color: red"></div>
+                    <div class="msg error-msg" id="loginErrorMsg" style="color: red; margin-bottom: 10px; font-weight: bold;"></div>
                     <div class="row control-group">
                         <div class="form-group col-xs-12 floating-label-form-group controls">
                             <label>Username</label>
@@ -79,6 +79,14 @@
 <script type="text/javascript">
     $(document).ready(function () {
         login.init();
+        var urlParams = new URLSearchParams(window.location.search);
+        var errorMsg = urlParams.get('error');
+        if (errorMsg) {
+            $('#loginErrorMsg').text(decodeURIComponent(errorMsg));
+        }
+        $('#userName, #password').on('input', function() {
+            $('#loginErrorMsg').text('');
+        });
     });
 </script>
 </body>

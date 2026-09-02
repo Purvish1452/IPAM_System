@@ -40,8 +40,6 @@ var globalSettings =
         {
             if(context.json.success == true)
             {
-                location.reload();
-
                 notification.showNotification({notificationTitle:context.json.message,notificationType:"success"});
             }
             else

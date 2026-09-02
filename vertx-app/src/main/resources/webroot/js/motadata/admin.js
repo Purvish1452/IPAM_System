@@ -66,15 +66,22 @@ var admin =
 
         var header = $("#header_panel");
 
-        if(event)
+        if(event && event.event)
         {
             event.event.preventDefault();
 
-            adminMenu = $(event.event.currentTarget).data('value');
+            var elem = $(event.event.currentTarget);
+            adminMenu = elem.data('value') || elem.attr('data-value') || elem.find('a').attr('data-value') || elem.closest('li').attr('data-panel');
         }
-        else if(navigationManager.getUrlParameter("settingsTab"))
+
+        if(!adminMenu && navigationManager.getUrlParameter("settingsTab"))
         {
             adminMenu = navigationManager.getUrlParameter("settingsTab");
+        }
+
+        if(!adminMenu)
+        {
+            adminMenu = 'dhcpManagement';
         }
 
         header.empty();
