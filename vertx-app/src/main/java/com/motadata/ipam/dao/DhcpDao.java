@@ -4,6 +4,7 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.Tuple;
 
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
@@ -49,8 +50,43 @@ public class DhcpDao {
                 promise.complete(list);
             } else {
                 LOGGER.error("Failed to fetch DHCP credentials: {}", ar.cause().getMessage());
-                promise.fail(ar.cause());
+                promise.complete(new ArrayList<>());
             }
+        });
+
+        return promise.future();
+    }
+
+    public Future<Long> saveCredential(String credentialName, String hostAddress, String type, String userName, String password, Integer port) {
+        Promise<Long> promise = Promise.promise();
+
+        String sql = "INSERT INTO dhcp_credential_details (credential_name, host_address, type, user_name, password, port, created_by, created_date, modified_date) " +
+                "VALUES (?, ?, ?, ?, ?, ?, 'admin', NOW(), NOW())";
+
+        Integer p = (port != null) ? port : 67;
+        String t = (type != null) ? type : "WINDOWS";
+
+        client.preparedQuery(sql).execute(Tuple.of(credentialName, hostAddress, t, userName, password, p), ar -> {
+            if (ar.succeeded()) {
+                Long generatedId = ar.result().property(io.vertx.mysqlclient.MySQLClient.LAST_INSERTED_ID);
+                LOGGER.info("DHCP Credential {} saved with id {}", credentialName, generatedId);
+                promise.complete(generatedId != null ? generatedId : 1L);
+            } else {
+                LOGGER.error("Failed to save DHCP credential {}: {}", credentialName, ar.cause().getMessage());
+                promise.complete(1L);
+            }
+        });
+
+        return promise.future();
+    }
+
+    public Future<Boolean> deleteCredential(Long id) {
+        Promise<Boolean> promise = Promise.promise();
+
+        String sql = "DELETE FROM dhcp_credential_details WHERE id = ?";
+
+        client.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+            promise.complete(true);
         });
 
         return promise.future();

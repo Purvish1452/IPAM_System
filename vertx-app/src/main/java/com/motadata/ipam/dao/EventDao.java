@@ -12,8 +12,9 @@ import org.slf4j.Logger;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reactive non-blocking Data Access Object for Event log operations using Vert.x MySQLPool.
@@ -62,13 +63,25 @@ public class EventDao {
                     Event event = new Event();
                     event.setId(row.getLong("id"));
                     event.setCategory(row.getString("category"));
-                    event.setMessage(row.getString("message"));
+                    String msg = row.getString("message");
+                    event.setMessage(msg);
+                    event.setEventLog(msg);
                     event.setSeverity(String.valueOf(row.getInteger("severity")));
-                    event.setUser(String.valueOf(row.getLong("user")));
+                    String username = String.valueOf(row.getLong("user"));
+                    event.setUser(username);
+
+                    Map<String, Object> doneBy = new HashMap<>();
+                    doneBy.put("userName", "admin");
+                    event.setDoneBy(doneBy);
 
                     LocalDateTime ldt = row.getLocalDateTime("timestamp");
                     if (ldt != null) {
-                        event.setTimestamp(Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant()));
+                        long millis = ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                        event.setTimestamp(millis);
+                        event.setGeneratedTime(millis);
+                    } else {
+                        event.setTimestamp(System.currentTimeMillis());
+                        event.setGeneratedTime(System.currentTimeMillis());
                     }
                     events.add(event);
                 }

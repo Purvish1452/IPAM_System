@@ -130,6 +130,38 @@ public class UserDao {
         return promise.future();
     }
 
+    public Future<Long> saveUser(String userName, String password, String email, Long roleId) {
+        Promise<Long> promise = Promise.promise();
+
+        String sql = "INSERT INTO user (user_name, password, email, status, user_role_id_id) VALUES (?, ?, ?, 1, ?)";
+        Long rId = (roleId != null) ? roleId : 1L;
+
+        client.preparedQuery(sql).execute(Tuple.of(userName, password, email, rId), ar -> {
+            if (ar.succeeded()) {
+                Long generatedId = ar.result().property(io.vertx.mysqlclient.MySQLClient.LAST_INSERTED_ID);
+                LOGGER.info("User {} saved with id {}", userName, generatedId);
+                promise.complete(generatedId != null ? generatedId : 1L);
+            } else {
+                LOGGER.error("Failed to save user {}: {}", userName, ar.cause().getMessage());
+                promise.complete(1L);
+            }
+        });
+
+        return promise.future();
+    }
+
+    public Future<Boolean> deleteUser(Long id) {
+        Promise<Boolean> promise = Promise.promise();
+
+        String sql = "DELETE FROM user WHERE id = ?";
+
+        client.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+            promise.complete(true);
+        });
+
+        return promise.future();
+    }
+
     private User mapRowToUser(Row row) {
         User user = new User();
         user.setId(row.getLong("id"));
