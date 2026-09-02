@@ -1,9 +1,0 @@
-com/motadata/ipam/service/ReportServiceTest.class
-com/motadata/ipam/MainVerticleTest.class
-com/motadata/ipam/dao/DaoTest.class
-com/motadata/ipam/config/AppConfigTest.class
-com/motadata/ipam/security/SecurityTest.class
-com/motadata/ipam/model/ModelTest.class
-com/motadata/ipam/scheduler/SchedulerTest.class
-com/motadata/ipam/dao/DatabasePoolTest.class
-com/motadata/ipam/service/ServiceTest.class

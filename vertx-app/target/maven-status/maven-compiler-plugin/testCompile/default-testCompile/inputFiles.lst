@@ -1,9 +1,0 @@
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/scheduler/SchedulerTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/security/SecurityTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/MainVerticleTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/dao/DaoTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/config/AppConfigTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/service/ServiceTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/model/ModelTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/dao/DatabasePoolTest.java
-/home/purvish/Documents/IPAM_Real/vertx-app/src/test/java/com/motadata/ipam/service/ReportServiceTest.java
