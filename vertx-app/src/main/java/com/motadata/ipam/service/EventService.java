@@ -37,24 +37,21 @@ public class EventService {
                     if (eventsAr.succeeded()) {
                         List<Event> eventList = eventsAr.result();
 
-                        JsonObject dataJson = new JsonObject()
-                                .put("total", totalCount)
-                                .put("data", new JsonArray(eventList));
-
                         JsonObject result = new JsonObject()
-                                .put("data", dataJson)
+                                .put("data", new JsonArray(eventList))
+                                .put("total", totalCount)
                                 .put("success", true)
                                 .put("message", (String) null);
 
                         promise.complete(result);
                     } else {
                         LOGGER.error("Error fetching event log: {}", eventsAr.cause().getMessage());
-                        promise.complete(new JsonObject().put("success", false).put("message", "Something Went Wrong"));
+                        promise.complete(new JsonObject().put("success", false).put("data", new JsonArray()).put("message", "Something Went Wrong"));
                     }
                 });
             } else {
                 LOGGER.error("Error counting events: {}", countAr.cause().getMessage());
-                promise.complete(new JsonObject().put("success", false).put("message", "Something Went Wrong"));
+                promise.complete(new JsonObject().put("success", false).put("data", new JsonArray()).put("message", "Something Went Wrong"));
             }
         });
 

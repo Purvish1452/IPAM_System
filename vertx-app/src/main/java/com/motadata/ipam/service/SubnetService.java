@@ -26,6 +26,14 @@ public class SubnetService {
         return subnetDao.findSubnetById(id);
     }
 
+    public Future<Long> saveSubnet(String subnetAddress, String subnetMask, Long categoryId, String description) {
+        return subnetDao.saveSubnet(subnetAddress, subnetMask, categoryId, description);
+    }
+
+    public Future<Boolean> deleteSubnet(Long id) {
+        return subnetDao.deleteSubnet(id);
+    }
+
     public Future<List<SubnetIpDetails>> getIpDetails(Long subnetId, Integer page, Integer pageSize) {
         int pageNum = (page == null || page < 1) ? 1 : page;
         int size = (pageSize == null || pageSize < 1) ? 20 : pageSize;
