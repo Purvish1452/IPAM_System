@@ -1,102 +1,67 @@
 /**
- * Created by nilesh on 27/6/18.
+ * Created by hardik on 5/7/18.
  */
-var eventLog = {
 
-    EventLogPage: 'eventLogPage', EventLogTable : 'eventLogTable',
-
-    // ----------------------------------------------------------------------Init event logs with timeline dropdown----------------------------------------------------------------------------------------------------//
+var eventLog =
+{
+    // ----------------------------------------------------------------------Init event log dashboard, render timeline drop-down & grid data----------------------------------------------------------------------------------------------------//
 
     init : function ()
     {
-        loaderUtil.showModalLoader();
+        var gridId = $("#eventLogTable");
 
-        loaderUtil.showCentralModalLoader(appConstant.LoadingMessage);
+        flux.getKendoDropDownList({dropDownId:$("#eventTimeLine"),dataSource:[{ text: "Today", value: "0" },{ text: "Last 7 Days", value: "7" },{ text: "Last 30 Days", value: "30" }],dataTextField: "text",dataValueField: "value",value: "0"});
 
-        navigationManager.addHistory("navigation=eventLog");
+        flux.bindKendoDropDownListChangeEvent({dropDownId:$("#eventTimeLine")},eventLog.onChangeTimeLine);
 
-        topManager.setActiveMenu('eventLog');
+        alerts.bindExportButtonClickEvent({element:'eventExportPdf', gridId:gridId, title:'Event Notifications', export:'PDF', timeline:$("#eventTimeLine")}, eventLog.onExportButtonClick);
 
-        var root = $("#header_panel");
+        alerts.bindExportButtonClickEvent({element:'eventExportCsv', gridId:gridId, title:'Event Notifications', export:'CSV', timeline:$("#eventTimeLine")}, eventLog.onExportButtonClick);
 
-        root.empty();
+        eventLog.onChangeTimeLine();
 
-        root.html('<div class="title-inner-box"> Event Logs</div>');
-
-        $("#container-panel").html('<div id="leftPanel" class="left-panel eventLogPage"></div><div id="eventLogPage" class="content-panel"></div><div id="right-panel" class="right-panel stickyScrollRight"></div>');
-
-        appManager.togglePanel();
-
-        appManager.renderHTML(eventLog.EventLogPage, $("#eventLogPage"),undefined);
-
-        var reportDropDown = $("#eventTimeLine");
-
-        var data = [{text: "All", value: "10" },{text: "Today", value: "1" },{text: "Previous Day", value: "2" },{text: "This Week", value: "3" },{text: "This Month", value: "4" },{text: "This Quarter", value: "5" },{text: "Previous Quarter", value: "6" },
-            {text: "Last Six Month", value: "7" },{text: "This Year", value: "8" },{text: "Previous Year", value: "9" },{text: "Previous Week", value: "11" },{text: "Previous Month", value: "12" }];
-
-        flux.getKendoDropDownList({dropDownId:reportDropDown,dataTextField: "text",dataValueField: "value",data:data});
-
-        var param = {};
-
-        reportDropDown.data('kendoDropDownList').destroy();
-
-        reportDropDown.kendoDropDownList
-        ({
-            change:function (e)
-            {
-                e.preventDefault();
-
-                param['exportTimeline'] = this.value();
-
-                eventLog.renderEventLogGrid(param);
-            }
-        });
-
-        reportDropDown.getKendoDropDownList().trigger('change');
-
-        reportDropDown.data('kendoDropDownList').refresh();
-
-        flux.bindKendoButtonClickEvent({element:'exportEventPdf',export:1},eventLog.onExportButtonClick);
-
-        flux.bindKendoButtonClickEvent({element:'exportEventCsv',export:2},eventLog.onExportButtonClick);
+        navigationManager.stickyScroll();
     },
 
-    // ----------------------------------------------------------------------Load Eventlog grid on selected timeline----------------------------------------------------------------------------------------------------//
+    // ----------------------------------------------------------------------Change timeline drop-down event----------------------------------------------------------------------------------------------------//
 
-    renderEventLogGrid : function (param)
+    onChangeTimeLine: function ()
     {
-        var gridId = $('#'+eventLog.EventLogTable);
+        var param = {};
 
-        var callbackContexts = {
+        param['exportTimeline'] = $("#eventTimeLine").val();
 
-            Read: function (options)
-            {
-                appManager.executeGETRequest({url: '/event/',container:options,callback:eventLog.renderEventLogGridData,params:param});
-            },
-            EventId: eventLog.EventLogTable,
-            PageSize: 20,
-            pageable: {
-                refresh: true,
-                pageSizes: [10,20,50,100],
-                buttonCount: 10
-            },
-            DataType: 'json',
-            groupable: true,
-            schema: {
-                model: {
-                    id: "id",
-                    fields: {
-                        eventType:{type:'string'},
-                        eventContext:{type:'string'},
-                        timestamp: {type: "string"},
-                        userName: {type: "string"}
-                    }
-                }
-            },
-            Fields: [
-                {field: "eventType", title: "Event Type",width:"15%",template:'# if (eventType) { # <span title="#:eventType#">#: eventType # </span># } else { #<span></span># } #'},
-                {field: "eventContext", title: "Event Context",width:"53%",template:'# if (eventContext) { # <span title="#:eventContext#">#: eventContext # </span># } else { #<span></span># } #'},
-                {field: "timestamp", title: "Time",width:"17%",template:'# if (timestamp) { # <span title="#:timestamp#">#: timestamp # </span># } else { #<span></span># } #'},
+        var gridId = $("#eventLogTable");
+
+        loaderUtil.showCentralModalLoader();
+
+        var callbackContexts =
+        {
+            container : gridId,
+            url : '/event/',
+            params : param,
+            pageSize : 20,
+            sort : { field: "generatedTime", dir: "desc" },
+            callback : eventLog.renderEventLogGridData,
+            columns: [
+                {
+                    field: "generatedTime",
+                    title: "Generated Time",
+                    template: "<span>#: appManager.formatDate(generatedTime) #</span>",
+                    width:"20%"
+                },
+                {
+                    field: "eventLog",
+                    title: "Description",
+                    template: "<span title='#: eventLog #'>#: eventLog #</span>",
+                    width:"50%"
+                },
+                {
+                    field: "ipAddress",
+                    title: "IP Address",
+                    template: "#if(ipAddress==null){#<span></span>#}else{#<span title='#: ipAddress #'>#: ipAddress #</span>#}#",
+                    width:"15%"
+                },
                 {
                     field: "userName",
                     template: "#if(doneBy==null){#<span></span>#}else{#<span title='#: doneBy.userName #'>#: doneBy.userName #</span>#}#",
@@ -126,16 +91,23 @@ var eventLog = {
 
     renderEventLogGridData : function (context)
     {
-        if(context.json.data != null && context.json.success == true)
+        if(context && context.json && context.json.data != null && context.json.success == true)
         {
             var result = context.json.data;
 
-            context.container.success(result);
+            if (result && Array.isArray(result.data)) {
+                context.container.success(result.data);
+            } else if (Array.isArray(result)) {
+                context.container.success(result);
+            } else {
+                context.container.success([]);
+            }
         }
         else
         {
-            context.container.success("");
-
+            if (context && context.container && typeof context.container.success === 'function') {
+                context.container.success([]);
+            }
             $(".k-grid-content").html(appConstant.NoDataSpan);
         }
         loaderUtil.hideModalLoader();
@@ -159,55 +131,18 @@ var eventLog = {
 
             param['exportTimeline'] = $("#eventTimeLine").val();
 
-            loaderUtil.showModalLoader();
-
-            loaderUtil.showCentralModalLoader(appConstant.ExportMessage);
-
-            if(exportType == 1)
+            if(exportType == 'PDF')
             {
-                appManager.executeGETRequest({url:'/exportEventPdf/',callback:eventLog.downloadPdf,params:param});
+                param['pdf'] = true;
             }
-            else if(exportType == 2)
+            else
             {
-                appManager.executeGETRequest({url:'/exportEventCsv/',callback:eventLog.downloadCsv,params:param});
+                param['csv'] = true;
             }
+
+            var exportUrl = "/event/";
+
+            window.location = exportUrl + "?" + $.param(param);
         }
-    },
-
-    downloadPdf : function (callbackContext)
-    {
-        if(callbackContext.json.data!=null && callbackContext.json.data !=undefined)
-        {
-            window.location.href = "/downloadPdf/"+encodeURIComponent(callbackContext.json.data);
-        }
-        else
-        {
-            notification.showNotification({notificationTitle:"No Data Available",notificationType:"info"});
-        }
-        loaderUtil.hideModalLoader();
-
-        loaderUtil.hideCentralModalLoader();
-    },
-
-    downloadCsv : function (callbackContext)
-    {
-        if(callbackContext.json.data!=null && callbackContext.json.data !=undefined)
-        {
-            window.location.href = "/downloadCsv/"+encodeURIComponent(callbackContext.json.data);
-        }
-        else
-        {
-            notification.showNotification({notificationTitle:"No Data Available",notificationType:"info"});
-        }
-        loaderUtil.hideModalLoader();
-
-        loaderUtil.hideCentralModalLoader();
-    },
-
-    // ---------------------------------------------------------------------------Navigation-----------------------------------------------------------------------------------------------//
-
-    renderEventLogFromURL : function ()
-    {
-        eventLog.init();
     }
 };

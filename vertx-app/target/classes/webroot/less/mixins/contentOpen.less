@@ -1,0 +1,78 @@
+& .dashboard-widget-panel > ul > li {
+  width: 49%;
+}
+& .dashboard-widget-panel > ul > li:nth-child(2) {
+  margin-right: 0;
+}
+& .dashboard-widget-panel > ul > li:last-child {
+  /*width: 63%;*/
+  width: 49%;
+}
+& .openColFullCollom {
+  width: 100%;
+  &:first-child {
+    /*.margin-b-20;*/
+  }
+  & .openColTwoCollom:first-child {
+    margin-bottom: 10px;
+  }
+}
+& .openColTwoCollom {
+  width: 100%;
+  padding-left: 0px;
+  &:first-child {
+    padding: 0;
+    /* .margin-b-20;*/
+  }
+}
+/*& .left-panel {
+  width:20%;
+  & div {
+    padding:0 20px;
+  }
+}
+
+& .right-panel {
+  width:20%;
+  & div {
+    padding:20px;
+  }
+}*/
+& .content-panel {
+  width:@leftRightOpenWidth;
+  margin-left: @leftCornerWidthMargin;
+}
+& .fixedChartHeight {
+  max-height: initial;
+  min-height: initial;
+  text-align: center;
+  &:hover {
+    overflow: visible;
+  }
+  & > svg {
+    width: auto !important;
+    min-width: 60%;
+  }
+}
+& .fixedChartHeightPie {
+  /*padding-left: 20%;*/
+}
+& .fixHeight5 {
+  .no-data-available {
+    height: 150px;
+    line-height: 130px;
+  }
+}
+& .fixHeight310 {
+  .no-data-available {
+    height: 150px;
+    line-height: 130px;
+  }
+}
+& .fixHeight700 {
+  border: 0;
+  & .no-data-available {
+    height: 150px;
+    line-height: 130px;
+  }
+}

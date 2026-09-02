@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta name="description" content="Motadata v4.0.0">
+    <meta name="author" content="Motadata">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+    <title>IPAM v4.0.0</title>
+
+    <link rel="stylesheet" href="/css/materialPreloader.min.css">
+    <link rel="stylesheet" href="/css/toggle-motadata.css">
+    <link rel="stylesheet" href="/css/default-theme-motadata.css">
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+
+    <script src="/js/plugins/jquery-2.1.1.min.js"></script>
+    <script src="/js/plugins/underscore.js"></script>
+    <script src="/js/plugins/jquery.mCustomScrollbar.concat.min.js"></script>
+    <script src="/js/plugins/kendo.all.min.js"></script>
+
+    <script src="/js/materialPreloader.js"></script>
+    <script src="/js/SmartNotification.min.js"></script>
+    <script src="/js/loader.js"></script>
+
+    <script src="/js/motadata/login.js"></script>
+    <script src="/js/motadata/navigation.js"></script>
+    <script src="/js/motadata/app.js"></script>
+    <script src="/js/motadata/flux.js"></script>
+    <script src="/js/motadata/popup-menu.js"></script>
+    <script src="/js/motadata/form.js"></script>
+    <script src="/js/motadata/top.js"></script>
+    <script src="/js/motadata/notification.js"></script>
+    <script src="/js/motadata/html-render.js"></script>
+    <script src="/js/motadata/home.js"></script>
+    <script src="/js/motadata/left.js"></script>
+    <script src="/js/motadata/right.js"></script>
+    <script src="/js/motadata/subnet-summary.js"></script>
+    <script src="/js/motadata/ipaddress-summary.js"></script>
+    <script src="/js/motadata/widget.js"></script>
+    <script src="/js/motadata/widget-render.js"></script>
+    <script src="/js/motadata/table.js"></script>
+    <script src="/js/motadata/admin.js"></script>
+    <script src="/js/motadata/reports.js"></script>
+    <script src="/js/motadata/database-maintanance.js"></script>
+    <script src="/js/motadata/dhcp-management.js"></script>
+    <script src="/js/motadata/dhcp-server-statistics.js"></script>
+    <script src="/js/motadata/mail-server-configuration.js"></script>
+    <script src="/js/motadata/re-branding.js"></script>
+    <script src="/js/motadata/configure-alert.js"></script>
+    <script src="/js/motadata/user-management.js"></script>
+    <script src="/js/motadata/global-settings.js"></script>
+    <script src="/js/motadata/const.js"></script>
+    <script src="/js/motadata/global-search.js"></script>
+    <script src="/js/motadata/event-log.js"></script>
+    <script src="/js/motadata/alerts.js"></script>
+    <script src="/js/motadata/rogue-detection.js"></script>
+    <script src="/js/motadata/discovery.js"></script>
+    <script src="/js/motadata/ip-requests.js"></script>
+    <script src="/js/motadata/custom-column.js"></script>
+</head>
+
+<body>
+
+<div id="wrapper">
+
+    <!--header-->
+    <header id="header">
+        <div id="leftHeader" class="company-panel">
+            <a title="Home">IP Address Manager</a>
+        </div>
+        <div class="logo-panel" id="centralHeader">
+            <a href="javascript:void(0);" style="cursor: default;"><img src="/images/logo.png"></a>
+            <span class="logo-slogan" title="Motadata IPAM">Motadata IPAM</span>
+        </div>
+        <div class="header-user-panel">
+            <ul class="header-navbar">
+                <li>
+                    <div class="search-box"> <i class="icon-magnifier icons"></i> <input class="input-box searchFilter" id="globalSearch" placeholder="Search" type="text" maxlength="20"></div>
+                </li>
+                <li id="alertsMenu">
+                    <a href="javascript:void(0);" data-value="alerts" data-original-title="Alerts" title="Alerts"><i class="icon-bell icons"></i></a>
+                </li>
+                <li id="eventLogMenu">
+                    <a href="javascript:void(0);" data-value="eventLog" data-original-title="Notifications" title="Event Notifications"><i class="icon-event icons"></i></a>
+                </li>
+                <li id="reportsMenu">
+                    <a id="add-grid" href="javascript:void(0);" data-value="reports" title="Reports"><i class="icon-docs icons"></i></a>
+                </li>
+                <li id="rogueDetectionMenu">
+                    <a href="javascript:void(0);" data-value="rogueDetection" data-original-title="RogueDetection" title="Rogue Detection"><i class="icon-shield icons"></i></a>
+                </li>
+                <li id="ipRequestsMenu">
+                    <a href="javascript:void(0);" data-value="ipRequests" data-original-title="IpRequests" title="IP Requests">
+                        <i class="fa fa-globe" aria-hidden="true" style="font-size: 24px; position: relative;"></i>
+                    </a>
+                </li>
+
+                <li id="settingsMenu">
+                    <a href="javascript:void(0);" data-value="settings" data-original-title="Settings" title="Settings" id="settingOption" data-property="dhcpManagement"><i class="icon-settings icons"></i></a>
+                </li>
+                <a class="logout" href="/logout.html" data-value="logout" data-original-title="Logout" title="LogOut"><i class="fa fa-power-off cursor-pointer"></i></a>
+            </ul>
+        </div>
+    </header>
+    <section id="header_panel" class="title-panel stickyScrollHeader"></section>
+
+    <input type="hidden" id="userName" value="admin">
+    <input type="hidden" id="url" value="">
+
+    <!--container-panel-->
+    <section id="container-panel">
+    </section>
+
+    <!--left treeview popup-->
+    <div id="leftTreePopupContent" class="action-dropmenu-panel leftDropDown" style="display: none"><ul><li id="renameCategory" style="cursor: pointer" title="Rename Category">Rename</li><li id="deleteCategory" style="cursor: pointer" title="Delete Category">Delete</li><li id="deleteSupernetCategory" style="cursor: pointer" title="Delete Category">Delete</li></ul></div>
+
+    <!--user grid popup-->
+    <div id="popupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="updatePassword" style="cursor: pointer" title="Update">Update Password</li></ul></div>
+
+    <!--subnet-summary popup-->
+    <div id="subnetSummaryPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="editSubnetAddress" style="cursor: pointer" title="Edit Subnet" class="subnetSummaryPopup">Edit Subnet</li><li class="subnetSummaryPopup" id="deleteSubnetAddress" style="cursor: pointer" title="Delete Subnet">Delete Subnet</li></ul></div>
+
+    <!--Dhcp server-summary popup-->
+    <div id="dhcpServerPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="scanDhcpServer" style="cursor: pointer" title="Scan DHCP Server"> Scan </li><li id="exportDhcpServerPdf" style="cursor: pointer" title="PDF"> Export PDF </li><li id="exportDhcpServerPng" style="cursor: pointer" title="PNG"> Export PNG </li><li id="exportDhcpServerSvg" style="cursor: pointer" title="SVG"> Export SVG </li></ul></div>
+
+    <!--subnet-grid actions-->
+    <div id="subnetPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportSubnetPdf" style="cursor: pointer" title="PDF">Export PDF</li></ul></div>
+
+    <!--dhcp-grid actions-->
+    <div id="dhcpPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportDhcpPdf" data-value="dhcpScopeUtilization" style="cursor: pointer" title="PDF">Export PDF</li></ul></div>
+
+    <!--conflict-grid actions-->
+    <div id="conflictPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportConflictPdf" data-value="conflictedIP" style="cursor: pointer" title="PDF">Export PDF</li></ul></div>
+
+    <div id="recentlyDiscoveredPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="recentlyDiscoveredPdf" data-value="recentlyDiscovered" style="cursor: pointer" title="PDF">Export PDF</li></ul></div>
+
+    <div id="top10SubnetUtilizationPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="top10SubnetUtilizationPdf" data-value="top10SubnetUtilization" style="cursor: pointer" title="PDF">Export PDF</li></ul></div>
+
+    <div id="top10CategoryUtilizationPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="top10CategoryUtilizationPdf" data-value="top10CategoryUtilization" style="cursor: pointer" title="PDF">Export PDF</li></ul></div>
+
+    <div id="dnsStatusPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportDnsStatusPdf" style="cursor: pointer" title="PDF"> Export PDF </li><li id="exportDnsStatusPng" style="cursor: pointer" title="PNG"> Export PNG </li><li id="exportDnsStatusSvg" style="cursor: pointer" title="SVG"> Export SVG </li></ul></div>
+
+    <!--IP Availability -chart actions-->
+    <div id="ipAvailabilityPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportIPAvailabilityPdf" style="cursor: pointer" title="PDF"> Export PDF </li><li id="exportIPAvailability" style="cursor: pointer" title="PNG"> Export PNG </li><li id="exportIPAvailabilitySvg" style="cursor: pointer" title="SVG"> Export SVG </li></ul></div>
+
+    <!--vendor-chart actions-->
+    <div id="vendorPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportVendorPdf" style="cursor: pointer" title="PDF"> Export PDF </li><li id="exportVendor" style="cursor: pointer" title="PNG"> Export PNG </li><li id="exportVendorSvg" style="cursor: pointer" title="SVG"> Export SVG </li></ul></div>
+
+    <!--Subnet summary widget actions-->
+    <div id="subnetSummaryPopupContent" class="action-dropmenu-panel" style="display: none"><ul><li id="exportSubnetSummary" style="cursor: pointer" title="Screenshot">Screenshot</li></ul></div>
+
+    <!--notification-->
+    <span id="notification"></span>
+
+    <!--delete modal-->
+    <div id="deleteModal"></div>
+
+    <!--add modal-->
+    <div id="addModal"></div>
+
+    <!--inner modal-->
+    <div id="innerModal"></div>
+
+    <!--footer-->
+    <footer id="footer-panel">
+        <div class="copyrightLeft"><b>IPAM v4.0.0 | Powered by Motadata </b></div>
+        <div class="copyrightRight"></div>
+    </footer>
+</div>
+
+<script>
+    function getAuthoritiesFromCookie() {
+        let authoritiesCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('authorities='));
+        if (!authoritiesCookie) return ['PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
+        const roleRegex = /PERM_[A-Z_]+(?:\s[A-Z_]+)?/g;
+        const roles = authoritiesCookie.match(roleRegex);
+        return roles ? roles : ['PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
+    }
+
+    function hasRole(role) {
+        const authorities = getAuthoritiesFromCookie();
+        return authorities.includes(role);
+    }
+
+    $(document).ready(function() {
+        var root = $('body');
+        appManager.init();
+
+        var lastScroll = 0;
+
+        $(window).scroll(function(event) {
+            if ($(window).scrollTop() >= 100) {
+                $('.stickyScrollLeft').addClass('stickyStickyLeft');
+                $('.stickyScrollRight').addClass('stickyStickyRight');
+                $height = $(window).height() - 170;
+                $('body.stickyScrollUp .nav-panel').css('max-height', $height);
+            } else {
+                $('.stickyScrollLeft').removeClass('stickyStickyLeft');
+                $('.stickyScrollRight').removeClass('stickyStickyRight');
+                appManager.resetWindowSize();
+            }
+
+            var st = $(this).scrollTop();
+            if (Math.abs(lastScroll - st) <= 5) return;
+
+            if (st < lastScroll) {
+                if ($(window).scrollTop() < 10) {
+                    $('.stickyScrollLeft').removeClass('stickyStickyLeft');
+                    $('.stickyScrollRight').removeClass('stickyStickyRight');
+                    root.removeClass('stickyScrollDown');
+                    root.removeClass('stickyScrollUp');
+                } else {
+                    root.removeClass('stickyScrollUp').addClass('stickyScrollDown');
+                }
+            } else {
+                root.removeClass('stickyScrollDown').addClass('stickyScrollUp');
+            }
+
+            lastScroll = st;
+        });
+
+        appManager.resetWindowSize();
+
+        $(window).resize(function() {
+            appManager.resetWindowSize();
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,365 @@
+html {
+  & body {
+    & .k-widget.k-window {
+      border-radius: @popUpBorderRadius;
+      overflow: hidden;
+      height: auto !important;
+      & .k-header {
+        background: @brand-color25;
+        padding: @popUpPadding;
+        border-bottom: solid 2px @brand-color21;
+        & .k-window-title {
+          font-size: @fontSize16;
+          font-weight: 600;
+          color: @brand-color5;
+          padding: 0;
+          width: 95%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: inline-block;
+        }
+        & .k-window-actions {
+          top: @popUpCloseTop;
+          right: @popUpCloseRight;
+          & .k-window-action {
+            opacity: 1;
+            padding: 0;
+            & .k-icon {
+              font-size: @fontSize14;
+              font-weight: normal;
+              color: @brand-color5;
+            }
+          }
+        }
+      }
+      & .upload-files-custome {
+        position: relative;
+        & .k-upload {
+          padding: 5px 10px;
+          background-color:@brand-color1;
+          border:@inputBorder;
+          border-radius:@inputRadius;
+          -webkit-box-shadow:@inputBoxShadow;
+          box-shadow: @inputBoxShadow;
+          -webkit-transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+          transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+        }
+        & .k-state-focused {
+          box-shadow: none !important;
+          outline: none !important;
+        }
+        & input {
+          opacity: 0;
+          position: absolute;
+          top: 17px;
+          z-index: 1;
+          visibility: visible;
+        }
+        & i {
+          position: absolute;
+          right: 14px;
+          top: 13px;
+          width: 40px;
+          height: 27px;
+          background: @brand-color23;
+          text-align: center;
+          line-height: 27px;
+          font-weight: bold;
+        }
+        & .k-upload-files {
+          .width100;
+          margin-top: 20px;
+          margin-bottom: 10px;
+          margin-left: -10px;
+          & li {
+            .width100;
+            & .k-file-invalid-extension-wrapper {
+              float: left;
+              margin-right: 5px;
+              & .k-file-invalid-icon {
+                width: 15px;
+                height: 15px;
+                float: left;
+                border: solid 1px @brand-color13;
+                text-align: center;
+                border-radius:  150px;
+              }
+            }
+            & .k-file-name-size-wrapper {
+              float: left;
+              & .k-file-name {
+                margin-right: 5px;
+              }
+            }
+            & .k-upload-status {
+              float: right;
+              margin-right: -20px;
+              & .k-button {
+                padding: 0;
+                background: none;
+              }
+            }
+          }
+        }
+      }
+      & .pop-up-content-fix-panel {
+        .width100;
+      }
+      & .fixed-height-body-popup-panel {
+        max-height: 350px;
+        overflow: auto;
+        padding: 0 20px;
+        .width100;
+      }
+      & .footer-box-grid-box {
+        padding: 10px 15px;
+       /* margin-left: -25px;
+        margin-right: -25px;*/
+        background: @brand-color25;
+        /*height: 60px;*/
+        .width100;
+      }
+      & .footer-box-grid-boxs {
+        padding: 10px 15px;
+        background: @brand-color25;
+        /*height: 60px;*/
+        .width100;
+      }
+    }
+    & .k-popup-edit-form.k-window-content.k-content {
+      .width100;
+      padding: 0;
+      & .content-pop-up-header-panel {
+        .width100;
+        padding: @popUpContentPadding;
+      }
+      & .row-content-s {
+        .width100;
+        padding: 5px 10px;
+        & label {
+          font-size: @fontSize12;
+          color: @brand-color14;
+          font-weight: normal;
+        }
+        .k-textbox{
+          display:block;
+          width:100%;
+          height:@inputHeight;
+          padding: @inputCommonPadding;
+          font-size:@inputFontSize;
+          line-height:@inputLineHeight;
+          color:@inputFontColor;
+          vertical-align:middle;
+          background-color:@brand-color1;
+          border:@inputBorder;
+          border-radius:@inputRadius;
+          -webkit-box-shadow:@inputBoxShadow;
+          box-shadow: @inputBoxShadow;
+          -webkit-transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+          transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+        }
+        .k-textbox{
+          display:block;
+          width:100%;
+          height:@inputHeight;
+          padding: @inputCommonPadding;
+          font-size:@inputFontSize;
+          line-height:@inputLineHeight;
+          color:@inputFontColor;
+          vertical-align:middle;
+          background-color:@brand-color1;
+          border:@inputBorder;
+          border-radius:@inputRadius;
+          -webkit-box-shadow:@inputBoxShadow;
+          box-shadow: @inputBoxShadow;
+          -webkit-transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+          transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+        }
+      }
+      & .footer-pop-up-content-panel {
+        .width100;
+        padding: @popUpFooterPadding;
+        background: @brand-color25;
+        text-align: right;
+      }
+      & .bottom-form-panel {
+        .width100;
+        padding: 5px 10px;
+        & .k-button-icontext {
+          border:@buttonDefualtBorder;
+          border-radius: @buttonDefualtBorderRedius;
+          font-size:@buttonDefualtFontSize;
+          font-weight:@buttonDefualtFontWeight;
+          color:@buttonDefualtColor;
+          line-height:@buttonDefualtFontLineHeight;
+          padding: @buttonPrimeryPadding;
+          background: @buttonDefualtBgColor;
+          cursor: pointer;
+          height: @inputCommonHeight;
+          line-height: @inputCommonLineHeight;
+          display: inline-block;
+          margin-left: 6px;
+          & .k-icon {
+            margin-right: 5px;
+            display: inline-block;
+            display: none;
+          }
+          &:hover {
+            background: @buttonDefualtBgColorHover;
+            border: @buttonDefualtBorderHover;
+            color: @buttonDefualtBgColorWhite;
+          }
+          &:focus {
+            border: solid 1px transparent;
+          }
+        }
+        & .k-primary {
+          border:@buttonPrimeryBorder;
+          border-radius: @buttonPrimeryBorderRedius;
+          font-size:@buttonPrimeryFontSize;
+          font-weight:@buttonPrimeryFontWeight;
+          color:@brand-color1;
+          line-height:@buttonPrimeryFontLineHeight;
+          padding: @buttonPrimeryPadding;
+          background: @buttonPrimeryColor;
+          cursor: pointer;
+          margin-left: 10px;
+          height: @inputCommonHeight;
+          line-height: @inputCommonLineHeight;
+          display: inline-block;
+          float: right;
+          & .k-icon {
+            margin-right: 5px;
+            display: inline-block;
+            display: none;
+          }
+          &:hover {
+            background: @buttonDefualtBgColorHover;
+            border: @buttonDefualtBorderHover;
+            color: @buttonDefualtBgColorWhite;
+          }
+          &:focus {
+            border: solid 1px transparent;
+          }
+        }
+      }
+    }
+    & .k-widget.k-window {
+      & .k-popup-edit-form.k-window-content.k-content {
+        & .k-edit-form-container {
+          .width100;
+          padding-top: 15px;
+          & .k-edit-label {
+            .width100;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+            padding-left: 15px;
+            padding-right: 15px;
+            & label {
+              font-size: @fontSize12;
+              color: @brand-color14;
+              font-weight: normal;
+            }
+          }
+
+          & .k-edit-field {
+            .width100;
+            padding: 0;
+            padding-left: 15px;
+            padding-right: 15px;
+            margin-bottom: 15px;
+            & .k-input.k-textbox {
+              width: 100%;
+            }
+          }
+          & .k-edit-buttons.k-state-default {
+            .width100;
+            padding: @popUpFooterPadding;
+            background: @brand-color25;
+            text-align: right;
+            bottom: 0;
+            margin-top: 10px;
+            & .k-button-icontext {
+              border:@buttonDefualtBorder;
+              border-radius: @buttonDefualtBorderRedius;
+              font-size:@buttonDefualtFontSize;
+              font-weight:@buttonDefualtFontWeight;
+              color:@buttonDefualtColor;
+              line-height:@buttonDefualtFontLineHeight;
+              padding: @buttonPrimeryPadding;
+              background: @buttonDefualtBgColor;
+              cursor: pointer;
+              height: @inputCommonHeight;
+              line-height: @inputCommonLineHeight;
+              display: inline-block;
+              & .k-icon {
+                margin-right: 5px;
+                display: inline-block;
+                display: none;
+              }
+              &:hover {
+                background: @buttonDefualtBgColorHover;
+                border: @buttonDefualtBorderHover;
+                color: @buttonDefualtBgColorWhite;
+              }
+              &:focus {
+                border: solid 1px transparent;
+              }
+            }
+            & .k-primary {
+              border:@buttonPrimeryBorder;
+              border-radius: @buttonPrimeryBorderRedius;
+              font-size:@buttonPrimeryFontSize;
+              font-weight:@buttonPrimeryFontWeight;
+              color:@brand-color1;
+              line-height:@buttonPrimeryFontLineHeight;
+              padding: @buttonPrimeryPadding;
+              background: @buttonPrimeryColor;
+              cursor: pointer;
+              margin-left: 10px;
+              height: @inputCommonHeight;
+              line-height: @inputCommonLineHeight;
+              display: inline-block;
+              float: right;
+              & .k-icon {
+                margin-right: 5px;
+                display: inline-block;
+                display: none;
+              }
+              &:hover {
+                background: @buttonDefualtBgColorHover;
+                border: @buttonDefualtBorderHover;
+                color: @buttonDefualtBgColorWhite;
+              }
+              &:focus {
+                border: solid 1px transparent;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  & .k-animation-container {
+    & .k-notification {
+      & .k-notification-wrap {
+        padding: 0 25px !important;
+        position: relative;
+        white-space:initial;
+        & span.k-icon.k-i-error {
+          position: absolute;
+          left: 0;
+        }
+        & span.k-icon.k-i-success {
+          position: absolute;
+          left: 0;
+        }
+        & span.k-icon.k-i-info {
+          position: absolute;
+          left: 0;
+        }
+      }
+    }
+  }
+}

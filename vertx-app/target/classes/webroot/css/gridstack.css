@@ -1,0 +1,1965 @@
+
+:root .grid-stack-item > .ui-resizable-handle {
+  filter: none;
+}
+
+.grid-stack {
+  position: relative;
+}
+
+.grid-stack.grid-stack-rtl {
+  direction: ltr;
+}
+
+.grid-stack.grid-stack-rtl > .grid-stack-item {
+  direction: rtl;
+}
+
+.grid-stack .grid-stack-placeholder > .placeholder-content {
+  border: 1px dashed lightgray;
+  margin: 0;
+  position: absolute;
+  top: 0;
+  left: 3px;
+  right: 3px;
+  bottom: 0;
+  width: auto;
+  z-index: 100 !important;
+  text-align: center;
+}
+
+.grid-stack > .grid-stack-item {
+  min-width: 10%;
+  position: absolute;
+  padding: 0;
+}
+
+.grid-stack > .grid-stack-item > .grid-stack-item-content {
+  margin: 0;
+  position: absolute;
+  top: 0;
+  left: 3px;
+  right: 3px;
+  bottom: 0;
+  width: auto;
+  z-index: 0 !important;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  background: #1E1C1C;
+  border:solid 1px #292929;
+}
+/*.grid-stack-item-content .highcharts-container {border:solid 1px #292929;}*/
+
+.grid-stack > .grid-stack-item > .ui-resizable-handle {
+  position: absolute;
+  font-size: 0.1px;
+  display: block;
+  -ms-touch-action: none;
+  touch-action: none;
+}
+
+.grid-stack > .grid-stack-item.ui-resizable-disabled > .ui-resizable-handle,
+.grid-stack > .grid-stack-item.ui-resizable-autohide > .ui-resizable-handle {
+  display: none;
+}
+
+.grid-stack > .grid-stack-item.ui-draggable-dragging, .grid-stack > .grid-stack-item.ui-resizable-resizing {
+  z-index: 100;
+}
+
+.grid-stack > .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content,
+.grid-stack > .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content, .grid-stack > .grid-stack-item.ui-resizable-resizing > .grid-stack-item-content,
+.grid-stack > .grid-stack-item.ui-resizable-resizing > .grid-stack-item-content {
+  box-shadow: 1px 4px 6px rgba(0, 0, 0, 0.2);
+  opacity: 0.8;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-se,
+.grid-stack > .grid-stack-item > .ui-resizable-sw {
+  background-image: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iaXNvLTg4NTktMSI/Pgo8IS0tIEdlbmVyYXRvcjogQWRvYmUgSWxsdXN0cmF0b3IgMTYuMC4wLCBTVkcgRXhwb3J0IFBsdWctSW4gLiBTVkcgVmVyc2lvbjogNi4wMCBCdWlsZCAwKSAgLS0+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4xIiBpZD0iQ2FwYV8xIiB4PSIwcHgiIHk9IjBweCIgd2lkdGg9IjE2cHgiIGhlaWdodD0iMTZweCIgdmlld0JveD0iMCAwIDUxMS42MjYgNTExLjYyNyIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNTExLjYyNiA1MTEuNjI3OyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+CjxnPgoJPHBhdGggZD0iTTMyOC45MDYsNDAxLjk5NGgtMzYuNTUzVjEwOS42MzZoMzYuNTUzYzQuOTQ4LDAsOS4yMzYtMS44MDksMTIuODQ3LTUuNDI2YzMuNjEzLTMuNjE1LDUuNDIxLTcuODk4LDUuNDIxLTEyLjg0NSAgIGMwLTQuOTQ5LTEuODAxLTkuMjMxLTUuNDI4LTEyLjg1MWwtNzMuMDg3LTczLjA5QzI2NS4wNDQsMS44MDksMjYwLjc2LDAsMjU1LjgxMywwYy00Ljk0OCwwLTkuMjI5LDEuODA5LTEyLjg0Nyw1LjQyNCAgIGwtNzMuMDg4LDczLjA5Yy0zLjYxOCwzLjYxOS01LjQyNCw3LjkwMi01LjQyNCwxMi44NTFjMCw0Ljk0NiwxLjgwNyw5LjIyOSw1LjQyNCwxMi44NDVjMy42MTksMy42MTcsNy45MDEsNS40MjYsMTIuODUsNS40MjYgICBoMzYuNTQ1djI5Mi4zNThoLTM2LjU0MmMtNC45NTIsMC05LjIzNSwxLjgwOC0xMi44NSw1LjQyMWMtMy42MTcsMy42MjEtNS40MjQsNy45MDUtNS40MjQsMTIuODU0ICAgYzAsNC45NDUsMS44MDcsOS4yMjcsNS40MjQsMTIuODQ3bDczLjA4OSw3My4wODhjMy42MTcsMy42MTcsNy44OTgsNS40MjQsMTIuODQ3LDUuNDI0YzQuOTUsMCw5LjIzNC0xLjgwNywxMi44NDktNS40MjQgICBsNzMuMDg3LTczLjA4OGMzLjYxMy0zLjYyLDUuNDIxLTcuOTAxLDUuNDIxLTEyLjg0N2MwLTQuOTQ4LTEuODA4LTkuMjMyLTUuNDIxLTEyLjg1NCAgIEMzMzguMTQyLDQwMy44MDIsMzMzLjg1Nyw0MDEuOTk0LDMyOC45MDYsNDAxLjk5NHoiIGZpbGw9IiM2NjY2NjYiLz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8Zz4KPC9nPgo8L3N2Zz4K);
+  background-repeat: no-repeat;
+  background-position: center;
+  -webkit-transform: rotate(45deg);
+  -moz-transform: rotate(45deg);
+  -ms-transform: rotate(45deg);
+  -o-transform: rotate(45deg);
+  transform: rotate(45deg);
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-se {
+  -webkit-transform: rotate(-45deg);
+  -moz-transform: rotate(-45deg);
+  -ms-transform: rotate(-45deg);
+  -o-transform: rotate(-45deg);
+  transform: rotate(-45deg);
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-nw {
+  cursor: nw-resize;
+  width: 20px;
+  height: 20px;
+  left: 10px;
+  top: 0;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-n {
+  cursor: n-resize;
+  height: 10px;
+  top: 0;
+  left: 25px;
+  right: 25px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-ne {
+  cursor: ne-resize;
+  width: 20px;
+  height: 20px;
+  right: 10px;
+  top: 0;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-e {
+  cursor: e-resize;
+  width: 10px;
+  right: 10px;
+  top: 15px;
+  bottom: 15px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-se {
+  cursor: se-resize;
+  width: 20px;
+  height: 20px;
+  right: 10px;
+  bottom: 0;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-s {
+  cursor: s-resize;
+  height: 10px;
+  left: 25px;
+  bottom: 0;
+  right: 25px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-sw {
+  cursor: sw-resize;
+  width: 20px;
+  height: 20px;
+  left: 10px;
+  bottom: 0;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-w {
+  cursor: w-resize;
+  width: 10px;
+  left: 10px;
+  top: 15px;
+  bottom: 15px;
+}
+
+.grid-stack > .grid-stack-item.ui-draggable-dragging > .ui-resizable-handle {
+  display: none !important;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='1'] {
+  width: 1%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='1'] {
+  left: 1%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='1'] {
+  min-width: 1%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='1'] {
+  max-width: 1%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='2'] {
+  width: 2%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='2'] {
+  left: 2%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='2'] {
+  min-width: 2%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='2'] {
+  max-width: 2%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='3'] {
+  width: 3%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='3'] {
+  left: 3%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='3'] {
+  min-width: 3%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='3'] {
+  max-width: 3%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='4'] {
+  width: 4%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='4'] {
+  left: 4%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='4'] {
+  min-width: 4%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='4'] {
+  max-width: 4%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='5'] {
+  width: 5%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='5'] {
+  left: 5%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='5'] {
+  min-width: 5%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='5'] {
+  max-width: 5%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='6'] {
+  width: 6%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='6'] {
+  left: 6%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='6'] {
+  min-width: 6%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='6'] {
+  max-width: 6%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='7'] {
+  width: 7%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='7'] {
+  left: 7%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='7'] {
+  min-width: 7%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='7'] {
+  max-width: 7%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='8'] {
+  width: 8%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='8'] {
+  left: 8%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='8'] {
+  min-width: 8%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='8'] {
+  max-width: 8%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='9'] {
+  width: 9%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='9'] {
+  left: 9%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='9'] {
+  min-width: 9%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='9'] {
+  max-width: 9%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='10'] {
+  width: 10%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='10'] {
+  left: 10%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='10'] {
+  min-width: 10%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='10'] {
+  max-width: 10%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='11'] {
+  width: 11%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='11'] {
+  left: 11%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='11'] {
+  min-width: 11%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='11'] {
+  max-width: 11%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-width='12'] {
+  width: 12%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='12'] {
+  left: 12%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='12'] {
+  min-width: 12%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='12'] {
+  max-width: 12%;
+}
+
+/*Changes: Added width-13*/
+
+.grid-stack > .grid-stack-item[data-gs-width='13'] {
+  width: 13%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='13'] {
+  left: 13%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='13'] {
+  min-width: 13%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='13'] {
+  max-width: 13%;
+}
+
+
+/*Changes: Added width-14*/
+
+.grid-stack > .grid-stack-item[data-gs-width='14'] {
+  width: 14%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='14'] {
+  left: 14%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='14'] {
+  min-width: 14%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='14'] {
+  max-width: 14%;
+}
+
+
+/*Changes: Added width-15*/
+
+.grid-stack > .grid-stack-item[data-gs-width='15'] {
+  width: 15%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='15'] {
+  left: 15%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='15'] {
+  min-width: 15%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='15'] {
+  max-width: 15%;
+}
+
+
+/*Changes: Added width-16*/
+
+.grid-stack > .grid-stack-item[data-gs-width='16'] {
+  width: 16%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='16'] {
+  left: 16%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='16'] {
+  min-width: 16%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='16'] {
+  max-width: 16%;
+}
+
+
+/*Changes: Added width-17*/
+
+.grid-stack > .grid-stack-item[data-gs-width='17'] {
+  width: 17%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='17'] {
+  left: 17%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='17'] {
+  min-width: 17%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='17'] {
+  max-width: 17%;
+}
+
+
+/*Changes: Added width-18*/
+
+.grid-stack > .grid-stack-item[data-gs-width='18'] {
+  width: 18%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='18'] {
+  left: 18%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='18'] {
+  min-width: 18%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='18'] {
+  max-width: 18%;
+}
+
+
+/*Changes: Added width-19*/
+
+.grid-stack > .grid-stack-item[data-gs-width='19'] {
+  width: 19%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='19'] {
+  left: 19%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='19'] {
+  min-width: 19%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='19'] {
+  max-width: 19%;
+}
+
+
+/*Changes: Added width-20*/
+
+.grid-stack > .grid-stack-item[data-gs-width='20'] {
+  width: 20%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='20'] {
+  left: 20%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='20'] {
+  min-width: 20%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='20'] {
+  max-width: 20%;
+}
+
+
+/*Changes: Added width-21*/
+
+.grid-stack > .grid-stack-item[data-gs-width='21'] {
+  width: 21%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='21'] {
+  left: 21%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='21'] {
+  min-width: 21%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='21'] {
+  max-width: 21%;
+}
+
+
+/*Changes: Added width-22*/
+
+.grid-stack > .grid-stack-item[data-gs-width='22'] {
+  width: 22%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='22'] {
+  left: 22%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='22'] {
+  min-width: 22%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='22'] {
+  max-width: 22%;
+}
+
+
+/*Changes: Added width-23*/
+
+.grid-stack > .grid-stack-item[data-gs-width='23'] {
+  width: 23%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='23'] {
+  left: 23%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='23'] {
+  min-width: 23%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='23'] {
+  max-width: 23%;
+}
+
+
+/*Changes: Added width-24*/
+
+.grid-stack > .grid-stack-item[data-gs-width='24'] {
+  width: 24%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='24'] {
+  left: 24%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='24'] {
+  min-width: 24%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='24'] {
+  max-width: 24%;
+}
+
+
+/*Changes: Added width-25*/
+
+.grid-stack > .grid-stack-item[data-gs-width='25'] {
+  width: 25%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='25'] {
+  left: 25%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='25'] {
+  min-width: 25%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='25'] {
+  max-width: 25%;
+}
+
+
+/*Changes: Added width-26*/
+
+.grid-stack > .grid-stack-item[data-gs-width='26'] {
+  width: 26%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='26'] {
+  left: 26%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='26'] {
+  min-width: 26%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='26'] {
+  max-width: 26%;
+}
+
+
+/*Changes: Added width-27*/
+
+.grid-stack > .grid-stack-item[data-gs-width='27'] {
+  width: 27%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='27'] {
+  left: 27%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='27'] {
+  min-width: 27%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='27'] {
+  max-width: 27%;
+}
+
+
+/*Changes: Added width-28*/
+
+.grid-stack > .grid-stack-item[data-gs-width='28'] {
+  width: 28%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='28'] {
+  left: 28%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='28'] {
+  min-width: 28%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='28'] {
+  max-width: 28%;
+}
+
+
+/*Changes: Added width-29*/
+
+.grid-stack > .grid-stack-item[data-gs-width='29'] {
+  width: 29%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='29'] {
+  left: 29%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='29'] {
+  min-width: 29%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='29'] {
+  max-width: 29%;
+}
+
+
+/*Changes: Added width-30*/
+
+.grid-stack > .grid-stack-item[data-gs-width='30'] {
+  width: 30%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='30'] {
+  left: 30%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='30'] {
+  min-width: 30%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='30'] {
+  max-width: 30%;
+}
+
+
+/*Changes: Added width-31*/
+
+.grid-stack > .grid-stack-item[data-gs-width='31'] {
+  width: 31%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='31'] {
+  left: 31%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='31'] {
+  min-width: 31%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='31'] {
+  max-width: 31%;
+}
+
+
+/*Changes: Added width-32*/
+
+.grid-stack > .grid-stack-item[data-gs-width='32'] {
+  width: 32%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='32'] {
+  left: 32%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='32'] {
+  min-width: 32%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='32'] {
+  max-width: 32%;
+}
+
+
+/*Changes: Added width-33*/
+
+.grid-stack > .grid-stack-item[data-gs-width='33'] {
+  width: 33%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='33'] {
+  left: 33%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='33'] {
+  min-width: 33%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='33'] {
+  max-width: 33%;
+}
+
+
+/*Changes: Added width-34*/
+
+.grid-stack > .grid-stack-item[data-gs-width='34'] {
+  width: 34%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='34'] {
+  left: 34%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='34'] {
+  min-width: 34%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='34'] {
+  max-width: 34%;
+}
+
+
+/*Changes: Added width-35*/
+
+.grid-stack > .grid-stack-item[data-gs-width='35'] {
+  width: 35%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='35'] {
+  left: 35%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='35'] {
+  min-width: 35%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='35'] {
+  max-width: 35%;
+}
+
+
+/*Changes: Added width-36*/
+
+.grid-stack > .grid-stack-item[data-gs-width='36'] {
+  width: 36%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='36'] {
+  left: 36%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='36'] {
+  min-width: 36%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='36'] {
+  max-width: 36%;
+}
+
+
+/*Changes: Added width-37*/
+
+.grid-stack > .grid-stack-item[data-gs-width='37'] {
+  width: 37%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='37'] {
+  left: 37%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='37'] {
+  min-width: 37%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='37'] {
+  max-width: 37%;
+}
+
+
+/*Changes: Added width-38*/
+
+.grid-stack > .grid-stack-item[data-gs-width='38'] {
+  width: 38%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='38'] {
+  left: 38%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='38'] {
+  min-width: 38%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='38'] {
+  max-width: 38%;
+}
+
+
+/*Changes: Added width-39*/
+
+.grid-stack > .grid-stack-item[data-gs-width='39'] {
+  width: 39%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='39'] {
+  left: 39%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='39'] {
+  min-width: 39%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='39'] {
+  max-width: 39%;
+}
+
+
+/*Changes: Added width-40*/
+
+.grid-stack > .grid-stack-item[data-gs-width='40'] {
+  width: 40%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='40'] {
+  left: 40%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='40'] {
+  min-width: 40%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='40'] {
+  max-width: 40%;
+}
+
+
+/*Changes: Added width-41*/
+
+.grid-stack > .grid-stack-item[data-gs-width='41'] {
+  width: 41%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='41'] {
+  left: 41%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='41'] {
+  min-width: 41%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='41'] {
+  max-width: 41%;
+}
+
+
+/*Changes: Added width-42*/
+
+.grid-stack > .grid-stack-item[data-gs-width='42'] {
+  width: 42%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='42'] {
+  left: 42%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='42'] {
+  min-width: 42%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='42'] {
+  max-width: 42%;
+}
+
+
+/*Changes: Added width-43*/
+
+.grid-stack > .grid-stack-item[data-gs-width='43'] {
+  width: 43%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='43'] {
+  left: 43%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='43'] {
+  min-width: 43%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='43'] {
+  max-width: 43%;
+}
+
+
+/*Changes: Added width-44*/
+
+.grid-stack > .grid-stack-item[data-gs-width='44'] {
+  width: 44%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='44'] {
+  left: 44%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='44'] {
+  min-width: 44%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='44'] {
+  max-width: 44%;
+}
+
+
+/*Changes: Added width-45*/
+
+.grid-stack > .grid-stack-item[data-gs-width='45'] {
+  width: 45%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='45'] {
+  left: 45%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='45'] {
+  min-width: 45%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='45'] {
+  max-width: 45%;
+}
+
+
+/*Changes: Added width-46*/
+
+.grid-stack > .grid-stack-item[data-gs-width='46'] {
+  width: 46%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='46'] {
+  left: 46%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='46'] {
+  min-width: 46%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='46'] {
+  max-width: 46%;
+}
+
+
+/*Changes: Added width-47*/
+
+.grid-stack > .grid-stack-item[data-gs-width='47'] {
+  width: 47%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='47'] {
+  left: 47%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='47'] {
+  min-width: 47%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='47'] {
+  max-width: 47%;
+}
+
+
+/*Changes: Added width-48*/
+
+.grid-stack > .grid-stack-item[data-gs-width='48'] {
+  width: 48%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='48'] {
+  left: 48%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='48'] {
+  min-width: 48%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='48'] {
+  max-width: 48%;
+}
+
+
+/*Changes: Added width-49*/
+
+.grid-stack > .grid-stack-item[data-gs-width='49'] {
+  width: 49%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='49'] {
+  left: 49%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='49'] {
+  min-width: 49%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='49'] {
+  max-width: 49%;
+}
+
+
+/*Changes: Added width-50*/
+
+.grid-stack > .grid-stack-item[data-gs-width='50'] {
+  width: 50%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='50'] {
+  left: 50%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='50'] {
+  min-width: 50%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='50'] {
+  max-width: 50%;
+}
+
+/*Changes: Added width-51*/
+
+.grid-stack > .grid-stack-item[data-gs-width='51'] {
+  width: 51%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='51'] {
+  left: 51%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='51'] {
+  min-width: 51%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='51'] {
+  max-width: 51%;
+}
+/*Changes: Added width-52*/
+
+.grid-stack > .grid-stack-item[data-gs-width='52'] {
+  width: 52%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='52'] {
+  left: 52%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='52'] {
+  min-width: 52%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='52'] {
+  max-width: 52%;
+}
+/*Changes: Added width-53*/
+
+.grid-stack > .grid-stack-item[data-gs-width='53'] {
+  width: 53%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='53'] {
+  left: 53%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='53'] {
+  min-width: 53%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='53'] {
+  max-width: 53%;
+}
+/*Changes: Added width-54*/
+
+.grid-stack > .grid-stack-item[data-gs-width='54'] {
+  width: 54%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='54'] {
+  left: 54%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='54'] {
+  min-width: 54%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='54'] {
+  max-width: 54%;
+}
+/*Changes: Added width-55*/
+
+.grid-stack > .grid-stack-item[data-gs-width='55'] {
+  width: 55%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='55'] {
+  left: 55%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='55'] {
+  min-width: 55%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='55'] {
+  max-width: 55%;
+}
+/*Changes: Added width-56*/
+
+.grid-stack > .grid-stack-item[data-gs-width='56'] {
+  width: 56%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='56'] {
+  left: 56%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='56'] {
+  min-width: 56%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='56'] {
+  max-width: 56%;
+}
+/*Changes: Added width-57*/
+
+.grid-stack > .grid-stack-item[data-gs-width='57'] {
+  width: 57%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='57'] {
+  left: 57%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='57'] {
+  min-width: 57%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='57'] {
+  max-width: 57%;
+}
+/*Changes: Added width-58*/
+
+.grid-stack > .grid-stack-item[data-gs-width='58'] {
+  width: 58%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='58'] {
+  left: 58%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='58'] {
+  min-width: 58%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='58'] {
+  max-width: 58%;
+}
+/*Changes: Added width-59*/
+
+.grid-stack > .grid-stack-item[data-gs-width='59'] {
+  width: 59%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='59'] {
+  left: 59%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='59'] {
+  min-width: 59%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='59'] {
+  max-width: 59%;
+}
+/*Changes: Added width-60*/
+
+.grid-stack > .grid-stack-item[data-gs-width='60'] {
+  width: 60%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='60'] {
+  left: 60%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='60'] {
+  min-width: 60%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='60'] {
+  max-width: 60%;
+}
+/*Changes: Added width-61*/
+
+.grid-stack > .grid-stack-item[data-gs-width='61'] {
+  width: 61%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='61'] {
+  left: 61%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='61'] {
+  min-width: 61%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='61'] {
+  max-width: 61%;
+}
+/*Changes: Added width-62*/
+
+.grid-stack > .grid-stack-item[data-gs-width='62'] {
+  width: 62%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='62'] {
+  left: 62%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='62'] {
+  min-width: 62%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='62'] {
+  max-width: 62%;
+}
+/*Changes: Added width-63*/
+
+.grid-stack > .grid-stack-item[data-gs-width='63'] {
+  width: 63%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='63'] {
+  left: 63%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='63'] {
+  min-width: 63%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='63'] {
+  max-width: 63%;
+}
+/*Changes: Added width-64*/
+
+.grid-stack > .grid-stack-item[data-gs-width='64'] {
+  width: 64%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='64'] {
+  left: 64%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='64'] {
+  min-width: 64%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='64'] {
+  max-width: 64%;
+}
+/*Changes: Added width-65*/
+
+.grid-stack > .grid-stack-item[data-gs-width='65'] {
+  width: 65%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='65'] {
+  left: 65%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='65'] {
+  min-width: 65%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='65'] {
+  max-width: 65%;
+}
+/*Changes: Added width-66*/
+
+.grid-stack > .grid-stack-item[data-gs-width='66'] {
+  width: 66%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='66'] {
+  left: 66%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='66'] {
+  min-width: 66%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='66'] {
+  max-width: 66%;
+}
+/*Changes: Added width-67*/
+
+.grid-stack > .grid-stack-item[data-gs-width='67'] {
+  width: 67%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='67'] {
+  left: 67%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='67'] {
+  min-width: 67%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='67'] {
+  max-width: 67%;
+}
+/*Changes: Added width-68*/
+
+.grid-stack > .grid-stack-item[data-gs-width='68'] {
+  width: 68%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='68'] {
+  left: 68%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='68'] {
+  min-width: 68%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='68'] {
+  max-width: 68%;
+}
+/*Changes: Added width-69*/
+
+.grid-stack > .grid-stack-item[data-gs-width='69'] {
+  width: 69%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='69'] {
+  left: 69%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='69'] {
+  min-width: 69%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='69'] {
+  max-width: 69%;
+}
+/*Changes: Added width-70*/
+
+.grid-stack > .grid-stack-item[data-gs-width='70'] {
+  width: 70%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='70'] {
+  left: 70%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='70'] {
+  min-width: 70%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='70'] {
+  max-width: 70%;
+}
+/*Changes: Added width-71*/
+
+.grid-stack > .grid-stack-item[data-gs-width='71'] {
+  width: 71%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='71'] {
+  left: 71%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='71'] {
+  min-width: 71%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='71'] {
+  max-width: 71%;
+}
+/*Changes: Added width-72*/
+
+.grid-stack > .grid-stack-item[data-gs-width='72'] {
+  width: 72%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='72'] {
+  left: 72%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='72'] {
+  min-width: 72%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='72'] {
+  max-width: 72%;
+}
+/*Changes: Added width-73*/
+
+.grid-stack > .grid-stack-item[data-gs-width='73'] {
+  width: 73%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='73'] {
+  left: 73%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='73'] {
+  min-width: 73%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='73'] {
+  max-width: 73%;
+}
+/*Changes: Added width-74*/
+
+.grid-stack > .grid-stack-item[data-gs-width='74'] {
+  width: 74%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='74'] {
+  left: 74%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='74'] {
+  min-width: 74%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='74'] {
+  max-width: 74%;
+}
+/*Changes: Added width-75*/
+
+.grid-stack > .grid-stack-item[data-gs-width='75'] {
+  width: 75%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='75'] {
+  left: 75%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='75'] {
+  min-width: 75%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='75'] {
+  max-width: 75%;
+}
+
+
+/*Changes: Added width-76*/
+
+.grid-stack > .grid-stack-item[data-gs-width='76'] {
+  width: 76%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='76'] {
+  left: 76%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='76'] {
+  min-width: 76%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='76'] {
+  max-width: 76%;
+}
+/*Changes: Added width-77*/
+
+.grid-stack > .grid-stack-item[data-gs-width='77'] {
+  width: 77%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='77'] {
+  left: 77%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='77'] {
+  min-width: 77%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='77'] {
+  max-width: 77%;
+}
+/*Changes: Added width-78*/
+
+.grid-stack > .grid-stack-item[data-gs-width='78'] {
+  width: 78%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='78'] {
+  left: 78%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='78'] {
+  min-width: 78%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='78'] {
+  max-width: 78%;
+}
+/*Changes: Added width-79*/
+
+.grid-stack > .grid-stack-item[data-gs-width='79'] {
+  width: 79%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='79'] {
+  left: 79%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='79'] {
+  min-width: 79%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='79'] {
+  max-width: 79%;
+}
+/*Changes: Added width-80*/
+
+.grid-stack > .grid-stack-item[data-gs-width='80'] {
+  width: 80%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='80'] {
+  left: 80%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='80'] {
+  min-width: 80%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='80'] {
+  max-width: 80%;
+}
+/*Changes: Added width-81*/
+
+.grid-stack > .grid-stack-item[data-gs-width='81'] {
+  width: 81%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='81'] {
+  left: 81%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='81'] {
+  min-width: 81%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='81'] {
+  max-width: 81%;
+}
+/*Changes: Added width-82*/
+
+.grid-stack > .grid-stack-item[data-gs-width='82'] {
+  width: 82%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='82'] {
+  left: 82%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='82'] {
+  min-width: 82%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='82'] {
+  max-width: 82%;
+}
+/*Changes: Added width-83*/
+
+.grid-stack > .grid-stack-item[data-gs-width='83'] {
+  width: 83%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='83'] {
+  left: 83%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='83'] {
+  min-width: 83%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='83'] {
+  max-width: 83%;
+}
+/*Changes: Added width-84*/
+
+.grid-stack > .grid-stack-item[data-gs-width='84'] {
+  width: 84%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='84'] {
+  left: 84%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='84'] {
+  min-width: 84%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='84'] {
+  max-width: 84%;
+}
+/*Changes: Added width-85*/
+
+.grid-stack > .grid-stack-item[data-gs-width='85'] {
+  width: 85%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='85'] {
+  left: 85%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='85'] {
+  min-width: 85%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='85'] {
+  max-width: 85%;
+}
+/*Changes: Added width-86*/
+
+.grid-stack > .grid-stack-item[data-gs-width='86'] {
+  width: 86%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='86'] {
+  left: 86%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='86'] {
+  min-width: 86%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='86'] {
+  max-width: 86%;
+}
+/*Changes: Added width-87*/
+
+.grid-stack > .grid-stack-item[data-gs-width='87'] {
+  width: 87%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='87'] {
+  left: 87%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='87'] {
+  min-width: 87%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='87'] {
+  max-width: 87%;
+}
+/*Changes: Added width-88*/
+
+.grid-stack > .grid-stack-item[data-gs-width='88'] {
+  width: 88%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='88'] {
+  left: 88%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='88'] {
+  min-width: 88%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='88'] {
+  max-width: 88%;
+}
+/*Changes: Added width-89*/
+
+.grid-stack > .grid-stack-item[data-gs-width='89'] {
+  width: 89%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='89'] {
+  left: 89%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='89'] {
+  min-width: 89%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='89'] {
+  max-width: 89%;
+}
+/*Changes: Added width-90*/
+
+.grid-stack > .grid-stack-item[data-gs-width='90'] {
+  width: 90%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='90'] {
+  left: 90%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='90'] {
+  min-width: 90%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='90'] {
+  max-width: 90%;
+}
+/*Changes: Added width-91*/
+
+.grid-stack > .grid-stack-item[data-gs-width='91'] {
+  width: 91%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='91'] {
+  left: 91%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='91'] {
+  min-width: 91%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='91'] {
+  max-width: 91%;
+}
+/*Changes: Added width-92*/
+
+.grid-stack > .grid-stack-item[data-gs-width='92'] {
+  width: 92%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='92'] {
+  left: 92%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='92'] {
+  min-width: 92%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='92'] {
+  max-width: 92%;
+}
+/*Changes: Added width-93*/
+
+.grid-stack > .grid-stack-item[data-gs-width='93'] {
+  width: 93%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='93'] {
+  left: 93%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='93'] {
+  min-width: 93%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='93'] {
+  max-width: 93%;
+}
+/*Changes: Added width-94*/
+
+.grid-stack > .grid-stack-item[data-gs-width='94'] {
+  width: 94%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='94'] {
+  left: 94%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='94'] {
+  min-width: 94%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='94'] {
+  max-width: 94%;
+}
+/*Changes: Added width-95*/
+
+.grid-stack > .grid-stack-item[data-gs-width='95'] {
+  width: 95%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='95'] {
+  left: 95%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='95'] {
+  min-width: 95%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='95'] {
+  max-width: 95%;
+}
+/*Changes: Added width-96*/
+
+.grid-stack > .grid-stack-item[data-gs-width='96'] {
+  width: 96%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='96'] {
+  left: 96%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='96'] {
+  min-width: 96%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='96'] {
+  max-width: 96%;
+}
+/*Changes: Added width-97*/
+
+.grid-stack > .grid-stack-item[data-gs-width='97'] {
+  width: 97%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='97'] {
+  left: 97%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='97'] {
+  min-width: 97%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='97'] {
+  max-width: 97%;
+}
+/*Changes: Added width-98*/
+
+.grid-stack > .grid-stack-item[data-gs-width='98'] {
+  width: 98%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='98'] {
+  left: 98%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='98'] {
+  min-width: 98%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='98'] {
+  max-width: 98%;
+}
+/*Changes: Added width-99*/
+
+.grid-stack > .grid-stack-item[data-gs-width='99'] {
+  width: 99%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='99'] {
+  left: 99%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='99'] {
+  min-width: 99%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='99'] {
+  max-width: 99%;
+}
+/*Changes: Added width-100*/
+
+.grid-stack > .grid-stack-item[data-gs-width='100'] {
+  width: 100%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-x='100'] {
+  left: 100%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-min-width='100'] {
+  min-width: 100%;
+}
+
+.grid-stack > .grid-stack-item[data-gs-max-width='100'] {
+  max-width: 100%;
+}
+
+.grid-stack.grid-stack-animate,
+.grid-stack.grid-stack-animate .grid-stack-item {
+  -webkit-transition: left 0.3s, top 0.3s, height 0.3s, width 0.3s;
+  -moz-transition: left 0.3s, top 0.3s, height 0.3s, width 0.3s;
+  -ms-transition: left 0.3s, top 0.3s, height 0.3s, width 0.3s;
+  -o-transition: left 0.3s, top 0.3s, height 0.3s, width 0.3s;
+  transition: left 0.3s, top 0.3s, height 0.3s, width 0.3s;
+}
+
+.grid-stack.grid-stack-animate .grid-stack-item.ui-draggable-dragging,
+.grid-stack.grid-stack-animate .grid-stack-item.ui-resizable-resizing,
+.grid-stack.grid-stack-animate .grid-stack-item.grid-stack-placeholder {
+  -webkit-transition: left 0s, top 0s, height 0s, width 0s;
+  -moz-transition: left 0s, top 0s, height 0s, width 0s;
+  -ms-transition: left 0s, top 0s, height 0s, width 0s;
+  -o-transition: left 0s, top 0s, height 0s, width 0s;
+  transition: left 0s, top 0s, height 0s, width 0s;
+}
+
+.grid-stack.grid-stack-one-column-mode {
+  height: auto !important;
+}
+
+.grid-stack.grid-stack-one-column-mode > .grid-stack-item {
+  position: relative !important;
+  width: auto !important;
+  left: 0 !important;
+  top: auto !important;
+  margin-bottom: 20px;
+  max-width: none !important;
+}
+
+.grid-stack.grid-stack-one-column-mode > .grid-stack-item > .ui-resizable-handle {
+  display: none;
+}

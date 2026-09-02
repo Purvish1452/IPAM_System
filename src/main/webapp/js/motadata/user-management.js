@@ -25,21 +25,33 @@ var userManagement =
     
     renderUserManagementGrid : function (context)
     {
-        if(context.json.data != null && context.json.success == true)
+        if(context && context.json && context.json.data != null && context.json.success == true)
         {
             var data = context.json.data;
 
-            for(var index=0;index < data.length ; index++)
-            {
-                data[index].roleId = data[index].userRoleId.role;
+            if (Array.isArray(data)) {
+                for(var index=0;index < data.length ; index++)
+                {
+                    if (data[index].userRoleId && data[index].userRoleId.role) {
+                        data[index].roleId = data[index].userRoleId.role;
+                    } else if (data[index].roleName) {
+                        data[index].roleId = data[index].roleName;
+                        data[index].userRoleId = { id: 1, role: data[index].roleName, description: "Role" };
+                    } else {
+                        data[index].roleId = "ROLE_ADMIN";
+                        data[index].userRoleId = { id: 1, role: "ROLE_ADMIN", description: "Administrator" };
+                    }
+                }
+                context.container.success(data);
+            } else {
+                context.container.success([]);
             }
-
-            context.container.success(data);
-
         }
         else
         {
-            context.container.success("");
+            if (context && context.container && typeof context.container.success === 'function') {
+                context.container.success([]);
+            }
 
             $(".k-grid-content").html(appConstant.NoDataSpan);
         }
@@ -87,7 +99,7 @@ var userManagement =
                     verifyPasswords: function(input)
                     {
                         var ret = true;
-                        if (input.is("[name=Confirm Password]")) {
+                        if (input.is("[id='rePassword']") || input.is("[name='Confirm Password']")) {
                             ret = input.val() === $("#password").val();
                         }
                         return ret;
@@ -155,7 +167,7 @@ var userManagement =
                     verifyPasswords: function(input)
                     {
                         var ret = true;
-                        if (input.is("[name=Confirm Password]")) {
+                        if (input.is("[id='rePassword']") || input.is("[name='Confirm Password']")) {
                             ret = input.val() === $("#password").val();
                         }
                         return ret;
@@ -409,7 +421,7 @@ var userManagement =
             }
             else
             {
-                userModal.content('<div class="common-box-grid-panel padding-t-20"><form id="addUserForm"><div class="fixed-height-body-popup-panel"><div class="row"><div class="col-xs-12 col-md-12 col-lg-6"> <label for="userName">Name</label> <input name="userName" type="text" class="k-textbox" required validationMessage="Name is required" maxlength="50"/></div><div class="col-xs-12 col-md-12 col-lg-6 select-drop-menu"> <label for="roleId">Access Control</label> <select id="roleId" name="roleId" class="k-dropdown" /></div></div><div class="row"><div class="col-xs-12 col-md-12 col-lg-6"> <label for="password">Password</label> <input name="password" type="password" class="k-textbox" id="password" required validationMessage="Password is required" maxlength="20"/></div><div class="col-xs-12 col-md-12 col-lg-6"> <label for="rePassword">Confirm Password</label> <input name="Confirm Password" type="password" class="k-textbox" id="rePassword" required maxlength="20"/> <span class="k-invalid-msg" data-for="password-confirm"></span></div></div><div class="row"><div class="col-xs-12 col-md-12 col-lg-6"> <label for="email">Email Id</label> <input name="email" type="email" class="k-textbox" required validationMessage="Valid Email address is required" maxlength="100" /></div><div class="col-xs-12 col-md-12 col-lg-6"> <label>Status</label><div class="col-xs-12 col-md-12 col-lg-12 padding-0 margin-t-5"> <input type="radio" name="activeStatus" class="k-radio" value="Enable" checked /> <label class="k-radio-label label-2" for="activeStatus">Enabled</label> <input type="radio" name="activeStatus" class="k-radio" value="Disable"/> <label class="k-radio-label label-2" for="status">Disabled</label></div></div></div><div class="row"><div class="col-xs-12 col-md-12 col-lg-12"> <label for="description">Description</label> <input name="description" type="text" class="k-textbox" maxlength="100"/></div></div></div><div class="footer-box-grid-box margin-t-10 align-right"> <button class="k-button k-button-icontext k-primary k-grid-update float-r" id="addUserManagement"> Save </button> <button class="defualt-btn k-button k-grid-cancel float-l" id="cancelUserButton">Cancel</button></div></form></div>');
+                userModal.content('<div class="common-box-grid-panel padding-t-20"><form id="addUserForm"><div class="fixed-height-body-popup-panel"><div class="row"><div class="col-xs-12 col-md-12 col-lg-6"> <label for="userName">Name</label> <input name="userName" type="text" class="k-textbox" required validationMessage="Name is required" maxlength="50"/></div><div class="col-xs-12 col-md-12 col-lg-6 select-drop-menu"> <label for="roleId">Access Control</label> <select id="roleId" name="roleId" class="k-dropdown" /></div></div><div class="row"><div class="col-xs-12 col-md-12 col-lg-6"> <label for="password">Password</label> <input name="password" type="password" class="k-textbox" id="password" required validationMessage="Password is required" maxlength="20"/></div><div class="col-xs-12 col-md-12 col-lg-6"> <label for="rePassword">Confirm Password</label> <input name="rePassword" type="password" class="k-textbox" id="rePassword" required validationMessage="Confirm Password is required" maxlength="20"/> <span class="k-invalid-msg" data-for="rePassword"></span></div></div><div class="row"><div class="col-xs-12 col-md-12 col-lg-6"> <label for="email">Email Id</label> <input name="email" type="email" class="k-textbox" required validationMessage="Valid Email address is required" maxlength="100" /></div><div class="col-xs-12 col-md-12 col-lg-6"> <label>Status</label><div class="col-xs-12 col-md-12 col-lg-12 padding-0 margin-t-5"> <input type="radio" name="activeStatus" class="k-radio" value="Enable" checked /> <label class="k-radio-label label-2" for="activeStatus">Enabled</label> <input type="radio" name="activeStatus" class="k-radio" value="Disable"/> <label class="k-radio-label label-2" for="status">Disabled</label></div></div></div><div class="row"><div class="col-xs-12 col-md-12 col-lg-12"> <label for="description">Description</label> <input name="description" type="text" class="k-textbox" maxlength="100"/></div></div></div><div class="footer-box-grid-box margin-t-10 align-right"> <button class="k-button k-button-icontext k-primary k-grid-update float-r" id="addUserManagement"> Save </button> <button class="defualt-btn k-button k-grid-cancel float-l" id="cancelUserButton">Cancel</button></div></form></div>');
 
                 table.kendoWindowSetOption({title : 'Add New User',width:'750px', kendoWindow : userModal});
 
@@ -668,12 +680,12 @@ var userManagement =
 
     showFeaturePermissionsBox: function (dataItem)
     {
-        const permissions = dataItem.roleFeaturePermissions || {};
+        const permissions = (dataItem && Array.isArray(dataItem.roleFeaturePermissions)) ? dataItem.roleFeaturePermissions : [];
 
         const filteredPermissions = permissions.map(permission => ({
-            feature: permission.feature.name, // Extracting feature name
-            read: permission.readPermission || false,
-            write: permission.writePermission || false
+            feature: (permission && permission.feature) ? (permission.feature.name || permission.feature) : "General",
+            read: permission ? (permission.readPermission || false) : false,
+            write: permission ? (permission.writePermission || false) : false
         }));
 
         let $rolePopupContent= $("#rolePopupContent");
@@ -799,7 +811,7 @@ var userManagement =
                     verifyPasswords: function(input)
                     {
                         var ret = true;
-                        if (input.is("[name=Confirm Password]")) {
+                        if (input.is("[id='rePassword']") || input.is("[name='Confirm Password']")) {
                             ret = input.val() === $("#password").val();
                         }
                         return ret;

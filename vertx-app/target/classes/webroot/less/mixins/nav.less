@@ -1,0 +1,221 @@
+.nav-panel {
+  width: 100% !important;
+  float: left;
+  border: 0;
+  margin-top: 10px;
+ /* max-height: 55%;*/
+  overflow: auto;
+  & ul {
+    .width100;
+    background: none;
+    & li {
+      .width100;
+      cursor: pointer;
+      border-bottom: solid 1px @brand-color22;
+      & > div {
+        .width100;
+        padding: 12px 15px;
+        position: relative;
+      }
+      & span.k-icon {
+        color: @brand-color5;
+        font-size: @fontSize14;
+        float: left;
+      }
+      /*& .k-in.k-state-selected {
+        background: none !important;
+      }*/
+      & span.k-in {
+        float: left;
+        font-size: @fontSize13;
+        color: @brand-color10;
+        width: 78%;
+        margin-left: 5px;
+        background: none;
+        &:hover {
+          background: none !important;
+        }
+        &.k-state-focused {
+          /*background: none !important;*/
+          box-shadow: none !important;
+        }
+        & span.page {
+          max-width: 255px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          .width100;
+        }
+        & span.value {
+          position: absolute;
+          right: 35px;
+          top: 9px;
+        }
+        & span.action {
+          position: absolute;
+          right: 16px;
+          top: 9px;
+        }
+        & > span {
+          /*text-overflow: ellipsis;
+          width: 80%;
+          overflow: hidden;
+          display: inline-block;
+          position: relative;
+          top: 2px;*/
+        }
+      }
+      &:hover {
+        background: @brand-color11;
+      }
+      & > ul {
+        width: 100%;
+        background: @brand-color1;
+        & li {
+          padding-left: 0px;
+          &:last-child {
+            border: 0;
+          }
+          & > div {
+            padding: 0;
+            & .k-in {
+              margin: 0;
+              position: relative;
+              width: 100%;
+
+              border-radius: 0;
+              & span.tree-name {
+                color:@brand-color9;
+                padding: 10px 0 8px 40px;
+                text-overflow: ellipsis;
+                overflow: hidden;
+                white-space: nowrap;
+              }
+              & span:first-child {
+                width: 84%;
+                float: left;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              & span.fa-trash {
+                position: absolute;
+                right: 15px;
+                top: 11px;
+                padding: 0;
+                &:before {
+                  color: @brand-color9;
+                  &:hover {
+                    color: @brand-color1;
+                  }
+                }
+                &:hover {
+                  &:before {
+                    color: @brand-color5;
+                  }
+                }
+              }
+              & span.tree-edit {
+                position: absolute;
+                right: 30px;
+                top: 11px;
+                padding: 0;
+                & i.fa {
+                  color: @brand-color9;
+                }
+                &:before {
+                  color: @brand-color9;
+                  &:hover {
+                    color: @brand-color5;
+                  }
+                }
+                &:hover {
+                  &:before {
+                    color: @brand-color5;
+                  }
+                }
+              }
+
+              & a {
+                color:@brand-color9;
+                padding: 10px 0 8px 40px;
+              }
+              & a:first-child {
+                width: 88%;
+                float: left;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              & a.fa.fa-edit {
+                position: absolute;
+                right: 15px;
+                top: 10px;
+                padding: 0;
+                &:before {
+                  color: @brand-color9;
+                  &:hover {
+                    color: @brand-color1;
+                  }
+                }
+                &:hover {
+                  &:before {
+                    color: @brand-color9;
+                  }
+                }
+              }
+            }
+            & .k-state-focused {
+              /*background: @brand-color9;*/
+              & a {
+                color: @brand-color1;
+                &:before {
+                  color: @brand-color1;
+                  &:hover {
+                    color: @brand-color9;
+                  }
+                }
+              }
+              &:hover {
+                background: @brand-color9;
+              }
+            }
+            & .k-state-selected {
+              background: rgba(171, 176, 183, 0.2);
+              & a {
+                color: @brand-color1;
+                &:before {
+                  color: @brand-color1 !important;
+                  &:hover {
+                    color: @brand-color9;
+                  }
+                }
+              }
+              &:hover {
+                background: rgba(171, 176, 183, 0.1) !important;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+#reportTreeView {
+  & ul li > ul li > div .k-in {
+    padding: 10px 0 8px 35px;
+    &.k-state-selected,
+    .k-state-focused{
+      background: #fff;
+    }
+    &:hover {
+      background: #f4f8f9 !important;
+    }
+    &.k-state-focused {
+      background: none !important;
+    }
+    & .k-checkbox-label {
+      line-height: 20px;
+    }
+  }
+}

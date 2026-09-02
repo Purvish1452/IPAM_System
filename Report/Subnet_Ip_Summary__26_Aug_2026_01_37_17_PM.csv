@@ -1,0 +1,2 @@
+IP Address,Mac Address,Status,IP To Dns,Dns To Ip,Vendor,Authenticity,Last Alive Time,TestColumn
+192.168.1.1,00:1A:2B:3C:4D:5E,Active,host1.local,192.168.1.1,Cisco,trusted,2025-04-03 10:15:30,N/A

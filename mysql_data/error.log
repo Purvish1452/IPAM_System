@@ -1,0 +1,88 @@
+2026-08-26T06:48:58.480380Z 0 [System] [MY-013169] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) initializing of server in progress as process 37
+2026-08-26T06:48:58.482900Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:48:58.492048Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:48:59.424446Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-26T06:49:02.022543Z 6 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
+2026-08-26T06:49:12.445677Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) starting as process 38
+2026-08-26T06:49:12.447315Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:49:12.461927Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:49:12.753807Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-26T06:49:13.870137Z 0 [ERROR] [MY-011292] [Server] Plugin mysqlx reported: 'Preparation of I/O interfaces failed, X Protocol won't be accessible'
+2026-08-26T06:49:13.870198Z 0 [ERROR] [MY-011300] [Server] Plugin mysqlx reported: 'Setup of bind-address: '127.0.0.1' port: 33060 failed, `bind()` failed with error: Address already in use (98). Do you already have another mysqld server running with Mysqlx ?'
+2026-08-26T06:49:13.870212Z 0 [ERROR] [MY-013597] [Server] Plugin mysqlx reported: 'Value '127.0.0.1' set to `Mysqlx_bind_address`, X Plugin can't bind to it. Skipping this value.'
+2026-08-26T06:49:13.870243Z 0 [ERROR] [MY-011300] [Server] Plugin mysqlx reported: 'Setup of socket: '/var/run/mysqld/mysqlx.sock' failed, can't create lock file /var/run/mysqld/mysqlx.sock.lock'
+2026-08-26T06:49:14.058652Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-26T06:49:14.058695Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-26T06:49:14.061892Z 0 [ERROR] [MY-010262] [Server] Can't start server: Bind on TCP/IP port: Address already in use
+2026-08-26T06:49:14.061939Z 0 [ERROR] [MY-010257] [Server] Do you already have another mysqld server running on port: 3306 ?
+2026-08-26T06:49:14.061977Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-08-26T06:49:15.652417Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.0.46-0ubuntu0.24.04.3)  (Ubuntu).
+2026-08-26T06:49:45.571271Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) starting as process 38
+2026-08-26T06:49:45.573711Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:49:45.586780Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:49:45.892842Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-26T06:49:46.163136Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-26T06:49:46.163179Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-26T06:49:46.166986Z 0 [ERROR] [MY-010262] [Server] Can't start server: Bind on TCP/IP port: Address already in use
+2026-08-26T06:49:46.167040Z 0 [ERROR] [MY-010257] [Server] Do you already have another mysqld server running on port: 3306 ?
+2026-08-26T06:49:46.167084Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-08-26T06:49:47.785874Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.0.46-0ubuntu0.24.04.3)  (Ubuntu).
+2026-08-26T06:50:21.587930Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) starting as process 39
+2026-08-26T06:50:21.591336Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:50:21.602830Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:50:21.893101Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-26T06:50:22.181443Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-26T06:50:22.181481Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-26T06:50:22.192520Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location '/home/purvish/Documents/IPAM_Real/mysql_data' in the path is accessible to all OS users. Consider choosing a different directory.
+2026-08-26T06:50:22.222876Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.0.46-0ubuntu0.24.04.3'  socket: '/home/purvish/Documents/IPAM_Real/mysql_data/mysql.sock'  port: 3306  (Ubuntu).
+2026-08-26T06:51:28.062210Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) starting as process 37
+2026-08-26T06:51:28.064509Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:51:28.076750Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:51:28.099738Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:29.099871Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:30.100040Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:31.100305Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:32.100556Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:33.100744Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:34.100922Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:35.101149Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:36.101372Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:37.101535Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:38.101704Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:39.101864Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:40.102024Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:41.102227Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:42.102436Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:43.102589Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:44.102778Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:45.102975Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:46.103124Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:47.103276Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:48.103513Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:49.103727Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:50.103976Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:51.104219Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:52.104377Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:51:53.104548Z 1 [ERROR] [MY-012574] [InnoDB] Unable to lock ./ibdata1 error: 11
+2026-08-26T06:52:07.665789Z 12 [Warning] [MY-013360] [Server] Plugin mysql_native_password reported: ''mysql_native_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'
+2026-08-26T06:52:30.466199Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) starting as process 40
+2026-08-26T06:52:30.468566Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:52:30.477654Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:52:31.418826Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-26T06:52:31.524786Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-08-26T06:52:31.533739Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-08-26T06:52:31.629097Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-26T06:52:31.629129Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-26T06:52:31.633083Z 0 [ERROR] [MY-010262] [Server] Can't start server: Bind on TCP/IP port: Address already in use
+2026-08-26T06:52:31.633130Z 0 [ERROR] [MY-010257] [Server] Do you already have another mysqld server running on port: 3306 ?
+2026-08-26T06:52:31.633180Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-08-26T06:52:33.267591Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.0.46-0ubuntu0.24.04.3)  (Ubuntu).
+2026-08-26T06:52:44.093675Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.46-0ubuntu0.24.04.3) starting as process 38
+2026-08-26T06:52:44.096049Z 0 [Warning] [MY-010122] [Server] One can only use the --user switch if running as root
+2026-08-26T06:52:44.109486Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-26T06:52:44.394577Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-26T06:52:44.635601Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-26T06:52:44.635628Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-26T06:52:44.645511Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location '/home/purvish/Documents/IPAM_Real/mysql_data' in the path is accessible to all OS users. Consider choosing a different directory.
+2026-08-26T06:52:44.666881Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.0.46-0ubuntu0.24.04.3'  socket: '/home/purvish/Documents/IPAM_Real/mysql_data/mysql.sock'  port: 3307  (Ubuntu).
+2026-08-26T06:53:17.598551Z 8 [Warning] [MY-013360] [Server] Plugin mysql_native_password reported: ''mysql_native_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'

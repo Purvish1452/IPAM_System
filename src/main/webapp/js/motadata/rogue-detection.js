@@ -234,19 +234,26 @@ var rogueDetection=
 
         renderRogueDetectionGrid : function (context)
         {
-            if(context!=null && context!=undefined)
+            if(context!=null && context!=undefined && context.json)
             {
                 var result = context.json.data;
 
                 if(result!=null && result !=undefined && context.json.success == true)
                 {
-                    context.container.success(result);
-
+                    if (Array.isArray(result)) {
+                        context.container.success(result);
+                    } else if (result && Array.isArray(result.data)) {
+                        context.container.success(result.data);
+                    } else {
+                        context.container.success([]);
+                    }
                     loaderUtil.hideCentralModalLoader();
                 }
                 else
                 {
-                    context.container.success("");
+                    if (context.container && typeof context.container.success === 'function') {
+                        context.container.success([]);
+                    }
 
                     $(".k-grid-content").html(appConstant.NoDataSpan);
 

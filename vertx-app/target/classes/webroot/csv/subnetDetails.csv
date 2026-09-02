@@ -1,0 +1,2 @@
+Category Name,Subnet Address ,Subnet Mask / Prefix ,Subnet CIDR ,Subnet Name ,VLAN Name,Location ,Description,DNS Address,Scheduled Hours,Duration,Local Subnet, Gateway IP
+Test,192.168.127.0,255.255.255.0,24,Test123,Test123,Ahmedabad123,Test123,192.168.1.2,0,Days,no,172.16.8.2

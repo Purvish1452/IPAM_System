@@ -239,7 +239,7 @@ var appManager =
                 },
                 error: function (json)
                 {
-                    if(json.responseJSON.message==='Access is denied')
+                    if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                     {
                         loaderUtil.hideCentralModalLoader();
 
@@ -300,7 +300,7 @@ var appManager =
             },
             error: function (json)
             {
-                if(json.responseJSON.message==='Access is denied')
+                if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
                     loaderUtil.hideCentralModalLoader();
 
@@ -357,7 +357,7 @@ var appManager =
             },
             error: function (json)
             {
-                if(json.responseJSON.message==='Access is denied')
+                if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
                     loaderUtil.hideCentralModalLoader();
 
@@ -411,7 +411,7 @@ var appManager =
             },
             error: function (json)
             {
-                if(json.responseJSON.message==='Access is denied')
+                if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
                     loaderUtil.hideCentralModalLoader();
 
@@ -465,7 +465,7 @@ var appManager =
             },
             error: function (json)
             {
-                if(json.responseJSON.message==='Access is denied')
+                if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
                     loaderUtil.hideCentralModalLoader();
 
@@ -478,5 +478,24 @@ var appManager =
                 }
             }
         });
+    },
+
+    formatDate: function (date)
+    {
+        if(date)
+        {
+            var date = new Date(date);
+
+            return date.getFullYear() + "-" + appManager.checkLeadingZero(date.getMonth() + 1) + "-" + appManager.checkLeadingZero(date.getDate()) + " " + appManager.checkLeadingZero(date.getHours()) + ":" + appManager.checkLeadingZero(date.getMinutes()) + ":" + appManager.checkLeadingZero(date.getSeconds());
+        }
+        else
+        {
+            return "";
+        }
+    },
+
+    checkLeadingZero : function (context)
+    {
+        return (context < 10 ? '0' : '') + context;
     }
 };
