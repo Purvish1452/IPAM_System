@@ -232,7 +232,12 @@ var subnetSummary =
                                         }
 
                                         let gridData = response.json.data;
-                                        let firstRowCustomColumns = gridData.length > 0 ? gridData[0].customColumns || {} : {};
+                                        gridData.forEach(function (row) {
+                                            if (!row.customColumns || typeof row.customColumns !== "object") {
+                                                row.customColumns = {};
+                                            }
+                                        });
+                                        response.json.data = gridData;
 
                                         // Generate dynamic custom columns based on fetched column names
                                         let customFields = availableColumns.map(key => ({
