@@ -61,10 +61,25 @@
             <artifactId>vertx-auth-jwt</artifactId>
         </dependency>
 
-        <!-- Vert.x Reactive MySQL Client & JDBC -->
+        <!-- Vert.x Reactive PostgreSQL Client & JDBC -->
         <dependency>
             <groupId>io.vertx</groupId>
-            <artifactId>vertx-mysql-client</artifactId>
+            <artifactId>vertx-pg-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ongres.scram</groupId>
+            <artifactId>client</artifactId>
+            <version>2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ongres.scram</groupId>
+            <artifactId>common</artifactId>
+            <version>2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ongres.stringprep</groupId>
+            <artifactId>saslprep</artifactId>
+            <version>1.1</version>
         </dependency>
         <dependency>
             <groupId>io.vertx</groupId>
@@ -83,9 +98,9 @@
 
         <!-- Database Driver & Migrations -->
         <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>8.0.33</version>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.6.0</version>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
