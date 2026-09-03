@@ -89,8 +89,10 @@ public class MainVerticle extends AbstractVerticle {
                 new AlertRouter(alertService).attachRoutes(router);
                 new ReportRouter(reportService).attachRoutes(router);
 
-                // Serve static web assets from webroot
-                router.route("/*").handler(StaticHandler.create("webroot"));
+                // Serve static web assets from webroot (disable caching for development/live updates)
+                router.route("/*").handler(StaticHandler.create("webroot")
+                        .setCachingEnabled(false)
+                        .setMaxAgeSeconds(0));
 
                 // Start HTTP Server
                 int port = config.getServerPort();
