@@ -84,8 +84,17 @@ var widgetRenderManager =
                     pageSize: context.PageSize,
                     serverPaging: true,
                     schema: {
-                        data: "data",   // Data field in the response
-                        total: "total"  // Total count field in the response
+                        data: function(response) {
+                            if (response && Array.isArray(response.data)) return response.data;
+                            if (Array.isArray(response)) return response;
+                            return [];
+                        },
+                        total: function(response) {
+                            if (response && response.total !== undefined && response.total !== null) return response.total;
+                            if (response && Array.isArray(response.data)) return response.data.length;
+                            if (Array.isArray(response)) return response.length;
+                            return 0;
+                        }
                     },
                 },
                 dataBound:function (e)
