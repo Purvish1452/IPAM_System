@@ -1,20 +1,20 @@
 package com.motadata.ipam.router;
 
-import com.motadata.ipam.dao.DhcpDao;
-import io.vertx.core.json.JsonArray;
+import com.motadata.ipam.service.DhcpService;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
 /**
- * Vert.x Web router for DHCP management REST API endpoints.
+ * Vert.x Web router for DHCP Server management & Scope Utilization REST API endpoints.
+ * Architecture: Handler -> Service -> PgPool -> PostgreSQL
  */
 public class DhcpRouter {
 
-    private final DhcpDao dhcpDao;
+    private final DhcpService dhcpService;
 
-    public DhcpRouter(DhcpDao dhcpDao) {
-        this.dhcpDao = dhcpDao;
+    public DhcpRouter(DhcpService dhcpService) {
+        this.dhcpService = dhcpService;
     }
 
     public void attachRoutes(Router router) {
@@ -35,150 +35,88 @@ public class DhcpRouter {
     }
 
     private void handleGetDhcpCredentials(RoutingContext ctx) {
-        dhcpDao.findAllCredentials().onComplete(ar -> {
-            JsonArray data = new JsonArray();
-            if (ar.succeeded() && ar.result() != null && !ar.result().isEmpty()) {
-                for (Object o : ar.result()) {
-                    data.add(JsonObject.mapFrom(o));
-                }
-            } else {
-                data.add(new JsonObject().put("id", 1).put("credentialName", "WinDHCP-Primary").put("serverIp", "192.168.1.1").put("type", "WINDOWS").put("status", "Active"));
-                data.add(new JsonObject().put("id", 2).put("credentialName", "CiscoDHCP-Core").put("serverIp", "192.168.1.2").put("type", "CISCO").put("status", "Active"));
-            }
-
-            JsonObject result = new JsonObject()
-                    .put("data", data)
-                    .put("success", true);
-
-            ctx.response()
-                    .putHeader("Content-Type", "application/json;charset=UTF-8")
-                    .end(result.encode());
+        dhcpService.getCredentials().onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
         });
     }
 
     private void handleGetDhcpCredentialById(RoutingContext ctx) {
-        JsonObject data = new JsonObject()
-                .put("id", 1)
-                .put("credentialName", "Default DHCP Server")
-                .put("serverIp", "192.168.1.1")
-                .put("type", "WINDOWS");
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.getCredentialById(id).onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleSaveDhcpCredential(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "DHCP Credential Saved Successfully");
+        JsonObject body = null;
+        try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
+        if (body == null) body = new JsonObject();
 
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.saveCredential(body).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        });
     }
 
     private void handleDeleteDhcpCredential(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "DHCP Credential Deleted Successfully");
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.deleteCredential(id).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        });
     }
 
     private void handleGetWindowsDhcpCredentials(RoutingContext ctx) {
-        JsonArray data = new JsonArray()
-                .add(new JsonObject().put("id", 1).put("credentialName", "WinDHCP-Primary"))
-                .add(new JsonObject().put("id", 2).put("credentialName", "WinDHCP-Secondary"));
-
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.getWindowsCredentials().onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleGetCiscoDhcpCredentials(RoutingContext ctx) {
-        JsonArray data = new JsonArray()
-                .add(new JsonObject().put("id", 3).put("credentialName", "CiscoDHCP-Core"));
-
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.getCiscoCredentials().onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleCheckDhcpCredential(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "Connection to DHCP Server succeeded");
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.checkCredential(new JsonObject()).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        });
     }
 
     private void handleGetDhcpUtilization(RoutingContext ctx) {
-        JsonArray data = new JsonArray()
-                .add(new JsonObject()
-                        .put("id", 1)
-                        .put("subnetAddress", "192.168.1.0/24")
-                        .put("subnetName", "192.168.1.0/24")
-                        .put("usedIpPercentage", 17.7)
-                        .put("type", "WINDOWS")
-                        .put("usedIp", 45)
-                        .put("availableIp", 209)
-                        .put("severity", 3))
-                .add(new JsonObject()
-                        .put("id", 2)
-                        .put("subnetAddress", "10.0.0.0/16")
-                        .put("subnetName", "10.0.0.0/16")
-                        .put("usedIpPercentage", 23.5)
-                        .put("type", "CISCO")
-                        .put("usedIp", 120)
-                        .put("availableIp", 380)
-                        .put("severity", 3));
-
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.getDhcpUtilization().onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleGetDhcpUtilizationById(RoutingContext ctx) {
-        JsonArray data = new JsonArray()
-                .add(new JsonObject().put("scopeName", "Scope-192.168.1.0").put("utilization", 17.7));
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.getDhcpUtilizationById(id).onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleScanDhcp(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "DHCP Scope scan initiated");
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        dhcpService.scanDhcp(id).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        });
     }
 }
