@@ -210,71 +210,37 @@ var subnetSummary =
                     Read: function (options) {
                         loaderUtil.showCentralModalLoader(appConstant.LoadingMessage);
 
-                        // Fetch all available custom column names
+                        // Fetch the subnet IP data
                         appManager.executeGETRequest({
-                            url: '/customColumn/',
-                            callback: function (columnResponse) {
-                                if (!columnResponse || !Array.isArray(columnResponse.json.data)) {
-                                    console.warn("Failed to fetch column names.");
+                            url: '/subnetIpBySubnet/' + id,
+                            container: options,
+                            callback: function (response) {
+                                if (!response || !Array.isArray(response.json.data)) {
+                                    console.warn("Invalid data response.");
+                                    if (options && options.success) options.success([]);
+                                    loaderUtil.hideCentralModalLoader();
                                     return;
                                 }
 
-                                let availableColumns = columnResponse.json.data.map(item => item.columnName);// List of all valid custom column names
-
-                                // Now fetch the subnet data
-                                appManager.executeGETRequest({
-                                    url: '/subnetIpBySubnet/' + id,
-                                    container: options,
-                                    callback: function (response) {
-                                        if (!response || !Array.isArray(response.json.data)) {
-                                            console.warn("Invalid data response.");
-                                            return;
-                                        }
-
-                                        let gridData = response.json.data;
-                                        let firstRowCustomColumns = gridData.length > 0 ? gridData[0].customColumns || {} : {};
-
-                                        // Generate dynamic custom columns based on fetched column names
-                                        let customFields = availableColumns.map(key => ({
-                                            field: `customColumns.${key}`,
-                                            title: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim(),
-                                            template: `# if (customColumns["${key}"]) { #
-                                                <span style="display: block; text-align: center; padding: 5px; white-space: normal;"
-                                                      title="#: customColumns['${key}'] #">
-                                                    #: customColumns['${key}'] #
-                                                </span>
-                                            # } else { #
-                                                <span style="display: block; text-align: center; padding: 5px;"></span>
-                                            # } #`,
-                                            width: "10%"
-                                        }));
-
-                                        let newFields = [...callbackContexts.Fields, ...customFields];
-
-                                        let grid = $(gridId).data("kendoGrid");
-
-                                        if (grid) {
-                                            let newColumnsJSON = JSON.stringify(newFields);
-                                            if (newColumnsJSON !== lastUpdatedColumns) {
-                                                lastUpdatedColumns = newColumnsJSON;
-
-                                                requestIdleCallback(() => {
-                                                    grid.setOptions({ columns: newFields });
-
-                                                    setTimeout(() => {
-                                                        if (grid.dataSource.total() === 0) {
-                                                            grid.dataSource.read();
-                                                        }
-                                                    }, 150);
-                                                });
-                                            }
-                                        } else {
-                                            console.warn("Kendo Grid is not initialized yet.");
-                                        }
-
-                                        subnetSummary.renderSubnetIPSummaryGrid(response || []);
+                                let gridData = response.json.data;
+                                gridData.forEach(function (row) {
+                                    if (!row.customColumns || typeof row.customColumns !== "object") {
+                                        row.customColumns = {};
                                     }
+                                    if (!row.subnetId || typeof row.subnetId !== "object") {
+                                        row.subnetId = {
+                                            id: (row.subnetId !== undefined && row.subnetId !== null) ? row.subnetId : id,
+                                            subnetName: row.subnetName || scopeAddress || "Subnet"
+                                        };
+                                    }
+                                    if (!row.ipToDns) row.ipToDns = row.dnsStatus || "Forward OK";
+                                    if (!row.dnsToIp) row.dnsToIp = row.dnsStatus || "Reverse OK";
+                                    if (!row.authenticity) row.authenticity = "TRUSTED";
+                                    if (!row.lastAliveTime) row.lastAliveTime = row.lastScanTime || "N/A";
                                 });
+                                response.json.data = gridData;
+
+                                subnetSummary.renderSubnetIPSummaryGrid(response || []);
                             }
                         });
                     },

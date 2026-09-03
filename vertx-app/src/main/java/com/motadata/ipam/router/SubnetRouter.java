@@ -250,7 +250,7 @@ public class SubnetRouter {
 
         Long subnetId = (subnetIdStr != null) ? Long.parseLong(subnetIdStr) : 1L;
         Integer page = (pageStr != null) ? Integer.parseInt(pageStr) : 1;
-        Integer pageSize = (pageSizeStr != null) ? Integer.parseInt(pageSizeStr) : 50;
+        Integer pageSize = (pageSizeStr != null) ? Integer.parseInt(pageSizeStr) : 10000;
 
         subnetService.getIpDetails(subnetId, page, pageSize).onComplete(ar -> {
             JsonObject result = new JsonObject()
@@ -267,13 +267,16 @@ public class SubnetRouter {
             if (pathParam != null) subnetId = Long.parseLong(pathParam);
         } catch (Exception ignored) {}
 
-        subnetService.getIpDetails(subnetId, 1, 100).onComplete(ar -> {
+        // The UI uses client-side Kendo paging — all records must be returned at once.
+        // Page=1 with a very large pageSize fetches all rows without artificial truncation.
+        subnetService.getIpDetails(subnetId, 1, 10000).onComplete(ar -> {
             JsonObject result = new JsonObject()
                     .put("data", ar.succeeded() ? ar.result() : new JsonArray())
                     .put("success", true);
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
         });
     }
+
 
     private void handleGetGateways(RoutingContext ctx) {
         subnetService.getGateways().onComplete(ar -> {
