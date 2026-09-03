@@ -1,11 +1,13 @@
 package com.motadata.ipam.service;
 
 import com.motadata.ipam.config.AppConfig;
-import com.motadata.ipam.dao.*;
+import com.motadata.ipam.db.DatabaseInit;
+import com.motadata.ipam.db.PgClientProvider;
 import com.motadata.ipam.security.JwtAuthProvider;
 import io.vertx.core.Vertx;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
+import io.vertx.sqlclient.Pool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(VertxExtension.class)
 public class ServiceTest {
 
-    private DatabasePool dbPool;
+    private PgClientProvider pgClientProvider;
     private UserService userService;
     private SubnetService subnetService;
     private AlertService alertService;
@@ -25,19 +27,16 @@ public class ServiceTest {
     @BeforeEach
     public void setUp(Vertx vertx, VertxTestContext testContext) {
         AppConfig.load(vertx).onComplete(testContext.succeeding(config -> {
-            FlywayRunner.runMigrations(vertx, config).onComplete(testContext.succeeding(v -> {
-                dbPool = new DatabasePool(vertx, config);
+            pgClientProvider = new PgClientProvider(vertx, config);
+            Pool db = pgClientProvider.getPool();
+
+            DatabaseInit.initSchema(vertx, db).onComplete(testContext.succeeding(v -> {
                 JwtAuthProvider jwtAuthProvider = new JwtAuthProvider(vertx);
 
-                UserDao userDao = new UserDao(dbPool.getClient());
-                SubnetDao subnetDao = new SubnetDao(dbPool.getClient());
-                AlertDao alertDao = new AlertDao(dbPool.getClient());
-                EventDao eventDao = new EventDao(dbPool.getClient());
-
-                userService = new UserService(userDao, jwtAuthProvider);
-                subnetService = new SubnetService(subnetDao);
-                alertService = new AlertService(alertDao);
-                eventService = new EventService(eventDao);
+                userService = new UserService(db, jwtAuthProvider);
+                subnetService = new SubnetService(db);
+                alertService = new AlertService(db);
+                eventService = new EventService(db);
 
                 testContext.completeNow();
             }));
@@ -46,14 +45,14 @@ public class ServiceTest {
 
     @AfterEach
     public void tearDown() {
-        if (dbPool != null) {
-            dbPool.close();
+        if (pgClientProvider != null) {
+            pgClientProvider.close();
         }
     }
 
     @Test
     public void testUserAuthentication(VertxTestContext testContext) {
-        userService.authenticate("admin", "admin").onComplete(testContext.succeeding(result -> {
+        userService.authenticate("admin", "admin123").onComplete(testContext.succeeding(result -> {
             testContext.verify(() -> {
                 assertNotNull(result);
                 assertTrue(result.getBoolean("success"));
@@ -70,7 +69,7 @@ public class ServiceTest {
             testContext.verify(() -> {
                 assertNotNull(result);
                 assertTrue(result.getBoolean("success"));
-                assertNotNull(result.getJsonObject("data"));
+                assertNotNull(result.getJsonArray("data"));
                 testContext.completeNow();
             });
         }));
@@ -82,7 +81,7 @@ public class ServiceTest {
             testContext.verify(() -> {
                 assertNotNull(result);
                 assertTrue(result.getBoolean("success"));
-                assertNotNull(result.getJsonObject("data"));
+                assertNotNull(result.getJsonArray("data"));
                 testContext.completeNow();
             });
         }));
@@ -93,6 +92,7 @@ public class ServiceTest {
         subnetService.getAllSubnets().onComplete(testContext.succeeding(subnets -> {
             testContext.verify(() -> {
                 assertNotNull(subnets);
+                assertTrue(subnets.size() > 0);
                 testContext.completeNow();
             });
         }));

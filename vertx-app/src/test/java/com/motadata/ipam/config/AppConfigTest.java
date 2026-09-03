@@ -19,7 +19,8 @@ public class AppConfigTest {
                 assertEquals(8080, config.getServerPort());
                 assertEquals("localhost", config.getServerHost());
                 assertEquals("localhost", config.getDbHost());
-                assertEquals(3306, config.getDbPort());
+                assertEquals(5432, config.getDbPort());
+                assertEquals("ipam_db", config.getDbName());
                 testContext.completeNow();
             });
         }));

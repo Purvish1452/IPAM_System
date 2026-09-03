@@ -84,7 +84,7 @@ public class MainVerticleTest {
                         try {
                             assertEquals(200, ar.result().statusCode());
                             assertTrue(ar.result().bodyAsJsonObject().getBoolean("success"));
-                            assertEquals("ROLE_ROLE_ADMIN", ar.result().bodyAsJsonObject().getString("currentUserRole"));
+                            assertEquals("ROLE_ADMIN", ar.result().bodyAsJsonObject().getString("currentUserRole"));
                             testContext.completeNow();
                         } catch (Throwable t) {
                             testContext.failNow(t);
