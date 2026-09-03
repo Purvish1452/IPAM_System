@@ -118,15 +118,27 @@ var alerts = {
 
     renderAlertsGridData : function (context)
     {
-        if(context.json.data != null && context.json.success == true)
+        if(context && context.json && context.json.success === true && context.json.data != null)
         {
             var result = context.json.data;
+            var totalCount = (context.json.total !== undefined && context.json.total !== null) ? context.json.total : (Array.isArray(result) ? result.length : 0);
 
-            context.container.success(result);
+            if (Array.isArray(result)) {
+                context.container.success({
+                    data: result,
+                    total: totalCount
+                });
+            } else if (result && Array.isArray(result.data)) {
+                context.container.success(result);
+            } else {
+                context.container.success({ data: [], total: 0 });
+            }
         }
         else
         {
-            context.container.success("");
+            if (context && context.container && typeof context.container.success === 'function') {
+                context.container.success({ data: [], total: 0 });
+            }
 
             $(".k-grid-content").html(appConstant.NoDataSpan);
         }
