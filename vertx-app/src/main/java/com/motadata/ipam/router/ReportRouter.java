@@ -6,11 +6,12 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Vert.x Web Router for Report and PDF Reporting API Endpoints.
+ * Vert.x Web Router for Report Scheduling and PDF/CSV Reporting API Endpoints.
+ * Architecture: Handler -> Service -> PgPool -> PostgreSQL
  */
 public class ReportRouter {
 
@@ -46,10 +47,7 @@ public class ReportRouter {
         JsonArray data = new JsonArray()
                 .add(new JsonObject().put("id", 1).put("subnetAddress", "192.168.1.0/24").put("subnetName", "Default Subnet"));
 
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
+        JsonObject result = new JsonObject().put("data", data).put("success", true);
         ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
     }
 
@@ -63,63 +61,55 @@ public class ReportRouter {
                         .put("hostName", "server-01.motadata.local")
                         .put("lastSeen", "2026-09-02 10:00:00"));
 
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
+        JsonObject result = new JsonObject().put("data", data).put("success", true);
         ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
     }
 
     private void handleGetReportSchedulers(RoutingContext ctx) {
-        JsonArray data = new JsonArray();
-
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        reportService.getReportSchedulers().onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleGetReportSchedulerById(RoutingContext ctx) {
-        JsonObject data = new JsonObject()
-                .put("id", 1)
-                .put("scheduleName", "Weekly Subnet Summary")
-                .put("reportType", "PDF")
-                .put("scheduleTime", "09:00");
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
-        JsonObject result = new JsonObject()
-                .put("data", data)
-                .put("success", true);
-
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        reportService.getReportSchedulerById(id).onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleSaveReportScheduler(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "Report Schedule Saved Successfully");
+        JsonObject body = null;
+        try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
+        if (body == null) body = new JsonObject();
 
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        reportService.saveReportScheduler(body).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        });
     }
 
     private void handleDeleteReportScheduler(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "Report Schedule Deleted");
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        reportService.deleteReportScheduler(id).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        });
     }
 
     private void handleInsertMailRecipient(RoutingContext ctx) {
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("message", "Email recipient added");
-
+        JsonObject result = new JsonObject().put("success", true).put("message", "Email recipient added");
         ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
     }
 
     private void handleSubnetPdfReport(RoutingContext ctx) {
-        LOGGER.info("Received request for Subnet PDF Report download");
+        LOGGER.info("Generating Subnet PDF Report download");
         reportService.generateSubnetPdfReport().onComplete(ar -> {
             if (ar.succeeded()) {
                 sendPdfResponse(ctx, ar.result(), "Subnet_Utilization_Report.pdf");
@@ -130,7 +120,7 @@ public class ReportRouter {
     }
 
     private void handleAlertPdfReport(RoutingContext ctx) {
-        LOGGER.info("Received request for Alert PDF Report download");
+        LOGGER.info("Generating Alert PDF Report download");
         reportService.generateAlertPdfReport().onComplete(ar -> {
             if (ar.succeeded()) {
                 sendPdfResponse(ctx, ar.result(), "Alert_History_Report.pdf");
@@ -141,7 +131,7 @@ public class ReportRouter {
     }
 
     private void handleEventPdfReport(RoutingContext ctx) {
-        LOGGER.info("Received request for Event PDF Report download");
+        LOGGER.info("Generating Event PDF Report download");
         reportService.generateEventPdfReport().onComplete(ar -> {
             if (ar.succeeded()) {
                 sendPdfResponse(ctx, ar.result(), "Event_Audit_Log_Report.pdf");
@@ -152,7 +142,7 @@ public class ReportRouter {
     }
 
     private void handleDhcpPdfReport(RoutingContext ctx) {
-        LOGGER.info("Received request for DHCP PDF Report download");
+        LOGGER.info("Generating DHCP PDF Report download");
         reportService.generateDhcpPdfReport().onComplete(ar -> {
             if (ar.succeeded()) {
                 sendPdfResponse(ctx, ar.result(), "DHCP_Server_Report.pdf");
@@ -171,13 +161,7 @@ public class ReportRouter {
     }
 
     private void sendErrorResponse(RoutingContext ctx, int statusCode, String message) {
-        JsonObject errorJson = new JsonObject()
-                .put("status", statusCode)
-                .put("message", message);
-
-        ctx.response()
-                .setStatusCode(statusCode)
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(errorJson.encode());
+        JsonObject errorJson = new JsonObject().put("status", statusCode).put("message", message);
+        ctx.response().setStatusCode(statusCode).putHeader("Content-Type", "application/json;charset=UTF-8").end(errorJson.encode());
     }
 }

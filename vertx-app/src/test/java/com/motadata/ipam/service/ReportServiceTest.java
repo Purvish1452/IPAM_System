@@ -1,10 +1,12 @@
 package com.motadata.ipam.service;
 
 import com.motadata.ipam.config.AppConfig;
-import com.motadata.ipam.dao.*;
+import com.motadata.ipam.db.DatabaseInit;
+import com.motadata.ipam.db.PgClientProvider;
 import io.vertx.core.Vertx;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
+import io.vertx.sqlclient.Pool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(VertxExtension.class)
 public class ReportServiceTest {
 
-    private DatabasePool dbPool;
+    private PgClientProvider pgClientProvider;
     private ReportService reportService;
 
     @BeforeEach
@@ -23,14 +25,11 @@ public class ReportServiceTest {
         AppConfig.load(vertx).onComplete(configAr -> {
             if (configAr.succeeded()) {
                 AppConfig config = configAr.result();
-                FlywayRunner.runMigrations(vertx, config).onComplete(flywayAr -> {
-                    dbPool = new DatabasePool(vertx, config);
-                    SubnetDao subnetDao = new SubnetDao(dbPool.getClient());
-                    AlertDao alertDao = new AlertDao(dbPool.getClient());
-                    EventDao eventDao = new EventDao(dbPool.getClient());
-                    DhcpDao dhcpDao = new DhcpDao(dbPool.getClient());
+                pgClientProvider = new PgClientProvider(vertx, config);
+                Pool db = pgClientProvider.getPool();
 
-                    reportService = new ReportService(vertx, subnetDao, alertDao, eventDao, dhcpDao);
+                DatabaseInit.initSchema(vertx, db).onComplete(initAr -> {
+                    reportService = new ReportService(vertx, db);
                     testContext.completeNow();
                 });
             } else {
@@ -41,8 +40,8 @@ public class ReportServiceTest {
 
     @AfterEach
     public void tearDown() {
-        if (dbPool != null) {
-            dbPool.close();
+        if (pgClientProvider != null) {
+            pgClientProvider.close();
         }
     }
 
@@ -54,7 +53,6 @@ public class ReportServiceTest {
                     byte[] pdfBytes = ar.result();
                     assertNotNull(pdfBytes);
                     assertTrue(pdfBytes.length > 0);
-                    // Verify PDF header magic bytes %PDF
                     String pdfHeader = new String(pdfBytes, 0, Math.min(4, pdfBytes.length));
                     assertEquals("%PDF", pdfHeader);
                     testContext.completeNow();
