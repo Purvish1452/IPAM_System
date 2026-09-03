@@ -10,11 +10,18 @@ min-memory : 1024
 #tomcat server max heap memory
 max-memory : 2048
 
-#mariadb host
+#postgresql host
 db-host: localhost
 
-#mariadb port
-db-port: 3306
+#postgresql port
+db-port: 5432
+
+#postgresql database name
+db-name: ipam_db
+
+#postgresql credentials
+db-user: postgres
+db-password: password
 
 #max ping check timeout (seconds)
 max-ping-check-timeout: 10

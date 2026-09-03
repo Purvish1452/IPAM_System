@@ -1,7 +1,8 @@
 package com.motadata.ipam;
 
 import com.motadata.ipam.config.AppConfig;
-import com.motadata.ipam.dao.*;
+import com.motadata.ipam.db.DatabaseInit;
+import com.motadata.ipam.db.PgClientProvider;
 import com.motadata.ipam.router.*;
 import com.motadata.ipam.scheduler.JobScheduler;
 import com.motadata.ipam.security.JwtAuthHandler;
@@ -15,22 +16,24 @@ import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.SessionHandler;
 import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
-import org.slf4j.LoggerFactory;
+import io.vertx.sqlclient.Pool;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Entry point Verticle for the Vert.x IPAM Web Application.
+ * Architecture: Handler -> Service -> PgPool -> PostgreSQL
  */
 public class MainVerticle extends AbstractVerticle {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MainVerticle.class);
 
-    private DatabasePool dbPool;
+    private PgClientProvider pgClientProvider;
     private JobScheduler jobScheduler;
 
     @Override
     public void start(Promise<Void> startPromise) {
-        LOGGER.info("Starting Vert.x IPAM MainVerticle...");
+        LOGGER.info("Starting Vert.x IPAM MainVerticle (PostgreSQL Reactive Engine)...");
 
         AppConfig.load(vertx).onComplete(configAr -> {
             if (configAr.failed()) {
@@ -41,35 +44,35 @@ public class MainVerticle extends AbstractVerticle {
 
             AppConfig config = configAr.result();
 
-            // Run database Flyway migrations
-            FlywayRunner.runMigrations(vertx, config).onComplete(flywayAr -> {
-                if (flywayAr.failed()) {
-                    LOGGER.warn("Flyway migration warning: {}", flywayAr.cause().getMessage());
+            // Initialize PostgreSQL Reactive Connection Pool
+            pgClientProvider = new PgClientProvider(vertx, config);
+            Pool db = pgClientProvider.getPool();
+
+            // Initialize PostgreSQL Schema & Seed Data
+            DatabaseInit.initSchema(vertx, db).onComplete(initAr -> {
+                if (initAr.failed()) {
+                    LOGGER.warn("Database initialization warning: {}", initAr.cause().getMessage());
                 }
 
-                // Initialize Database Pool & Security
-                dbPool = new DatabasePool(vertx, config);
+                // Initialize Security Provider
                 JwtAuthProvider jwtAuthProvider = new JwtAuthProvider(vertx);
 
                 // Initialize Background Job Scheduler
                 jobScheduler = new JobScheduler(vertx);
                 jobScheduler.start();
 
-                // Initialize DAOs
-                UserDao userDao = new UserDao(dbPool.getClient());
-                SubnetDao subnetDao = new SubnetDao(dbPool.getClient());
-                AlertDao alertDao = new AlertDao(dbPool.getClient());
-                EventDao eventDao = new EventDao(dbPool.getClient());
-                DhcpDao dhcpDao = new DhcpDao(dbPool.getClient());
+                // Initialize Direct Reactive Services (No DAO layer)
+                UserService userService = new UserService(db, jwtAuthProvider);
+                SubnetService subnetService = new SubnetService(db);
+                DhcpService dhcpService = new DhcpService(db);
+                AlertService alertService = new AlertService(db);
+                EventService eventService = new EventService(db);
+                SettingsService settingsService = new SettingsService(db);
+                DiscoveryService discoveryService = new DiscoveryService(db);
+                ReportService reportService = new ReportService(vertx, db);
+                SubnetIPActionService subnetIPActionService = new SubnetIPActionService(vertx, db);
 
-                // Initialize Services
-                UserService userService = new UserService(userDao, jwtAuthProvider);
-                SubnetService subnetService = new SubnetService(subnetDao);
-                AlertService alertService = new AlertService(alertDao);
-                EventService eventService = new EventService(eventDao);
-                ReportService reportService = new ReportService(vertx, subnetDao, alertDao, eventDao, dhcpDao);
-
-                // Configure Router
+                // Configure Vert.x Web Router
                 Router router = Router.router(vertx);
 
                 // Body & Session handlers mounted first
@@ -77,13 +80,13 @@ public class MainVerticle extends AbstractVerticle {
                 router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
                 router.route().handler(new JwtAuthHandler(jwtAuthProvider));
 
-                // Mount API Routers
+                // Mount REST API Routers
                 new AuthRouter(userService).attachRoutes(router);
-                new SubnetRouter(subnetService).attachRoutes(router);
-                new AlertRouter(alertService).attachRoutes(router);
+                new SubnetRouter(subnetService, userService, subnetIPActionService).attachRoutes(router);
+                new DhcpRouter(dhcpService).attachRoutes(router);
+                new SettingsRouter(userService, settingsService, alertService, discoveryService).attachRoutes(router);
                 new EventRouter(eventService).attachRoutes(router);
-                new SettingsRouter().attachRoutes(router);
-                new DhcpRouter(dhcpDao).attachRoutes(router);
+                new AlertRouter(alertService).attachRoutes(router);
                 new ReportRouter(reportService).attachRoutes(router);
 
                 // Serve static web assets from webroot
@@ -95,7 +98,10 @@ public class MainVerticle extends AbstractVerticle {
                         .requestHandler(router)
                         .listen(httpAr -> {
                             if (httpAr.succeeded()) {
-                                LOGGER.info("Vert.x IPAM Server successfully started on http://localhost:{}", port);
+                                LOGGER.info("===============================================================");
+                                LOGGER.info(" Vert.x IPAM Server running on http://localhost:{}", port);
+                                LOGGER.info(" Architecture: Handler -> Service -> PgPool -> PostgreSQL");
+                                LOGGER.info("===============================================================");
                                 startPromise.complete();
                             } else {
                                 LOGGER.error("Failed to start Vert.x HTTP server on port {}: {}", port, httpAr.cause().getMessage());
@@ -111,8 +117,8 @@ public class MainVerticle extends AbstractVerticle {
         if (jobScheduler != null) {
             jobScheduler.stop();
         }
-        if (dbPool != null) {
-            dbPool.close();
+        if (pgClientProvider != null) {
+            pgClientProvider.close();
         }
         LOGGER.info("Stopped Vert.x IPAM MainVerticle.");
         stopPromise.complete();
