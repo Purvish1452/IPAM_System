@@ -6,13 +6,14 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URLEncoder;
 
 /**
- * Vert.x Web router for Authentication, Session, View routing, and Global Search endpoints.
+ * Vert.x Web router for Authentication, Session, Page views, PBAC permissions, and Global Search.
+ * Architecture: Handler -> Service -> PgPool -> PostgreSQL
  */
 public class AuthRouter {
 
@@ -25,16 +26,16 @@ public class AuthRouter {
     }
 
     public void attachRoutes(Router router) {
-        // Page view routes
+        // Static page views
         router.get("/").handler(this::handleIndexPage);
         router.get("/login.html").handler(this::handleIndexPage);
         router.get("/loadHomePage").handler(this::handleHomePage);
 
-        // Authentication endpoints
+        // Authentication & Session
         router.post("/loginUser.html").handler(this::handleLogin);
         router.get("/logout.html").handler(this::handleLogout);
 
-        // Security validation & Global Search endpoints
+        // Security validation & Global Search
         router.get("/validatePermission/").handler(this::handleValidatePermission);
         router.post("/search/").handler(this::handleGlobalSearch);
     }
@@ -58,14 +59,13 @@ public class AuthRouter {
                     if (uName == null) uName = json.getString("userName");
                     if (pass == null) pass = json.getString("password");
                 }
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
 
         final String finalUserName = uName;
         final String finalPassword = pass;
 
-        LOGGER.info("AuthRouter handleLogin executing for user: {}", finalUserName);
+        LOGGER.info("AuthRouter handling login for user: {}", finalUserName);
 
         userService.authenticate(finalUserName, finalPassword).onComplete(ar -> {
             if (ar.succeeded() && ar.result() != null && Boolean.TRUE.equals(ar.result().getBoolean("success"))) {
@@ -79,15 +79,15 @@ public class AuthRouter {
                     ctx.response().addCookie(Cookie.cookie("userName", finalUserName != null ? finalUserName : "").setPath("/"));
                     ctx.response().addCookie(Cookie.cookie("authorities", safeAuthorities).setPath("/"));
                 } catch (Exception e) {
-                    LOGGER.warn("Failed to encode cookie values: {}", e.getMessage());
+                    LOGGER.warn("Failed to encode auth cookie: {}", e.getMessage());
                 }
 
-                LOGGER.info("AuthRouter handleLogin success, redirecting user {} to /loadHomePage", finalUserName);
+                LOGGER.info("Login successful for user {}, redirecting to /loadHomePage", finalUserName);
                 ctx.response().setStatusCode(302).putHeader("Location", "/loadHomePage").end();
             } else {
-                String message = (ar.succeeded() && ar.result() != null) ? ar.result().getString("message") : "Bad Credentials";
-                LOGGER.warn("AuthRouter handleLogin failed for user {}: {}", finalUserName, message);
-                ctx.response().setStatusCode(302).putHeader("Location", "/login.html?error=" + message).end();
+                String msg = (ar.succeeded() && ar.result() != null) ? ar.result().getString("message", "Bad Credentials") : "Bad Credentials";
+                LOGGER.warn("Login failed for user {}: {}", finalUserName, msg);
+                ctx.response().setStatusCode(302).putHeader("Location", "/login.html?error=" + msg).end();
             }
         });
     }
@@ -106,37 +106,17 @@ public class AuthRouter {
             userName = ctx.request().getParam("userName");
         }
 
-        String role = "ROLE_USER";
-        if ("admin".equalsIgnoreCase(userName)) {
-            role = "ROLE_ADMIN";
-        } else if (userName != null && !userName.trim().isEmpty()) {
-            for (JsonObject u : SettingsRouter.getFallbackUsers()) {
-                if (userName.equalsIgnoreCase(u.getString("userName"))) {
-                    String uRole = u.getString("roleName");
-                    if (uRole != null && !uRole.trim().isEmpty()) {
-                        role = uRole;
-                    }
-                    break;
-                }
-            }
-        } else {
-            role = "ROLE_ADMIN";
-        }
-
-        JsonObject result = new JsonObject()
-                .put("success", true)
-                .put("currentUserRole", role);
-
-        ctx.response()
-                .putHeader("Content-Type", "application/json;charset=UTF-8")
-                .end(result.encode());
+        userService.validatePermission(userName).onComplete(ar -> {
+            JsonObject result = ar.succeeded() ? ar.result() : new JsonObject().put("success", true).put("currentUserRole", "ROLE_ADMIN");
+            ctx.response()
+                    .putHeader("Content-Type", "application/json;charset=UTF-8")
+                    .end(result.encode());
+        });
     }
 
     private void handleGlobalSearch(RoutingContext ctx) {
-        JsonArray data = new JsonArray();
-
         JsonObject result = new JsonObject()
-                .put("data", data)
+                .put("data", new JsonArray())
                 .put("success", true);
 
         ctx.response()
