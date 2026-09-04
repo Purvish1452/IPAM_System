@@ -82,7 +82,7 @@ public class MainVerticle extends AbstractVerticle {
 
                 // Mount REST API Routers
                 new AuthRouter(userService).attachRoutes(router);
-                new SubnetRouter(subnetService, userService, subnetIPActionService).attachRoutes(router);
+                new SubnetRouter(subnetService, userService, subnetIPActionService, discoveryService).attachRoutes(router);
                 new DhcpRouter(dhcpService).attachRoutes(router);
                 new SettingsRouter(userService, settingsService, alertService, discoveryService).attachRoutes(router);
                 new EventRouter(eventService).attachRoutes(router);

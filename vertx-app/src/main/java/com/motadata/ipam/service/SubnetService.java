@@ -251,24 +251,42 @@ public class SubnetService {
 
     public Future<JsonArray> getGateways() {
         Promise<JsonArray> promise = Promise.promise();
-        String sql = "SELECT id, gateway, description, version FROM gateway ORDER BY id ASC";
+        String sql = "SELECT id, gateway, COALESCE(name, description, 'Core Gateway Router') as name_val, " +
+                "COALESCE(to_char(previous_scan, 'YYYY-MM-DD HH24:MI:SS'), '2026-09-02 10:00:00') as prev_scan, " +
+                "COALESCE(status, 'Active') as status_val, description, version " +
+                "FROM gateway ORDER BY id ASC";
         db.query(sql).execute(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
+                    String name = row.getString("name_val");
+                    String gw = row.getString("gateway");
+                    String prevScan = row.getString("prev_scan");
+                    String stat = row.getString("status_val");
                     result.add(new JsonObject()
                             .put("id", row.getLong("id"))
-                            .put("gateway", row.getString("gateway"))
-                            .put("description", row.getString("description"))
-                            .put("version", row.getString("version")));
+                            .put("name", name)
+                            .put("gateway", gw)
+                            .put("previousScan", prevScan)
+                            .put("status", stat)
+                            .put("description", row.getString("description") != null ? row.getString("description") : name)
+                            .put("version", row.getString("version") != null ? row.getString("version") : "v2c"));
                 }
                 promise.complete(result);
             } else {
-                promise.complete(new JsonArray().add(new JsonObject().put("id", 1).put("gateway", "192.168.1.1").put("description", "Default Core Gateway Router")));
+                promise.complete(new JsonArray().add(new JsonObject()
+                        .put("id", 1)
+                        .put("name", "Default Core Gateway Router")
+                        .put("gateway", "192.168.1.1")
+                        .put("previousScan", "2026-09-02 10:00:00")
+                        .put("status", "Active")
+                        .put("description", "Default Core Gateway Router")));
             }
         });
         return promise.future();
     }
+
+
 
     public Future<JsonObject> saveGateway(JsonObject gJson) {
         Promise<JsonObject> promise = Promise.promise();

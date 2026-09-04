@@ -1,0 +1,168 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 5818 >>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(Subnet IP Address Export - Subnet ID: 1) Tj
+0 -20 Td
+/F1 9 Tf
+(Generated: 2026-09-03 18:17:22) Tj
+0 -25 Td
+/F1 10 Tf
+(IP Address            Status     MAC Address        Host Name) Tj
+0 -18 Td
+(--------------------------------------------------------------) Tj
+0 -5 Td
+0 -18 Td
+("192.168.10.1"         "AVAILABLE" "00:50:56:FE:10:01"  "gateway-01.motadata.local") Tj
+0 -18 Td
+("192.168.10.10"        "AVAILABLE" "00:50:56:FE:10:02"  "db-primary.motadata.local") Tj
+0 -18 Td
+("192.168.10.100"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.101"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.102"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.103"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.104"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.105"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.106"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.107"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.108"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.109"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.11"        "AVAILABLE" "00:50:56:FE:10:03"  "web-app.motadata.local") Tj
+0 -18 Td
+("192.168.10.110"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.111"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.112"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.113"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.114"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.115"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.116"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.117"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.118"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.119"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.12"        "AVAILABLE" "00:50:56:FE:10:04"  "cache-01.motadata.local") Tj
+0 -18 Td
+("192.168.10.120"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.121"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.122"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.123"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.124"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.125"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.126"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.127"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.128"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.129"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.13"        "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.130"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.131"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.132"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.133"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.134"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.135"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.136"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.137"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.138"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.139"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.14"        "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.140"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.141"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.142"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.143"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.144"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.145"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.146"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.147"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.148"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.149"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.15"        "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.150"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.151"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("192.168.10.152"       "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+(... and 195 more records) Tj
+ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000006111 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+6179
+%%EOF

@@ -1,0 +1,3 @@
+IP Address,MAC Address,Host Name,Status,Device Type,DNS Status,Last Alive Time,Location,Description
+"192.168.10.1","00:50:56:FE:10:01","gateway-01.motadata.local","AVAILABLE","ROUTER","Forward & Reverse OK","N/A","HQ DC","Cisco 2960 Gateway"
+"192.168.10.10","00:50:56:FE:10:02","db-primary.motadata.local","AVAILABLE","SERVER","Forward & Reverse OK","N/A","HQ DC","PostgreSQL Database Server"

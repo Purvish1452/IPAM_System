@@ -275,18 +275,32 @@ var flux =
     {
         if (context) {
             var id = context.dropDownId;
+            var dataItems = context.data || context.dataSource || [];
 
             id.kendoDropDownList({
                 value : context.value,
                 dataTextField: context.dataTextField,
                 dataValueField: context.dataValueField,
                 dataSource: {
-                    data: context.data
+                    data: dataItems
                 },
                 filter:context.filter
             });
         }
     },
+
+    bindKendoDropDownListChangeEvent: function (context, callback)
+    {
+        if (context && context.dropDownId) {
+            var dropdown = context.dropDownId.data("kendoDropDownList");
+            if (dropdown) {
+                dropdown.bind("change", callback);
+            } else {
+                context.dropDownId.on("change", callback);
+            }
+        }
+    },
+
 
     // ----------------------------------------------------------------------------------kendo multiselet dropdown with local data----------------------------------------------------------------------------------------//
 

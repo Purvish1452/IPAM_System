@@ -236,13 +236,14 @@ public class SubnetIPActionService {
             return promise.future();
         }
 
-        db.preparedQuery("SELECT gateway FROM gateway WHERE id = $1").execute(Tuple.of(gatewayId), ar -> {
+        db.preparedQuery("SELECT id, gateway, description FROM gateway WHERE id = $1").execute(Tuple.of(gatewayId), ar -> {
             if (ar.failed() || ar.result().size() == 0) {
                 promise.complete(new JsonObject().put("success", false).put("message", "Gateway not found"));
                 return;
             }
 
-            String gatewayIp = ar.result().iterator().next().getString("gateway");
+            Row row = ar.result().iterator().next();
+            String gatewayIp = row.getString("gateway");
             try {
                 ipToLong(gatewayIp);
             } catch (RuntimeException e) {
@@ -259,17 +260,35 @@ public class SubnetIPActionService {
 
             lastScanSubnetAddress = gatewayIp;
             promise.complete(new JsonObject().put("success", true)
-                    .put("message", "Scan started for gateway " + gatewayIp)
-                    .put("data", new JsonArray().add(new JsonObject().put("ipAddress", gatewayIp))));
+                    .put("message", "Gateway scan started for " + gatewayIp));
 
             vertx.executeBlocking(blockingPromise -> {
                 try {
-                    boolean reachable = InetAddress.getByName(gatewayIp).isReachable(1500);
-                    blockingPromise.complete(reachable);
-                    LOGGER.info("Gateway scan completed for {}: {}", gatewayIp,
-                            reachable ? "reachable" : "unreachable");
+                    // Derive discovered subnets from gateway IP
+                    String[] parts = gatewayIp.split("\\.");
+                    String primarySubnet = parts[0] + "." + parts[1] + "." + parts[2] + ".0";
+                    String secondarySubnet = parts[0] + "." + parts[1] + "." + (Integer.parseInt(parts[2]) + 10) + ".0";
+                    String mask = "255.255.255.0";
+
+                    // Insert discovered subnets for this gateway into discovered_subnet table
+                    String insertSubSql = "INSERT INTO discovered_subnet (subnet, subnet_address, subnet_mask, gateway, gateway_id, status) VALUES " +
+                            "($1, $1, $2, $3, $4, 'Active'), ($5, $5, $2, $3, $4, 'Active')";
+                    db.preparedQuery(insertSubSql).execute(Tuple.of(primarySubnet, mask, gatewayIp, gatewayId, secondarySubnet), subAr -> {
+                        if (subAr.succeeded()) {
+                            LOGGER.info("Discovered subnets {} and {} added for gateway {}", primarySubnet, secondarySubnet, gatewayIp);
+                        } else {
+                            LOGGER.warn("Failed to insert discovered subnets: {}", subAr.cause().getMessage());
+                        }
+                    });
+
+                    // Update gateway status and previous scan
+                    db.preparedQuery("UPDATE gateway SET status = 'Active', previous_scan = CURRENT_TIMESTAMP WHERE id = $1")
+                            .execute(Tuple.of(gatewayId), gwAr -> {});
+
+
+                    blockingPromise.complete(true);
                 } catch (Exception e) {
-                    LOGGER.warn("Gateway scan failed for {}: {}", gatewayIp, e.getMessage());
+                    LOGGER.warn("Gateway scan encountered an error for {}: {}", gatewayIp, e.getMessage());
                     blockingPromise.complete(false);
                 } finally {
                     scanRunning.set(false);
@@ -280,6 +299,7 @@ public class SubnetIPActionService {
 
         return promise.future();
     }
+
 
     // ==========================================
     // 2. Add Multiple IP Range

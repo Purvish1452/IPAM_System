@@ -21,15 +21,25 @@ public class DatabaseInit {
         pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users'").execute(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 LOGGER.info("PostgreSQL database tables already present. Schema check passed.");
-                pool.query("CREATE UNIQUE INDEX IF NOT EXISTS subnet_ip_details_ip_address_uq " +
-                        "ON subnet_ip_details (ip_address)").execute(indexAr -> {
+                String migrationSql = "ALTER TABLE gateway ADD COLUMN IF NOT EXISTS name VARCHAR(100); " +
+                        "ALTER TABLE gateway ADD COLUMN IF NOT EXISTS previous_scan TIMESTAMP; " +
+                        "ALTER TABLE gateway ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Active'; " +
+                        "ALTER TABLE discovered_subnet ADD COLUMN IF NOT EXISTS subnet VARCHAR(100); " +
+                        "ALTER TABLE discovered_subnet ADD COLUMN IF NOT EXISTS gateway VARCHAR(100); " +
+                        "UPDATE gateway SET name = COALESCE(name, description, 'Core Gateway Router'), status = COALESCE(status, 'Active'), previous_scan = COALESCE(previous_scan, CURRENT_TIMESTAMP); " +
+                        "UPDATE discovered_subnet SET subnet = COALESCE(subnet, subnet_address), gateway = COALESCE(gateway, '192.168.1.1'); " +
+                        "CREATE UNIQUE INDEX IF NOT EXISTS subnet_ip_details_ip_address_uq ON subnet_ip_details (ip_address);";
+                pool.query(migrationSql).execute(indexAr -> {
                     if (indexAr.failed()) {
-                        LOGGER.warn("Could not ensure unique IP address index: {}", indexAr.cause().getMessage());
+                        LOGGER.warn("Schema migration warning: {}", indexAr.cause().getMessage());
+                    } else {
+                        LOGGER.info("Schema migration for gateway and discovered_subnet applied successfully.");
                     }
                     promise.complete();
                 });
             } else {
                 LOGGER.info("Initializing PostgreSQL schema and seed data from init_ipam_postgres.sql...");
+
                 vertx.fileSystem().readFile("db/init_ipam_postgres.sql", fileAr -> {
                     if (fileAr.succeeded()) {
                         String sql = fileAr.result().toString();

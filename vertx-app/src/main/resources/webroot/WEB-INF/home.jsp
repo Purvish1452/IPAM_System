@@ -38,39 +38,40 @@
 
     <script src="${pageContext.request.contextPath}/js/motadata/login.js"></script>
     <script src="${pageContext.request.contextPath}/js/motadata/navigation.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/app.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/flux.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/popup-menu.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/form.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/top.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/notification.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/html-render.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/home.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/left.js"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/right.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/subnet-summary.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/ipaddress-summary.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/widget.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/widget-render.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/table.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/admin.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/reports.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/database-maintanance.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/dhcp-management.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/dhcp-server-statistics.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/mail-server-configuration.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/re-branding.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/configure-alert.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/user-management.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/global-settings.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/const.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/global-search.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/event-log.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/alerts.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/rogue-detection.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/discovery.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/ip-requests.js?v=4.0.1"></script>
-    <script src="${pageContext.request.contextPath}/js/motadata/custom-column.js?v=4.0.1"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/app.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/flux.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/popup-menu.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/form.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/top.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/notification.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/html-render.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/home.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/left.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/right.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/subnet-summary.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/ipaddress-summary.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/widget.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/widget-render.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/table.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/admin.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/reports.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/database-maintanance.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/dhcp-management.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/dhcp-server-statistics.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/mail-server-configuration.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/re-branding.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/configure-alert.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/user-management.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/global-settings.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/const.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/global-search.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/event-log.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/alerts.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/rogue-detection.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/discovery.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/ip-requests.js?v=4.0.2"></script>
+    <script src="${pageContext.request.contextPath}/js/motadata/custom-column.js?v=4.0.2"></script>
+
 </head>
 
 <body>

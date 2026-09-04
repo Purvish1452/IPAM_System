@@ -12,7 +12,17 @@ var eventLog =
 
         flux.getKendoDropDownList({dropDownId:$("#eventTimeLine"),dataSource:[{ text: "Today", value: "0" },{ text: "Last 7 Days", value: "7" },{ text: "Last 30 Days", value: "30" }],dataTextField: "text",dataValueField: "value",value: "0"});
 
-        flux.bindKendoDropDownListChangeEvent({dropDownId:$("#eventTimeLine")},eventLog.onChangeTimeLine);
+        if (typeof flux.bindKendoDropDownListChangeEvent === 'function') {
+            flux.bindKendoDropDownListChangeEvent({dropDownId:$("#eventTimeLine")},eventLog.onChangeTimeLine);
+        } else {
+            var el = $("#eventTimeLine");
+            var dd = el.data("kendoDropDownList");
+            if (dd) {
+                dd.bind("change", eventLog.onChangeTimeLine);
+            } else {
+                el.on("change", eventLog.onChangeTimeLine);
+            }
+        }
 
         alerts.bindExportButtonClickEvent({element:'eventExportPdf', gridId:gridId, title:'Event Notifications', export:'PDF', timeline:$("#eventTimeLine")}, eventLog.onExportButtonClick);
 
@@ -53,22 +63,23 @@ var eventLog =
                 {
                     field: "eventLog",
                     title: "Description",
-                    template: "<span title='#: eventLog #'>#: eventLog #</span>",
+                    template: "# if (typeof eventLog !== 'undefined' && eventLog) { # <span title='#: eventLog #'>#: eventLog #</span> # } else if (typeof message !== 'undefined' && message) { # <span title='#: message #'>#: message #</span> # } else { # <span>-</span> # } #",
                     width:"50%"
                 },
                 {
                     field: "ipAddress",
                     title: "IP Address",
-                    template: "#if(ipAddress==null){#<span></span>#}else{#<span title='#: ipAddress #'>#: ipAddress #</span>#}#",
+                    template: "# if (typeof ipAddress !== 'undefined' && ipAddress != null && ipAddress !== '') { # <span title='#: ipAddress #'>#: ipAddress #</span> # } else { # <span>-</span> # } #",
                     width:"15%"
                 },
                 {
                     field: "userName",
-                    template: "#if(doneBy==null){#<span></span>#}else{#<span title='#: doneBy.userName #'>#: doneBy.userName #</span>#}#",
+                    template: "# if (typeof doneBy !== 'undefined' && doneBy != null && doneBy.userName) { # <span title='#: doneBy.userName #'>#: doneBy.userName #</span> # } else if (typeof userName !== 'undefined' && userName) { # <span title='#: userName #'>#: userName #</span> # } else { # <span>admin</span> # } #",
                     title: "Username",
                     width:"15%"
                 }
             ],
+
             sortable: true,
             resizable:true
         };

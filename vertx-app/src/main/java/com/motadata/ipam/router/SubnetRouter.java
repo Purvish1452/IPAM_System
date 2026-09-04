@@ -1,5 +1,6 @@
 package com.motadata.ipam.router;
 
+import com.motadata.ipam.service.DiscoveryService;
 import com.motadata.ipam.service.SubnetIPActionService;
 import com.motadata.ipam.service.SubnetService;
 import com.motadata.ipam.service.UserService;
@@ -29,12 +30,15 @@ public class SubnetRouter {
     private final SubnetService subnetService;
     private final UserService userService;
     private final SubnetIPActionService ipActionService;
+    private final DiscoveryService discoveryService;
 
-    public SubnetRouter(SubnetService subnetService, UserService userService, SubnetIPActionService ipActionService) {
+    public SubnetRouter(SubnetService subnetService, UserService userService, SubnetIPActionService ipActionService, DiscoveryService discoveryService) {
         this.subnetService = subnetService;
         this.userService = userService;
         this.ipActionService = ipActionService;
+        this.discoveryService = discoveryService;
     }
+
 
     public void attachRoutes(Router router) {
         router.get("/validatePermission/").handler(this::handleValidatePermission);
@@ -113,7 +117,8 @@ public class SubnetRouter {
         router.get("/statusScanGateway/").handler(this::handleScanStatus);
         router.post("/scanGateway/:id").handler(this::handleScanGateway);
         router.get("/discoveredSubnet/").handler(this::handleGetDiscoveredSubnets);
-        router.delete("/discoveredSubnet/:id").handler(this::handleDeleteGateway);
+        router.get("/discoveredSubnet/:id").handler(this::handleGetDiscoveredSubnets);
+        router.delete("/discoveredSubnet/:id").handler(this::handleDeleteDiscoveredSubnet);
 
         // ---- NEW: Feature routes (Scan, Add Multiple IP, Select IP Range, Import, Export) ----
         // Scan subnet (triggered by Scan button)
@@ -479,11 +484,32 @@ public class SubnetRouter {
     }
 
     private void handleGetDiscoveredSubnets(RoutingContext ctx) {
-        subnetService.getAllSubnets().onComplete(ar -> {
-            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        String idStr = ctx.pathParam("id");
+        if (idStr != null) {
+            Long id = 1L;
+            try { id = Long.parseLong(idStr); } catch (Exception ignored) {}
+            discoveryService.getDiscoveredSubnetById(id).onComplete(ar -> {
+                JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            });
+        } else {
+            discoveryService.getDiscoveredSubnets().onComplete(ar -> {
+                JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            });
+        }
+    }
+
+    private void handleDeleteDiscoveredSubnet(RoutingContext ctx) {
+        String idStr = ctx.pathParam("id");
+        Long id = 1L;
+        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
+
+        discoveryService.deleteDiscoveredSubnet(id).onComplete(ar -> {
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
         });
     }
+
 
     // ===========================================================================
     // NEW HANDLERS: Scan, Add Multiple IP, Select IP Range, Import, Export

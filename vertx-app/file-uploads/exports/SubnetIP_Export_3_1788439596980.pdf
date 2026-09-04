@@ -1,0 +1,168 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 5795 >>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(Subnet IP Address Export - Subnet ID: 3) Tj
+0 -20 Td
+/F1 9 Tf
+(Generated: 2026-09-03 18:16:36) Tj
+0 -25 Td
+/F1 10 Tf
+(IP Address            Status     MAC Address        Host Name) Tj
+0 -18 Td
+(--------------------------------------------------------------) Tj
+0 -5 Td
+0 -18 Td
+("172.16.0.1"           "AVAILABLE" -                    "gateway-3"         ) Tj
+0 -18 Td
+("172.16.0.10"          "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.100"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.101"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.102"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.103"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.104"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.105"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.106"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.107"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.108"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.109"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.11"          "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.110"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.111"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.112"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.113"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.114"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.115"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.116"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.117"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.118"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.119"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.12"          "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.120"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.121"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.122"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.123"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.124"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.125"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.126"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.127"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.128"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.129"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.13"          "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.130"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.131"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.132"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.133"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.134"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.135"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.136"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.137"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.138"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.139"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.14"          "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.140"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.141"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.142"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.143"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.144"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.145"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.146"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.147"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.148"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.149"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.15"          "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.150"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.151"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+("172.16.0.152"         "AVAILABLE" -                    -                   ) Tj
+0 -18 Td
+(... and 194 more records) Tj
+ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000006088 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+6156
+%%EOF
