@@ -18,7 +18,7 @@ public class DatabaseInit {
         Promise<Void> promise = Promise.promise();
 
         // Check if users table exists
-        pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users'").execute(ar -> {
+        pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users'").execute().onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 LOGGER.info("PostgreSQL database tables already present. Schema check passed.");
                 String migrationSql = "ALTER TABLE gateway ADD COLUMN IF NOT EXISTS name VARCHAR(100); " +
@@ -29,7 +29,7 @@ public class DatabaseInit {
                         "UPDATE gateway SET name = COALESCE(name, description, 'Core Gateway Router'), status = COALESCE(status, 'Active'), previous_scan = COALESCE(previous_scan, CURRENT_TIMESTAMP); " +
                         "UPDATE discovered_subnet SET subnet = COALESCE(subnet, subnet_address), gateway = COALESCE(gateway, '192.168.1.1'); " +
                         "CREATE UNIQUE INDEX IF NOT EXISTS subnet_ip_details_ip_address_uq ON subnet_ip_details (ip_address);";
-                pool.query(migrationSql).execute(indexAr -> {
+                pool.query(migrationSql).execute().onComplete(indexAr -> {
                     if (indexAr.failed()) {
                         LOGGER.warn("Schema migration warning: {}", indexAr.cause().getMessage());
                     } else {
@@ -40,10 +40,10 @@ public class DatabaseInit {
             } else {
                 LOGGER.info("Initializing PostgreSQL schema and seed data from init_ipam_postgres.sql...");
 
-                vertx.fileSystem().readFile("db/init_ipam_postgres.sql", fileAr -> {
+                vertx.fileSystem().readFile("db/init_ipam_postgres.sql").onComplete(fileAr -> {
                     if (fileAr.succeeded()) {
                         String sql = fileAr.result().toString();
-                        pool.query(sql).execute(execAr -> {
+                        pool.query(sql).execute().onComplete(execAr -> {
                             if (execAr.succeeded()) {
                                 LOGGER.info("PostgreSQL schema initialized successfully.");
                                 promise.complete();
@@ -58,6 +58,7 @@ public class DatabaseInit {
                     }
                 });
             }
+
         });
 
         return promise.future();

@@ -42,7 +42,7 @@ public class AppConfig {
         ConfigRetrieverOptions options = new ConfigRetrieverOptions().addStore(yamlStore);
         ConfigRetriever retriever = ConfigRetriever.create(vertx, options);
 
-        retriever.getConfig(ar -> {
+        retriever.getConfig().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonObject json = ar.result();
                 LOGGER.info("Configuration loaded successfully: {}", json.encodePrettily());
@@ -52,6 +52,7 @@ public class AppConfig {
                 promise.complete(new AppConfig(createDefaultConfig()));
             }
         });
+
 
         return promise.future();
     }
@@ -98,19 +99,19 @@ public class AppConfig {
     }
 
     public int getDbPort() {
-        return config.getInteger("db-port", 3306);
+        return config.getInteger("db-port", 5432);
     }
 
     public String getDbName() {
-        return config.getString("db-name", "ipam");
+        return config.getString("db-name", "ipam_db");
     }
 
     public String getDbUser() {
-        return config.getString("db-user", "root");
+        return config.getString("db-user", "postgres");
     }
 
     public String getDbPassword() {
-        return config.getString("db-password", "Mind@123");
+        return config.getString("db-password", "password");
     }
 
     public int getMaxPingTimeout() {

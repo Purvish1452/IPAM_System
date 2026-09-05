@@ -2,8 +2,8 @@ package com.motadata.ipam.db;
 
 import com.motadata.ipam.config.AppConfig;
 import io.vertx.core.Vertx;
+import io.vertx.pgclient.PgBuilder;
 import io.vertx.pgclient.PgConnectOptions;
-import io.vertx.pgclient.PgPool;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import org.slf4j.Logger;
@@ -33,7 +33,6 @@ public class PgClientProvider {
                 .setDatabase(database)
                 .setUser(user)
                 .setPassword(password)
-                .setConnectTimeout(5000)
                 .setReconnectAttempts(5)
                 .setReconnectInterval(1000);
 
@@ -41,9 +40,14 @@ public class PgClientProvider {
                 .setMaxSize(20)
                 .setMaxWaitQueueSize(100);
 
-        this.pool = PgPool.pool(vertx, connectOptions, poolOptions);
+        this.pool = PgBuilder.pool()
+                .with(poolOptions)
+                .connectingTo(connectOptions)
+                .using(vertx)
+                .build();
         LOGGER.info("Vert.x Reactive PgPool successfully initialized.");
     }
+
 
     public Pool getPool() {
         return pool;

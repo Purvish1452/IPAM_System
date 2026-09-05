@@ -15,9 +15,9 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
-        <vertx.version>4.5.3</vertx.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <vertx.version>5.0.0</vertx.version>
         <junit.jupiter.version>5.10.0</junit.jupiter.version>
         <main.verticle>com.motadata.ipam.MainVerticle</main.verticle>
     </properties>
@@ -61,29 +61,26 @@
             <artifactId>vertx-auth-jwt</artifactId>
         </dependency>
 
-        <!-- Vert.x Reactive PostgreSQL Client & JDBC -->
+        <!-- Vert.x Reactive PostgreSQL Client -->
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-pg-client</artifactId>
         </dependency>
+        <!-- SCRAM auth for PostgreSQL (Vert.x 5 / scram-client 3.x requires stringprep Profile) -->
         <dependency>
             <groupId>com.ongres.scram</groupId>
-            <artifactId>client</artifactId>
-            <version>2.1</version>
+            <artifactId>scram-client</artifactId>
+            <version>3.1</version>
         </dependency>
         <dependency>
-            <groupId>com.ongres.scram</groupId>
-            <artifactId>common</artifactId>
-            <version>2.1</version>
+            <groupId>com.ongres.stringprep</groupId>
+            <artifactId>stringprep</artifactId>
+            <version>2.2</version>
         </dependency>
         <dependency>
             <groupId>com.ongres.stringprep</groupId>
             <artifactId>saslprep</artifactId>
-            <version>1.1</version>
-        </dependency>
-        <dependency>
-            <groupId>io.vertx</groupId>
-            <artifactId>vertx-jdbc-client</artifactId>
+            <version>2.2</version>
         </dependency>
 
         <!-- Vert.x Configuration (YAML) -->
@@ -206,8 +203,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <source>21</source>
+                    <target>21</target>
                 </configuration>
             </plugin>
             <plugin>
@@ -229,7 +226,7 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>io.vertx.core.Launcher</Main-Class>
+                                        <Main-Class>com.motadata.ipam.MainVerticle</Main-Class>
                                         <Main-Verticle>${main.verticle}</Main-Verticle>
                                     </manifestEntries>
                                 </transformer>
@@ -239,6 +236,7 @@
                         </configuration>
                     </execution>
                 </executions>
+
             </plugin>
         </plugins>
     </build>
