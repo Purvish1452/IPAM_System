@@ -239,14 +239,22 @@ var appManager =
                 },
                 error: function (json)
                 {
+                    loaderUtil.hideCentralModalLoader();
+
+                    loaderUtil.hideModalLoader();
+
                     if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                     {
-                        loaderUtil.hideCentralModalLoader();
-
-                        loaderUtil.hideModalLoader();
-
                         notification.showNotification({
                             notificationTitle: "Permission denied. Please contact the administrator.",
+                            notificationType: "error"
+                        });
+                    }
+                    else
+                    {
+                        var msg = (json && json.responseJSON && json.responseJSON.message) ? json.responseJSON.message : "Request failed. Please try again.";
+                        notification.showNotification({
+                            notificationTitle: msg,
                             notificationType: "error"
                         });
                     }
@@ -300,14 +308,22 @@ var appManager =
             },
             error: function (json)
             {
+                loaderUtil.hideCentralModalLoader();
+
+                loaderUtil.hideModalLoader();
+
                 if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
-                    loaderUtil.hideCentralModalLoader();
-
-                    loaderUtil.hideModalLoader();
-
                     notification.showNotification({
                         notificationTitle: "Permission denied. Please contact the administrator.",
+                        notificationType: "error"
+                    });
+                }
+                else
+                {
+                    var msg = (json && json.responseJSON && json.responseJSON.message) ? json.responseJSON.message : "Request failed. Please try again.";
+                    notification.showNotification({
+                        notificationTitle: msg,
                         notificationType: "error"
                     });
                 }
@@ -357,14 +373,22 @@ var appManager =
             },
             error: function (json)
             {
+                loaderUtil.hideCentralModalLoader();
+
+                loaderUtil.hideModalLoader();
+
                 if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
-                    loaderUtil.hideCentralModalLoader();
-
-                    loaderUtil.hideModalLoader();
-
                     notification.showNotification({
                         notificationTitle: "Permission denied. Please contact the administrator.",
+                        notificationType: "error"
+                    });
+                }
+                else
+                {
+                    var msg = (json && json.responseJSON && json.responseJSON.message) ? json.responseJSON.message : "Request failed. Please try again.";
+                    notification.showNotification({
+                        notificationTitle: msg,
                         notificationType: "error"
                     });
                 }
@@ -411,14 +435,22 @@ var appManager =
             },
             error: function (json)
             {
+                loaderUtil.hideCentralModalLoader();
+
+                loaderUtil.hideModalLoader();
+
                 if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
-                    loaderUtil.hideCentralModalLoader();
-
-                    loaderUtil.hideModalLoader();
-
                     notification.showNotification({
                         notificationTitle: "Permission denied. Please contact the administrator.",
+                        notificationType: "error"
+                    });
+                }
+                else
+                {
+                    var msg = (json && json.responseJSON && json.responseJSON.message) ? json.responseJSON.message : "Request failed. Please try again.";
+                    notification.showNotification({
+                        notificationTitle: msg,
                         notificationType: "error"
                     });
                 }
@@ -465,14 +497,22 @@ var appManager =
             },
             error: function (json)
             {
+                loaderUtil.hideCentralModalLoader();
+
+                loaderUtil.hideModalLoader();
+
                 if(json && json.responseJSON && json.responseJSON.message==='Access is denied')
                 {
-                    loaderUtil.hideCentralModalLoader();
-
-                    loaderUtil.hideModalLoader();
-
                     notification.showNotification({
                         notificationTitle: "Permission denied. Please contact the administrator.",
+                        notificationType: "error"
+                    });
+                }
+                else
+                {
+                    var msg = (json && json.responseJSON && json.responseJSON.message) ? json.responseJSON.message : "Request failed. Please try again.";
+                    notification.showNotification({
+                        notificationTitle: msg,
                         notificationType: "error"
                     });
                 }
