@@ -38,19 +38,20 @@ public class JwtAuthHandler implements Handler<RoutingContext> {
             return;
         }
 
-        JsonObject credentials = new JsonObject().put("token", token);
-
-        jwtAuthProvider.getJwtAuth().authenticate(credentials, ar -> {
+        jwtAuthProvider.getJwtAuth().authenticate(new io.vertx.ext.auth.authentication.TokenCredentials(token)).onComplete(ar -> {
             if (ar.succeeded()) {
-                ctx.setUser(ar.result());
+                ctx.put("user", ar.result());
                 ctx.next();
             } else {
+
+
                 // If token expired or invalid, continue request processing so UI does not break
                 LOGGER.debug("JWT Token validation failed for path {}: {}", path, ar.cause().getMessage());
                 ctx.next();
             }
         });
     }
+
 
     private String extractToken(RoutingContext ctx) {
         String token = ctx.request().getHeader("accessToken");
@@ -63,10 +64,11 @@ public class JwtAuthHandler implements Handler<RoutingContext> {
             return authHeader.substring(7);
         }
 
-        Cookie cookie = ctx.getCookie("token");
+        io.vertx.core.http.Cookie cookie = ctx.request().getCookie("token");
         if (cookie != null && cookie.getValue() != null && !cookie.getValue().isEmpty()) {
             return cookie.getValue();
         }
+
 
         return null;
     }

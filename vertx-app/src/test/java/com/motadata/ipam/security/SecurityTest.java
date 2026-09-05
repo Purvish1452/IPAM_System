@@ -47,9 +47,9 @@ public class SecurityTest {
         assertNotNull(token);
         assertFalse(token.isEmpty());
 
-        JsonObject credentials = new JsonObject().put("token", token);
-        jwtAuthProvider.getJwtAuth().authenticate(credentials, ar -> {
+        jwtAuthProvider.getJwtAuth().authenticate(new io.vertx.ext.auth.authentication.TokenCredentials(token)).onComplete(ar -> {
             testContext.verify(() -> {
+
                 assertTrue(ar.succeeded());
                 io.vertx.ext.auth.User authUser = ar.result();
                 assertNotNull(authUser);

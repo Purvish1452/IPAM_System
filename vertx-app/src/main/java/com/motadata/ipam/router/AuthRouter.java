@@ -100,8 +100,9 @@ public class AuthRouter {
     }
 
     private void handleValidatePermission(RoutingContext ctx) {
-        Cookie userCookie = ctx.getCookie("userName");
+        io.vertx.core.http.Cookie userCookie = ctx.request().getCookie("userName");
         String userName = userCookie != null ? userCookie.getValue() : null;
+
         if (userName == null || userName.trim().isEmpty()) {
             userName = ctx.request().getParam("userName");
         }
