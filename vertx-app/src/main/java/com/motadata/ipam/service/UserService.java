@@ -51,7 +51,7 @@ public class UserService {
                 "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id " +
                 "WHERE LOWER(u.user_name) = LOWER($1)";
 
-        db.preparedQuery(sql).execute(Tuple.of(userName), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(userName)).onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 String dbPass = row.getString("password");
@@ -159,7 +159,7 @@ public class UserService {
                 "LEFT JOIN user_role ur ON u.user_role_id = ur.id " +
                 "WHERE LOWER(u.user_name) = LOWER($1)";
 
-        db.preparedQuery(sql).execute(Tuple.of(userName), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(userName)).onComplete(ar -> {
             String role = "ROLE_USER";
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
@@ -190,7 +190,7 @@ public class UserService {
                 "u.user_role_id as role_id, ur.role as role_name, ur.description as role_desc " +
                 "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id ORDER BY u.id ASC";
 
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray users = new JsonArray();
                 for (Row row : ar.result()) {
@@ -230,7 +230,7 @@ public class UserService {
                 "u.user_role_id as role_id, ur.role as role_name, ur.description as role_desc " +
                 "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id WHERE u.id = $1";
 
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 JsonObject u = new JsonObject()
@@ -272,7 +272,7 @@ public class UserService {
                 "ON CONFLICT (user_name) DO UPDATE SET email = EXCLUDED.email, user_role_id = EXCLUDED.user_role_id " +
                 "RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(userName, hashedPassword, email, roleId), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(userName, hashedPassword, email, roleId)).onComplete(ar -> {
             if (ar.succeeded()) {
                 LOGGER.info("User {} saved successfully in PostgreSQL", userName);
                 promise.complete(new JsonObject().put("success", true).put("message", "User Details Saved Successfully"));
@@ -292,7 +292,7 @@ public class UserService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "DELETE FROM users WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "User Deleted Successfully"));
         });
 
@@ -306,7 +306,7 @@ public class UserService {
         Promise<JsonArray> promise = Promise.promise();
 
         String sql = "SELECT id, role, description FROM user_role ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray roles = new JsonArray();
                 for (Row row : ar.result()) {
@@ -335,7 +335,7 @@ public class UserService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "SELECT id, role, description FROM user_role WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 promise.complete(new JsonObject()
@@ -367,12 +367,12 @@ public class UserService {
 
         if (id != null) {
             String sql = "UPDATE user_role SET role = $1, description = $2 WHERE id = $3";
-            db.preparedQuery(sql).execute(Tuple.of(role, desc, id), ar -> {
+            db.preparedQuery(sql).execute(Tuple.of(role, desc, id)).onComplete(ar -> {
                 promise.complete(new JsonObject().put("success", true).put("message", "User Role Updated Successfully"));
             });
         } else {
             String sql = "INSERT INTO user_role (role, description) VALUES ($1, $2) RETURNING id";
-            db.preparedQuery(sql).execute(Tuple.of(role, desc), ar -> {
+            db.preparedQuery(sql).execute(Tuple.of(role, desc)).onComplete(ar -> {
                 promise.complete(new JsonObject().put("success", true).put("message", "User Role Saved Successfully"));
             });
         }
@@ -387,7 +387,7 @@ public class UserService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "DELETE FROM user_role WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "User Role Deleted Successfully"));
         });
 
@@ -401,7 +401,7 @@ public class UserService {
         Promise<JsonArray> promise = Promise.promise();
 
         String sql = "SELECT id, name FROM feature ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray features = new JsonArray();
                 for (Row row : ar.result()) {
@@ -439,7 +439,7 @@ public class UserService {
                 "JOIN feature f ON rfp.feature_id = f.id " +
                 "WHERE rfp.role_id = $1";
 
-        db.preparedQuery(sql).execute(Tuple.of(roleId), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(roleId)).onComplete(ar -> {
             List<String> auths = new ArrayList<>();
             if (ar.succeeded()) {
                 for (Row row : ar.result()) {
