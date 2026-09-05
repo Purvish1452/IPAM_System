@@ -29,7 +29,7 @@ public class SettingsService {
     public Future<JsonObject> getGlobalSetting() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT id, logging_level, css_mode, session_timeout FROM global_setting WHERE id = 1";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 promise.complete(new JsonObject()
@@ -49,7 +49,7 @@ public class SettingsService {
         int log = json.getInteger("loggingLevel", 1);
         int css = json.getInteger("cssMode", 1);
         String sql = "UPDATE global_setting SET logging_level = $1, css_mode = $2 WHERE id = 1";
-        db.preparedQuery(sql).execute(Tuple.of(log, css), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(log, css)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Global Settings Updated Successfully"));
         });
         return promise.future();
@@ -59,7 +59,7 @@ public class SettingsService {
     public Future<JsonObject> getBrand() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT id, product_name, product_img FROM brand WHERE id = 1";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 promise.complete(new JsonObject()
@@ -77,7 +77,7 @@ public class SettingsService {
         Promise<JsonObject> promise = Promise.promise();
         String name = json.getString("productName", "IP Address Manager");
         String sql = "UPDATE brand SET product_name = $1 WHERE id = 1";
-        db.preparedQuery(sql).execute(Tuple.of(name), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(name)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Branding Details Updated Successfully"));
         });
         return promise.future();
@@ -87,7 +87,7 @@ public class SettingsService {
     public Future<JsonArray> getMailConfig() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, smtp_host, smtp_port, smtp_user, from_address FROM mail_server ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -122,7 +122,7 @@ public class SettingsService {
     public Future<JsonArray> getCustomColumns() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, column_name, column_type, description FROM custom_column ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -147,7 +147,7 @@ public class SettingsService {
         String colName = json.getString("columnName", "Custom Column");
         String desc = json.getString("description", "Custom Column Definition");
         String sql = "INSERT INTO custom_column (column_name, column_type, description) VALUES ($1, 'STRING', $2) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(colName, desc), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(colName, desc)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Custom Column Saved Successfully"));
         });
         return promise.future();
@@ -156,7 +156,7 @@ public class SettingsService {
     public Future<JsonObject> deleteCustomColumn(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM custom_column WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Custom Column Deleted Successfully"));
         });
         return promise.future();
@@ -166,7 +166,7 @@ public class SettingsService {
     public Future<JsonObject> getDatabaseMaintenance() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT id, status, backup_path, duration, schedule_status, schedule_hour, auto_backup, retention_days FROM database_maintainence WHERE id = 1";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 promise.complete(new JsonObject()

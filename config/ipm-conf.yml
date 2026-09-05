@@ -1,13 +1,13 @@
-#tomcat server http/https port
+#server http/https port
 server-port: 8080
 
-#tomcat server host
+# server host
 server-host: localhost
 
-#tomcat server min heap memory
+# server min heap memory
 min-memory : 1024
 
-#tomcat server max heap memory
+# server max heap memory
 max-memory : 2048
 
 #postgresql host
