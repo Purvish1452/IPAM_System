@@ -31,8 +31,21 @@ public class MainVerticle extends AbstractVerticle {
     private PgClientProvider pgClientProvider;
     private JobScheduler jobScheduler;
 
+    public static void main(String[] args) {
+        io.vertx.core.Vertx vertx = io.vertx.core.Vertx.vertx();
+        vertx.deployVerticle(new MainVerticle()).onComplete(ar -> {
+            if (ar.succeeded()) {
+                LOGGER.info("Vert.x 5 IPAM Application successfully initialized and deployed.");
+            } else {
+                LOGGER.error("Failed to start Vert.x 5 IPAM Application: {}", ar.cause().getMessage(), ar.cause());
+                System.exit(1);
+            }
+        });
+    }
+
     @Override
     public void start(Promise<Void> startPromise) {
+
         LOGGER.info("Starting Vert.x IPAM MainVerticle (PostgreSQL Reactive Engine)...");
 
         AppConfig.load(vertx).onComplete(configAr -> {
@@ -68,9 +81,9 @@ public class MainVerticle extends AbstractVerticle {
                 AlertService alertService = new AlertService(db);
                 EventService eventService = new EventService(db);
                 SettingsService settingsService = new SettingsService(db);
-                DiscoveryService discoveryService = new DiscoveryService(db);
+                DiscoveryService discoveryService = new DiscoveryService(vertx, db);
                 ReportService reportService = new ReportService(vertx, db);
-                SubnetIPActionService subnetIPActionService = new SubnetIPActionService(vertx, db);
+                SubnetIPActionService subnetIPActionService = new SubnetIPActionService(vertx, db, discoveryService);
 
                 // Configure Vert.x Web Router
                 Router router = Router.router(vertx);
@@ -95,14 +108,16 @@ public class MainVerticle extends AbstractVerticle {
                         .setMaxAgeSeconds(0));
 
                 // Start HTTP Server
-                int port = config.getServerPort();
+                int port = config().getInteger("server-port", config.getServerPort());
                 vertx.createHttpServer(new HttpServerOptions().setPort(port))
                         .requestHandler(router)
-                        .listen(httpAr -> {
+                        .listen()
+                        .onComplete(httpAr -> {
                             if (httpAr.succeeded()) {
                                 LOGGER.info("===============================================================");
                                 LOGGER.info(" Vert.x IPAM Server running on http://localhost:{}", port);
                                 LOGGER.info(" Architecture: Handler -> Service -> PgPool -> PostgreSQL");
+                                LOGGER.info(" Vert.x Version: 5.0.0");
                                 LOGGER.info("===============================================================");
                                 startPromise.complete();
                             } else {
@@ -110,6 +125,7 @@ public class MainVerticle extends AbstractVerticle {
                                 startPromise.fail(httpAr.cause());
                             }
                         });
+
             });
         });
     }

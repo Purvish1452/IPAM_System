@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class MainVerticleTest {
 
+    private static final int TEST_PORT = 8089;
     private WebClient webClient;
     private JwtAuthProvider jwtAuthProvider;
     private String deploymentId;
@@ -29,7 +30,10 @@ public class MainVerticleTest {
         webClient = WebClient.create(vertx);
         jwtAuthProvider = new JwtAuthProvider(vertx);
 
-        vertx.deployVerticle(new MainVerticle(), ar -> {
+        io.vertx.core.DeploymentOptions options = new io.vertx.core.DeploymentOptions()
+                .setConfig(new JsonObject().put("server-port", TEST_PORT));
+
+        vertx.deployVerticle(new MainVerticle(), options).onComplete(ar -> {
             if (ar.succeeded()) {
                 deploymentId = ar.result();
                 testContext.completeNow();
@@ -45,15 +49,16 @@ public class MainVerticleTest {
             webClient.close();
         }
         if (deploymentId != null) {
-            vertx.undeploy(deploymentId, ar -> testContext.completeNow());
+            vertx.undeploy(deploymentId).onComplete(ar -> testContext.completeNow());
         } else {
             testContext.completeNow();
         }
     }
 
+
     @Test
     public void testGetIndexPage(VertxTestContext testContext) {
-        webClient.get(8080, "localhost", "/")
+        webClient.get(TEST_PORT, "localhost", "/")
                 .send()
                 .onComplete(ar -> {
                     if (ar.succeeded()) {
@@ -76,7 +81,7 @@ public class MainVerticleTest {
         user.setUserRoleId(new UserRole(1L, "ROLE_ADMIN", "Administrator"));
         String token = jwtAuthProvider.generateToken(user);
 
-        webClient.get(8080, "localhost", "/validatePermission/")
+        webClient.get(TEST_PORT, "localhost", "/validatePermission/")
                 .putHeader("accessToken", token)
                 .send()
                 .onComplete(ar -> {
@@ -101,7 +106,7 @@ public class MainVerticleTest {
                 .put("userName", "admin")
                 .put("password", "admin");
 
-        webClient.post(8080, "localhost", "/loginUser.html")
+        webClient.post(TEST_PORT, "localhost", "/loginUser.html")
                 .followRedirects(false)
                 .sendJsonObject(body)
                 .onComplete(ar -> {
