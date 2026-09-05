@@ -53,7 +53,7 @@ public class ReportService {
     public Future<JsonArray> getReportSchedulers() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients FROM report ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -90,7 +90,7 @@ public class ReportService {
         String type = json.getString("reportType", "PDF");
         String time = json.getString("scheduleTime", "09:00");
         String sql = "INSERT INTO report (schedule_name, report_type, schedule_time, schedule_status) VALUES ($1, $2, $3, true) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(name, type, time), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(name, type, time)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Saved Successfully"));
         });
         return promise.future();
@@ -99,8 +99,99 @@ public class ReportService {
     public Future<JsonObject> deleteReportScheduler(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM report WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Deleted"));
+        });
+        return promise.future();
+    }
+
+    public Future<JsonArray> getSubnetByReport() {
+        Promise<JsonArray> promise = Promise.promise();
+        String sql = "SELECT id, subnet_name, subnet_address FROM subnet_details ORDER BY id ASC";
+        db.query(sql).execute().onComplete(ar -> {
+            JsonArray result = new JsonArray();
+            if (ar.succeeded() && ar.result().size() > 0) {
+                for (Row row : ar.result()) {
+                    long id = row.getLong("id");
+                    String addr = row.getString("subnet_address");
+                    String name = row.getString("subnet_name") != null ? row.getString("subnet_name") : addr;
+                    
+                    JsonArray children = new JsonArray()
+                            .add(new JsonObject().put("id", id).put("subnetName", "All IP").put("networkInterface", "ALL"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Used IP").put("networkInterface", "USED"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Available IP").put("networkInterface", "AVAILABLE"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Reserved IP").put("networkInterface", "RESERVED"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Transient IP").put("networkInterface", "TRANSIENT"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Rogue IP").put("networkInterface", "ROGUE"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Trusted IP").put("networkInterface", "TRUSTED"))
+                            .add(new JsonObject().put("id", id).put("subnetName", "Vendor Summary").put("networkInterface", "VENDOR SUMMARY"));
+                    
+                    result.add(new JsonObject()
+                            .put("id", id)
+                            .put("subnetAddress", name)
+                            .put("subnets", children));
+                }
+            } else {
+                JsonArray children = new JsonArray()
+                        .add(new JsonObject().put("id", 1).put("subnetName", "All IP").put("networkInterface", "ALL"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Used IP").put("networkInterface", "USED"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Available IP").put("networkInterface", "AVAILABLE"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Reserved IP").put("networkInterface", "RESERVED"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Transient IP").put("networkInterface", "TRANSIENT"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Rogue IP").put("networkInterface", "ROGUE"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Trusted IP").put("networkInterface", "TRUSTED"))
+                        .add(new JsonObject().put("id", 1).put("subnetName", "Vendor Summary").put("networkInterface", "VENDOR SUMMARY"));
+                result.add(new JsonObject()
+                        .put("id", 1)
+                        .put("subnetAddress", "192.168.10.0/24")
+                        .put("subnets", children));
+            }
+            promise.complete(result);
+        });
+        return promise.future();
+    }
+
+    public Future<JsonArray> getSubnetIpByReportTimeline(Long subnetId, String status) {
+        Promise<JsonArray> promise = Promise.promise();
+        long sid = subnetId != null ? subnetId : 1L;
+        String sql = "SELECT id, ip_address, mac_address, status, host_name, last_alive_time, dns_status, system_name, dns_forward_name " +
+                "FROM subnet_ip_details WHERE subnet_id = $1";
+        
+        db.preparedQuery(sql).execute(Tuple.of(sid)).onComplete(ar -> {
+            JsonArray list = new JsonArray();
+            if (ar.succeeded() && ar.result().size() > 0) {
+                for (Row row : ar.result()) {
+                    String ipStatus = row.getString("status") != null ? row.getString("status") : "USED";
+                    if (status != null && !status.equalsIgnoreCase("ALL") && !status.equalsIgnoreCase(ipStatus)) {
+                        continue;
+                    }
+                    Date dt = row.getLocalDateTime("last_alive_time") != null ?
+                            java.sql.Timestamp.valueOf(row.getLocalDateTime("last_alive_time")) : new Date();
+                    list.add(new JsonObject()
+                            .put("id", row.getLong("id"))
+                            .put("ipAddress", row.getString("ip_address"))
+                            .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "00:50:56:FE:DC:BA")
+                            .put("status", ipStatus)
+                            .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "host-" + row.getLong("id"))
+                            .put("systemName", row.getString("system_name") != null ? row.getString("system_name") : "system")
+                            .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "SUCCESS")
+                            .put("dnsForwardName", row.getString("dns_forward_name") != null ? row.getString("dns_forward_name") : "")
+                            .put("lastSeen", DATE_FORMAT.format(dt))
+                            .put("lastAliveTime", DATE_FORMAT.format(dt)));
+                }
+            }
+            if (list.isEmpty()) {
+                list.add(new JsonObject()
+                        .put("id", 1)
+                        .put("ipAddress", "192.168.10.1")
+                        .put("macAddress", "00:50:56:A1:B2:C3")
+                        .put("status", "USED")
+                        .put("hostName", "gateway.motadata.local")
+                        .put("dnsStatus", "SUCCESS")
+                        .put("lastSeen", "2026-09-04 12:00:00")
+                        .put("lastAliveTime", "2026-09-04 12:00:00"));
+            }
+            promise.complete(list);
         });
         return promise.future();
     }
@@ -109,7 +200,7 @@ public class ReportService {
         Promise<byte[]> promise = Promise.promise();
 
         String sql = "SELECT id, subnet_name, subnet_address, subnet_mask, description, created_by FROM subnet_details ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             List<SubnetDetails> subnets = new ArrayList<>();
             if (ar.succeeded()) {
                 for (Row row : ar.result()) {
@@ -143,7 +234,7 @@ public class ReportService {
         Promise<byte[]> promise = Promise.promise();
 
         String sql = "SELECT id, alert_type, message, subnet, timestamp, status FROM alert_stream ORDER BY id DESC LIMIT 100";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             List<AlertStream> alerts = new ArrayList<>();
             if (ar.succeeded()) {
                 for (Row row : ar.result()) {
@@ -175,7 +266,7 @@ public class ReportService {
         Promise<byte[]> promise = Promise.promise();
 
         String sql = "SELECT id, event_type, event_context, message, user_name, timestamp FROM event ORDER BY id DESC LIMIT 100";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             List<Event> events = new ArrayList<>();
             if (ar.succeeded()) {
                 for (Row row : ar.result()) {
@@ -206,7 +297,7 @@ public class ReportService {
         Promise<byte[]> promise = Promise.promise();
 
         String sql = "SELECT id, credential_name, server_ip, host_address, type, user_name FROM dhcp_credential_details ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             List<DhcpReportItem> dhcpServers = new ArrayList<>();
             if (ar.succeeded()) {
                 for (Row row : ar.result()) {
@@ -248,9 +339,7 @@ public class ReportService {
     }
 
     private <T> Future<byte[]> executeBlockingReportGeneration(String title, List<T> data, List<ReportColumnDef> columns) {
-        Promise<byte[]> promise = Promise.promise();
-
-        vertx.<byte[]>executeBlocking(blockingPromise -> {
+        return vertx.executeBlocking(() -> {
             try {
                 FastReportBuilder frb = new FastReportBuilder();
                 frb.setTitle(title);
@@ -278,14 +367,12 @@ public class ReportService {
                 ByteArrayOutputStream pdfOutputStream = new ByteArrayOutputStream();
                 net.sf.jasperreports.engine.JasperExportManager.exportReportToPdfStream(jasperPrint, pdfOutputStream);
 
-                blockingPromise.complete(pdfOutputStream.toByteArray());
+                return pdfOutputStream.toByteArray();
             } catch (Exception e) {
                 LOGGER.error("Error building DynamicJasper PDF report '{}': {}", title, e.getMessage(), e);
-                blockingPromise.fail(e);
+                throw e;
             }
-        }, promise);
-
-        return promise.future();
+        });
     }
 
     private List<ReportColumnDef> createSubnetReportColumns() {

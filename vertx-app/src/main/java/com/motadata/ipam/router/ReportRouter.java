@@ -44,25 +44,24 @@ public class ReportRouter {
     }
 
     private void handleSubnetByReport(RoutingContext ctx) {
-        JsonArray data = new JsonArray()
-                .add(new JsonObject().put("id", 1).put("subnetAddress", "192.168.1.0/24").put("subnetName", "Default Subnet"));
-
-        JsonObject result = new JsonObject().put("data", data).put("success", true);
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        reportService.getSubnetByReport().onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleSubnetIpByReportTimeline(RoutingContext ctx) {
-        JsonArray data = new JsonArray()
-                .add(new JsonObject()
-                        .put("id", 1)
-                        .put("ipAddress", "192.168.1.10")
-                        .put("macAddress", "00:50:56:A1:B2:C3")
-                        .put("status", "USED")
-                        .put("hostName", "server-01.motadata.local")
-                        .put("lastSeen", "2026-09-02 10:00:00"));
+        String subnetIdStr = ctx.request().getParam("subnetId");
+        String status = ctx.request().getParam("status");
+        Long subnetId = 1L;
+        try {
+            if (subnetIdStr != null) subnetId = Long.parseLong(subnetIdStr);
+        } catch (Exception ignored) {}
 
-        JsonObject result = new JsonObject().put("data", data).put("success", true);
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        reportService.getSubnetIpByReportTimeline(subnetId, status).onComplete(ar -> {
+            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleGetReportSchedulers(RoutingContext ctx) {
