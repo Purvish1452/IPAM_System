@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+//This represents the request coming from another application.
 type DHCPScanRequest struct {
 	HostAddress string `json:"hostAddress"`
 	Type        string `json:"type"` // "windows" or "cisco"
@@ -20,6 +21,7 @@ type DHCPScanRequest struct {
 	Port        int    `json:"port"`
 }
 
+//This represents information about one DHCP scope.
 type DHCPScopeStats struct {
 	ScopeID     string `json:"scopeId"`
 	SubnetName  string `json:"subnetName"`
@@ -29,6 +31,7 @@ type DHCPScopeStats struct {
 	Utilization float64 `json:"utilization"`
 }
 
+//This is the final response returned to the caller.
 type DHCPScanResponse struct {
 	HostAddress string           `json:"hostAddress"`
 	ServerType  string           `json:"serverType"`
@@ -40,6 +43,8 @@ type DHCPScanResponse struct {
 
 func main() {
 	port := "8082"
+
+	//This allows deployment systems to change the port in env only.
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		port = envPort
 	}
@@ -49,8 +54,8 @@ func main() {
 
 	server := &http.Server{
 		Addr:         ":" + port,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		ReadTimeout:  15 * time.Second,  //Maximum time allowed to read the incoming HTTP request.
+		WriteTimeout: 60 * time.Second,  //Maximum time allowed to write the HTTP response.
 	}
 
 	go func() {
@@ -60,6 +65,7 @@ func main() {
 		}
 	}()
 
+//Creates a channel for OS signals.
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop

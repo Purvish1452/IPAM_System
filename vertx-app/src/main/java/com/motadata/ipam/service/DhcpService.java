@@ -28,7 +28,7 @@ public class DhcpService {
         Promise<JsonArray> promise = Promise.promise();
 
         String sql = "SELECT id, credential_name, server_ip, host_address, server_type, type, user_name, status FROM dhcp_credential_details ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -55,7 +55,7 @@ public class DhcpService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "SELECT id, credential_name, server_ip, host_address, server_type, type, user_name, status FROM dhcp_credential_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 promise.complete(new JsonObject()
@@ -88,7 +88,7 @@ public class DhcpService {
         String sql = "INSERT INTO dhcp_credential_details (credential_name, server_ip, host_address, server_type, type, user_name, password, status) " +
                 "VALUES ($1, $2, $2, $3, $3, $4, $5, 'Active') RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(name, ip, type, user, pass), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(name, ip, type, user, pass)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "DHCP Credential Saved Successfully"));
         });
 
@@ -99,7 +99,7 @@ public class DhcpService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "DELETE FROM dhcp_credential_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "DHCP Credential Deleted Successfully"));
         });
 
@@ -115,7 +115,7 @@ public class DhcpService {
     public Future<JsonArray> getWindowsCredentials() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, credential_name, server_ip FROM dhcp_credential_details WHERE UPPER(type) = 'WINDOWS' OR UPPER(server_type) = 'WINDOWS'";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -132,7 +132,7 @@ public class DhcpService {
     public Future<JsonArray> getCiscoCredentials() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, credential_name, server_ip FROM dhcp_credential_details WHERE UPPER(type) = 'CISCO' OR UPPER(server_type) = 'CISCO'";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -155,7 +155,7 @@ public class DhcpService {
                 "LEFT JOIN dhcp_credential_details d ON du.credential_id = d.id " +
                 "ORDER BY du.id ASC";
 
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
