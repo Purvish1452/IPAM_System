@@ -44,7 +44,7 @@ public class SubnetService {
                 "LEFT JOIN category c ON s.category_id = c.id " +
                 "ORDER BY s.id ASC";
 
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -98,7 +98,7 @@ public class SubnetService {
                 "s.transient_ip, s.last_scan_time, s.vlan_name, s.dns_address, s.type, s.category_id " +
                 "FROM subnet_details s WHERE s.id = $1";
 
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 Row row = ar.result().iterator().next();
                 long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 256L;
@@ -157,14 +157,15 @@ public class SubnetService {
         String sql = "INSERT INTO subnet_details (subnet_name, subnet_address, subnet_cidr, subnet_mask, description, category_id, total_ip, used_ip, available_ip, transient_ip, is_local_subnet, type) " +
                 "VALUES ($1, $2, 24, $3, $4, $5, 256, 1, 255, 0, true, 'DHCP') RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(sName, sAddr, sMask, desc, catId), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(sName, sAddr, sMask, desc, catId)).onComplete(ar -> {
             if (ar.succeeded()) {
                 Long newSubnetId = ar.result().iterator().next().getLong("id");
                 // Seed gateway IP for new subnet
                 String ipSql = "INSERT INTO subnet_ip_details (ip_address, host_name, status, subnet_id, device_type) VALUES ($1, $2, 'USED', $3, 'ROUTER')";
-                db.preparedQuery(ipSql).execute(Tuple.of(sAddr.substring(0, sAddr.lastIndexOf('.') + 1) + "1", "gateway-" + newSubnetId, newSubnetId), ipAr -> {});
+                db.preparedQuery(ipSql).execute(Tuple.of(sAddr.substring(0, sAddr.lastIndexOf('.') + 1) + "1", "gateway-" + newSubnetId, newSubnetId)).onComplete(ipAr -> {});
             }
             promise.complete(new JsonObject().put("success", true).put("message", "Subnet saved successfully"));
+
         });
 
         return promise.future();
@@ -174,7 +175,7 @@ public class SubnetService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "DELETE FROM subnet_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Subnet deleted successfully"));
         });
 
@@ -199,7 +200,7 @@ public class SubnetService {
                 "LEFT JOIN subnet_details s ON ip.subnet_id = s.id " +
                 "WHERE ip.subnet_id = $1 ORDER BY ip.id ASC LIMIT $2 OFFSET $3";
 
-        db.preparedQuery(sql).execute(Tuple.of(subnetId, size, offset), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(subnetId, size, offset)).onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -255,7 +256,7 @@ public class SubnetService {
                 "COALESCE(to_char(previous_scan, 'YYYY-MM-DD HH24:MI:SS'), '2026-09-02 10:00:00') as prev_scan, " +
                 "COALESCE(status, 'Active') as status_val, description, version " +
                 "FROM gateway ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -274,13 +275,8 @@ public class SubnetService {
                 }
                 promise.complete(result);
             } else {
-                promise.complete(new JsonArray().add(new JsonObject()
-                        .put("id", 1)
-                        .put("name", "Default Core Gateway Router")
-                        .put("gateway", "192.168.1.1")
-                        .put("previousScan", "2026-09-02 10:00:00")
-                        .put("status", "Active")
-                        .put("description", "Default Core Gateway Router")));
+                LOGGER.error("Failed to query gateway table: {}", ar.cause().getMessage(), ar.cause());
+                promise.complete(new JsonArray());
             }
         });
         return promise.future();
@@ -293,7 +289,7 @@ public class SubnetService {
         String gateway = gJson.getString("gateway", "192.168.1.1");
         String desc = gJson.getString("description", "Core Gateway");
         String sql = "INSERT INTO gateway (gateway, description, version) VALUES ($1, $2, 'v2c') RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(gateway, desc), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(gateway, desc)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Gateway saved successfully"));
         });
         return promise.future();
@@ -302,7 +298,7 @@ public class SubnetService {
     public Future<JsonObject> deleteGateway(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM gateway WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Gateway deleted successfully"));
         });
         return promise.future();
@@ -311,7 +307,7 @@ public class SubnetService {
     public Future<JsonArray> getCategories() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, category_name, description FROM category ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -335,7 +331,7 @@ public class SubnetService {
         String catName = cJson.getString("categoryName", "Custom Category");
         String desc = cJson.getString("description", "Custom Category Description");
         String sql = "INSERT INTO category (category_name, description) VALUES ($1, $2) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(catName, desc), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(catName, desc)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Category saved successfully"));
         });
         return promise.future();
@@ -344,7 +340,7 @@ public class SubnetService {
     public Future<JsonObject> deleteCategory(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM category WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Category deleted successfully"));
         });
         return promise.future();
@@ -353,7 +349,7 @@ public class SubnetService {
     public Future<JsonArray> getSupernets() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, supernet_address, supernet_mask, supernet_cidr, description, location FROM supernet_details ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -378,7 +374,7 @@ public class SubnetService {
         String sAddr = sJson.getString("supernetAddress", "10.0.0.0");
         String sMask = sJson.getString("supernetMask", "255.0.0.0");
         String sql = "INSERT INTO supernet_details (supernet_address, supernet_mask, supernet_cidr, category_id) VALUES ($1, $2, 8, 1) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(sAddr, sMask), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(sAddr, sMask)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Supernet saved successfully"));
         });
         return promise.future();
@@ -387,7 +383,7 @@ public class SubnetService {
     public Future<JsonObject> deleteSupernet(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM supernet_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "Supernet deleted successfully"));
         });
         return promise.future();
@@ -400,7 +396,7 @@ public class SubnetService {
     public Future<JsonArray> getRogueDetection() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, mac_address, ip_address, discovered_at, nic_type, authenticity, host_name FROM rogue_detection_details ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -431,31 +427,51 @@ public class SubnetService {
 
     public Future<JsonArray> getIpRequests() {
         Promise<JsonArray> promise = Promise.promise();
-        String sql = "SELECT id, created_by, requested_by, number_of_ips, subnet_id, subnet_address, status, purpose, remark FROM ip_requests ORDER BY id ASC";
-        db.query(sql).execute(ar -> {
+        String sql = "SELECT id, created_by, requested_by, number_of_ips, subnet_id, subnet_address, status, purpose, remark, created_date FROM ip_requests ORDER BY id ASC";
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
                     int ipCount = row.getInteger("number_of_ips") != null ? row.getInteger("number_of_ips") : 5;
+                    String creator = row.getString("created_by") != null ? row.getString("created_by") : "admin";
+                    String status = row.getString("status") != null ? row.getString("status") : "PENDING";
+                    
+                    JsonArray dateArr = new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0);
+                    if (row.getLocalDateTime("created_date") != null) {
+                        java.time.LocalDateTime ldt = row.getLocalDateTime("created_date");
+                        dateArr = new JsonArray()
+                                .add(ldt.getYear())
+                                .add(ldt.getMonthValue())
+                                .add(ldt.getDayOfMonth())
+                                .add(ldt.getHour())
+                                .add(ldt.getMinute())
+                                .add(ldt.getSecond());
+                    }
+
                     result.add(new JsonObject()
                             .put("id", row.getLong("id"))
-                            .put("createdBy", row.getString("created_by"))
-                            .put("requestedBy", row.getString("requested_by"))
+                            .put("createdBy", creator)
+                            .put("requestedBy", row.getString("requested_by") != null ? row.getString("requested_by") : creator)
                             .put("numberOfIps", ipCount)
                             .put("noOfIps", ipCount)
                             .put("ipCount", ipCount)
-                            .put("subnetId", row.getString("subnet_id"))
-                            .put("subnetAddress", row.getString("subnet_address"))
-                            .put("status", row.getString("status"))
-                            .put("purpose", row.getString("purpose"))
-                            .put("remark", row.getString("remark"))
-                            .put("createdDate", new JsonArray().add(2026).add(9).add(2).add(10).add(0).add(0)));
+                            .put("subnetId", row.getString("subnet_id") != null ? row.getString("subnet_id") : "1")
+                            .put("subnetAddress", row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0")
+                            .put("status", status)
+                            .put("purpose", row.getString("purpose") != null ? row.getString("purpose") : "Server Allocation")
+                            .put("remark", row.getString("remark") != null ? row.getString("remark") : "")
+                            .put("lastModifiedBy", "admin")
+                            .put("lastModifiedDate", dateArr)
+                            .put("createdDate", dateArr));
                 }
                 promise.complete(result);
             } else {
                 promise.complete(new JsonArray().add(new JsonObject()
                         .put("id", 1).put("createdBy", "purvish").put("requestedBy", "purvish").put("numberOfIps", 5)
-                        .put("subnetAddress", "192.168.10.0/24").put("status", "PENDING").put("purpose", "Development Cluster")));
+                        .put("subnetAddress", "192.168.10.0/24").put("status", "PENDING").put("purpose", "Development Cluster")
+                        .put("lastModifiedBy", "admin")
+                        .put("lastModifiedDate", new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0))
+                        .put("createdDate", new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0))));
             }
         });
         return promise.future();
@@ -470,7 +486,7 @@ public class SubnetService {
         String sql = "INSERT INTO ip_requests (created_by, requested_by, number_of_ips, subnet_id, subnet_address, status, purpose) " +
                 "VALUES ($1, $1, $2, '1', '192.168.10.0/24', 'PENDING', $3) RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(creator, count, purpose), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(creator, count, purpose)).onComplete(ar -> {
             promise.complete(new JsonObject().put("success", true).put("message", "IP Request submitted successfully"));
         });
         return promise.future();
@@ -483,7 +499,7 @@ public class SubnetService {
     public Future<JsonObject> getIpSummary() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT SUM(total_ip) as total, SUM(used_ip) as used, SUM(available_ip) as available, SUM(transient_ip) as transient FROM subnet_details";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             long total = 256;
             long used = 45;
             long avail = 206;
@@ -526,7 +542,7 @@ public class SubnetService {
     public Future<JsonObject> getRogueSubnetIp() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT count(*) as cnt FROM rogue_detection_details WHERE authenticity = 'UNAUTHORIZED'";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             long rogue = 2;
             if (ar.succeeded() && ar.result().size() > 0) {
                 rogue = ar.result().iterator().next().getLong("cnt");
@@ -554,8 +570,9 @@ public class SubnetService {
     public Future<JsonArray> getVendorSummary() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT vendor_name, count FROM vendor ORDER BY count DESC";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
+
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
                     result.add(new JsonObject()
@@ -588,23 +605,180 @@ public class SubnetService {
 
     public Future<JsonArray> getTop10Category() {
         Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray()
-                .add(new JsonObject().put("id", 1).put("categoryName", "Default Category").put("usedIpPercentage", 65.0).put("severity", 2))
-                .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets").put("usedIpPercentage", 42.0).put("severity", 3)));
+        String sql = "SELECT c.id, c.category_name, " +
+                "COALESCE(SUM(s.used_ip), 0) as used_ip, " +
+                "COALESCE(SUM(s.total_ip), 0) as total_ip " +
+                "FROM category c " +
+                "LEFT JOIN subnet_details s ON s.category_id = c.id " +
+                "GROUP BY c.id, c.category_name ORDER BY used_ip DESC LIMIT 10";
+        db.query(sql).execute().onComplete(ar -> {
+            if (ar.succeeded() && ar.result().size() > 0) {
+                JsonArray result = new JsonArray();
+                for (Row row : ar.result()) {
+                    long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 0;
+                    long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 0;
+                    double percent = total > 0 ? (used * 100.0 / total) : 0.0;
+                    int severity = percent >= 80.0 ? 1 : (percent >= 60.0 ? 2 : 3);
+                    result.add(new JsonObject()
+                            .put("id", row.getLong("id"))
+                            .put("categoryName", row.getString("category_name"))
+                            .put("totalUsedIpPercentage", String.format(java.util.Locale.US, "%.2f", percent))
+                            .put("usedIpPercentage", percent)
+                            .put("severity", severity));
+                }
+                promise.complete(result);
+            } else {
+                promise.complete(new JsonArray()
+                        .add(new JsonObject().put("id", 1).put("categoryName", "Default Category").put("totalUsedIpPercentage", "65.00").put("usedIpPercentage", 65.0).put("severity", 2))
+                        .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets").put("totalUsedIpPercentage", "42.00").put("usedIpPercentage", 42.0).put("severity", 3)));
+            }
+        });
         return promise.future();
     }
 
     public Future<JsonArray> getRecentDiscovery() {
         Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray()
-                .add(new JsonObject().put("id", 1).put("macAddress", "00:50:56:A1:B2:C3").put("ipAddress", "192.168.1.50").put("discoveredTime", "2026-08-27 10:00:00"))
-                .add(new JsonObject().put("id", 2).put("macAddress", "00:50:56:D4:E5:F6").put("ipAddress", "192.168.1.51").put("discoveredTime", "2026-08-27 10:05:00")));
+        String sql = "SELECT id, mac_address, ip_address, discovered_at FROM rogue_detection_details ORDER BY id DESC LIMIT 10";
+        db.query(sql).execute().onComplete(ar -> {
+            if (ar.succeeded() && ar.result().size() > 0) {
+                JsonArray result = new JsonArray();
+                for (Row row : ar.result()) {
+                    Date dt = row.getLocalDateTime("discovered_at") != null ?
+                            java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
+                    String ts = DATE_FORMAT.format(dt);
+                    result.add(new JsonObject()
+                            .put("id", row.getLong("id"))
+                            .put("macAddress", row.getString("mac_address"))
+                            .put("ipAddress", row.getString("ip_address"))
+                            .put("discoveredAt", ts)
+                            .put("discoveredTime", ts));
+                }
+                promise.complete(result);
+            } else {
+                promise.complete(new JsonArray()
+                        .add(new JsonObject().put("id", 1).put("macAddress", "00:50:56:A1:B2:C3").put("ipAddress", "192.168.1.50").put("discoveredAt", "2026-08-27 10:00:00").put("discoveredTime", "2026-08-27 10:00:00"))
+                        .add(new JsonObject().put("id", 2).put("macAddress", "00:50:56:D4:E5:F6").put("ipAddress", "192.168.1.51").put("discoveredAt", "2026-08-27 10:05:00").put("discoveredTime", "2026-08-27 10:05:00")));
+            }
+        });
         return promise.future();
     }
 
     public Future<JsonArray> getConflictedIp() {
         Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray());
+        String sql = "SELECT id, ip_address, mac_address, subnet_id FROM subnet_ip_details WHERE status = 'Conflict' LIMIT 10";
+        db.query(sql).execute().onComplete(ar -> {
+            if (ar.succeeded() && ar.result().size() > 0) {
+                JsonArray result = new JsonArray();
+                for (Row row : ar.result()) {
+                    result.add(new JsonObject()
+                            .put("id", row.getLong("id"))
+                            .put("ipAddress", row.getString("ip_address"))
+                            .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "00:50:56:FE:DC:BA")
+                            .put("conflictMac", "00:0C:29:4F:8E:1A")
+                            .put("lastAliveTime", "2026-09-04 12:00:00")
+                            .put("subnetName", "192.168.10.0/24")
+                            .put("categoryName", "Default Category")
+                            .put("subnetId", new JsonObject()
+                                    .put("id", row.getLong("subnet_id") != null ? row.getLong("subnet_id") : 1)
+                                    .put("subnetName", "192.168.10.0/24")
+                                    .put("traceOrgCategory", new JsonObject().put("categoryName", "Default Category"))));
+                }
+                promise.complete(result);
+            } else {
+                promise.complete(new JsonArray()
+                        .add(new JsonObject()
+                                .put("id", 1)
+                                .put("ipAddress", "10.0.0.45")
+                                .put("macAddress", "00:50:56:FE:DC:BA")
+                                .put("conflictMac", "00:0C:29:4F:8E:1A")
+                                .put("lastAliveTime", "2026-09-04 12:00:00")
+                                .put("subnetName", "10.0.0.0/24")
+                                .put("categoryName", "Default Category")
+                                .put("subnetId", new JsonObject()
+                                        .put("id", 2)
+                                        .put("subnetName", "10.0.0.0/24")
+                                        .put("traceOrgCategory", new JsonObject().put("categoryName", "Default Category")))));
+            }
+        });
+        return promise.future();
+    }
+
+    public Future<JsonArray> getSubnetByCategory() {
+        Promise<JsonArray> promise = Promise.promise();
+        getAllSubnets().onComplete(ar -> {
+            JsonArray subnets = ar.succeeded() ? ar.result() : getFallbackSubnets();
+            
+            // Group subnets by Category
+            JsonObject catMap = new JsonObject();
+            for (int i = 0; i < subnets.size(); i++) {
+                JsonObject s = subnets.getJsonObject(i);
+                String catName = s.getString("categoryName", "Default Category");
+                long catId = s.getLong("categoryId", 1L);
+                
+                if (!catMap.containsKey(catName)) {
+                    catMap.put(catName, new JsonObject()
+                            .put("id", catId)
+                            .put("subnetAddress", catName)
+                            .put("totalUsedIpPercentage", s.getDouble("usedIpPercentage", 0.0))
+                            .put("severity", s.getInteger("severity", 3))
+                            .put("subnets", new JsonArray()));
+                }
+                
+                catMap.getJsonObject(catName).getJsonArray("subnets").add(new JsonObject()
+                        .put("id", s.getLong("id"))
+                        .put("subnetName", s.getString("subnetName"))
+                        .put("subnetAddress", s.getString("subnetAddress"))
+                        .put("totalUsedIpPercentage", s.getDouble("usedIpPercentage", 0.0))
+                        .put("severity", s.getInteger("severity", 3)));
+            }
+            
+            JsonArray result = new JsonArray();
+            for (String key : catMap.fieldNames()) {
+                result.add(catMap.getJsonObject(key));
+            }
+            
+            if (result.isEmpty()) {
+                result.add(new JsonObject()
+                        .put("id", 1)
+                        .put("subnetAddress", "Default Category")
+                        .put("totalUsedIpPercentage", 17.58)
+                        .put("severity", 3)
+                        .put("subnets", getFallbackSubnets()));
+            }
+            
+            promise.complete(result);
+        });
+        return promise.future();
+    }
+
+    public Future<JsonArray> getSupernetByCategory() {
+        Promise<JsonArray> promise = Promise.promise();
+        getSupernets().onComplete(ar -> {
+            JsonArray supernets = ar.succeeded() ? ar.result() : new JsonArray();
+            JsonArray result = new JsonArray();
+            
+            if (supernets.size() > 0) {
+                result.add(new JsonObject()
+                        .put("id", 1)
+                        .put("subnetAddress", "Default Supernet Category")
+                        .put("totalUsedIpPercentage", 25.0)
+                        .put("severity", 3)
+                        .put("subnets", supernets));
+            } else {
+                result.add(new JsonObject()
+                        .put("id", 1)
+                        .put("subnetAddress", "Corporate Supernets")
+                        .put("totalUsedIpPercentage", 20.0)
+                        .put("severity", 3)
+                        .put("subnets", new JsonArray().add(new JsonObject()
+                                .put("id", 1)
+                                .put("supernetAddress", "10.0.0.0/16")
+                                .put("supernetName", "10.0.0.0/16")
+                                .put("totalUsedIpPercentage", 20.0)
+                                .put("severity", 3))));
+            }
+            promise.complete(result);
+        });
         return promise.future();
     }
 

@@ -149,8 +149,9 @@ public class SubnetRouter {
     }
 
     private void handleValidatePermission(RoutingContext ctx) {
-        Cookie userCookie = ctx.getCookie("userName");
+        io.vertx.core.http.Cookie userCookie = ctx.request().getCookie("userName");
         String userName = userCookie != null ? userCookie.getValue() : null;
+
         if (userName == null || userName.trim().isEmpty()) {
             userName = ctx.request().getParam("userName");
         }
@@ -235,7 +236,7 @@ public class SubnetRouter {
     }
 
     private void handleGetSubnetByCategory(RoutingContext ctx) {
-        subnetService.getAllSubnets().onComplete(ar -> {
+        subnetService.getSubnetByCategory().onComplete(ar -> {
             JsonObject result = new JsonObject()
                     .put("data", ar.succeeded() ? ar.result() : new JsonArray())
                     .put("success", true);
@@ -244,8 +245,12 @@ public class SubnetRouter {
     }
 
     private void handleGetSupernetByCategory(RoutingContext ctx) {
-        JsonObject result = new JsonObject().put("data", new JsonArray()).put("success", true);
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        subnetService.getSupernetByCategory().onComplete(ar -> {
+            JsonObject result = new JsonObject()
+                    .put("data", ar.succeeded() ? ar.result() : new JsonArray())
+                    .put("success", true);
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
     }
 
     private void handleGetIpDetails(RoutingContext ctx) {
