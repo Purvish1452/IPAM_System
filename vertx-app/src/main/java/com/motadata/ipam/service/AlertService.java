@@ -43,11 +43,11 @@ public class AlertService {
         }
 
         final String finalWhere = whereClause;
-        String countSql = "SELECT count(*) as total FROM alert_stream" + finalWhere;
+        String countSql = "SELECT count(*) as total FROM alert_stream " + finalWhere;
         String dataSql = "SELECT id, subnet_id, alert_type, message, subnet, timestamp, status " +
-                "FROM alert_stream" + finalWhere + "ORDER BY id DESC LIMIT $1 OFFSET $2";
+                "FROM alert_stream " + finalWhere + " ORDER BY id DESC LIMIT $1 OFFSET $2";
 
-        db.query(countSql).execute(countAr -> {
+        db.query(countSql).execute().onComplete(countAr -> {
             long total = 0;
             if (countAr.succeeded() && countAr.result().size() > 0) {
                 total = countAr.result().iterator().next().getLong("total");
@@ -59,7 +59,7 @@ public class AlertService {
             }
 
             final long finalTotal = total;
-            db.preparedQuery(dataSql).execute(Tuple.of(size, offset), dataAr -> {
+            db.preparedQuery(dataSql).execute(Tuple.of(size, offset)).onComplete(dataAr -> {
                 if (dataAr.succeeded() && dataAr.result().size() > 0) {
                     JsonArray list = new JsonArray();
                     for (Row row : dataAr.result()) {
@@ -99,7 +99,7 @@ public class AlertService {
                 "(1, 'INFO', 'DHCP Scope Office-DHCP-Pool lease sync completed', '192.168.10.0', CURRENT_TIMESTAMP - INTERVAL '2 hours', true), " +
                 "(1, 'CLEARED', 'Subnet 192.168.10.0/24 utilization normalized to 45%', '192.168.10.0', CURRENT_TIMESTAMP - INTERVAL '1 day', false) " +
                 "ON CONFLICT DO NOTHING";
-        db.query(seedSql).execute(ar -> {
+        db.query(seedSql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 LOGGER.info("Seeded initial alerts into alert_stream table.");
             }
@@ -110,7 +110,7 @@ public class AlertService {
         Promise<JsonObject> promise = Promise.promise();
 
         String sql = "SELECT alert_key, alert_value FROM alert";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonObject config = new JsonObject();
                 for (Row row : ar.result()) {
@@ -133,7 +133,7 @@ public class AlertService {
                 String val = String.valueOf(config.getValue(key));
                 String sql = "INSERT INTO alert (alert_key, alert_value) VALUES ($1, $2) " +
                         "ON CONFLICT (alert_key) DO UPDATE SET alert_value = EXCLUDED.alert_value";
-                db.preparedQuery(sql).execute(Tuple.of(key, val), ar -> {});
+                db.preparedQuery(sql).execute(Tuple.of(key, val)).onComplete(ar -> {});
             }
         }
 
@@ -144,7 +144,7 @@ public class AlertService {
     public Future<Integer> cleanupOldAlerts(int days) {
         Promise<Integer> promise = Promise.promise();
         String sql = "DELETE FROM alert_stream WHERE timestamp < CURRENT_TIMESTAMP - INTERVAL '" + days + " days'";
-        db.query(sql).execute(ar -> {
+        db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 promise.complete(ar.result().rowCount());
             } else {
