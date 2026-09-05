@@ -1,3 +1,9 @@
+/*This is a Go unit test file for your IPAM Discovery service. It tests two things:
+  /health endpoint
+  /api/v1/scan/subnet endpoint
+  The important point is that it uses httptest, so it can test the HTTP handler without starting the actual Go server.*/
+
+
 package main
 
 import (

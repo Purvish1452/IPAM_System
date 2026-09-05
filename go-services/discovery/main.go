@@ -15,12 +15,14 @@ import (
 	"com.motadata/ipam/go-services/common"
 )
 
+//This represents the request sent by the client.
 type ScanRequest struct {
 	SubnetCIDR string `json:"subnetCidr"`
 	TimeoutMs  int    `json:"timeoutMs"`
 	Concurrency int   `json:"concurrency"`
 }
 
+//This represents the result for one IP address.
 type HostResult struct {
 	IP       string `json:"ip"`
 	Status   string `json:"status"`
@@ -28,6 +30,7 @@ type HostResult struct {
 	RTTMs    int64  `json:"rttMs"`
 }
 
+//This represents the complete scanning response.
 type ScanResponse struct {
 	SubnetCIDR string       `json:"subnetCidr"`
 	TotalHosts int          `json:"totalHosts"`
@@ -38,6 +41,8 @@ type ScanResponse struct {
 
 func main() {
 	port := "8081"
+
+	//This allows you to override the default port.
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		port = envPort
 	}
@@ -45,6 +50,7 @@ func main() {
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/api/v1/scan/subnet", scanSubnetHandler)
 
+    //This creates the HTTP server.
 	server := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,
@@ -95,7 +101,7 @@ func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Concurrency <= 0 {
-		req.Concurrency = 50
+		req.Concurrency = 500
 	}
 
 	startTime := time.Now()

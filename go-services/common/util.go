@@ -24,6 +24,7 @@ func ExpandCIDR(cidr string) ([]string, error) {
 	return ips, nil
 }
 
+//This function increases an IP address by 1.
 func incIP(ip net.IP) {
 	for j := len(ip) - 1; j >= 0; j-- {
 		ip[j]++
@@ -33,7 +34,7 @@ func incIP(ip net.IP) {
 	}
 }
 
-// IPToUint32 converts net.IP to uint32 integer.
+// IPToUint32 converts net.IP to numerical uint32 integer.
 func IPToUint32(ip net.IP) uint32 {
 	if len(ip) == 16 {
 		return binary.BigEndian.Uint32(ip[12:16])
