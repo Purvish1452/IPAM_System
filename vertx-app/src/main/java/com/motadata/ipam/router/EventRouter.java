@@ -19,6 +19,7 @@ public class EventRouter {
 
     public void attachRoutes(Router router) {
         router.get("/event/").handler(this::handleGetEvents);
+        router.get("/events/").handler(this::handleGetEvents);
         router.get("/eventSummary/").handler(this::handleGetEventSummary);
         router.get("/topEvent/").handler(this::handleGetTopEvents);
     }

@@ -39,7 +39,7 @@ public class EventService {
         String dataSql = "SELECT id, event_type, event_context, message, user_name, timestamp " +
                 "FROM event ORDER BY id DESC LIMIT $1 OFFSET $2";
 
-        db.query(countSql).execute(countAr -> {
+        db.query(countSql).execute().onComplete(countAr -> {
             long total = 0;
             if (countAr.succeeded() && countAr.result().size() > 0) {
                 total = countAr.result().iterator().next().getLong("total");
@@ -50,7 +50,7 @@ public class EventService {
             }
 
             final long finalTotal = total;
-            db.preparedQuery(dataSql).execute(Tuple.of(size, offset), dataAr -> {
+            db.preparedQuery(dataSql).execute(Tuple.of(size, offset)).onComplete(dataAr -> {
                 if (dataAr.succeeded() && dataAr.result().size() > 0) {
                     JsonArray list = new JsonArray();
                     for (Row row : dataAr.result()) {
@@ -97,7 +97,7 @@ public class EventService {
                 "('Warning', 'IP Conflict', 'IP conflict alert triggered on IP 10.0.0.45', 'system', CURRENT_TIMESTAMP - INTERVAL '2 hours'), " +
                 "('Information', 'Authentication', 'User admin logged in successfully from 127.0.0.1', 'admin', CURRENT_TIMESTAMP - INTERVAL '3 hours') " +
                 "ON CONFLICT DO NOTHING";
-        db.query(seedSql).execute(ar -> {
+        db.query(seedSql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 LOGGER.info("Seeded initial event logs into event table.");
             }
@@ -123,7 +123,7 @@ public class EventService {
     public Future<Void> logEvent(String eventType, String context, String message, String userName) {
         Promise<Void> promise = Promise.promise();
         String sql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)";
-        db.preparedQuery(sql).execute(Tuple.of(eventType, context, message, userName != null ? userName : "system"), ar -> {
+        db.preparedQuery(sql).execute(Tuple.of(eventType, context, message, userName != null ? userName : "system")).onComplete(ar -> {
             promise.complete();
         });
         return promise.future();
