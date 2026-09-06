@@ -113,7 +113,7 @@ var ipRequests=
                         return;
                     }
 
-                    var processedData = data.map(function (item) {
+                        var processedData = data.map(function (item) {
 
                         let formattedLastModifiedDate="N/A";
 
@@ -305,7 +305,7 @@ var ipRequests=
     {
             selectedIPs.clear();
 
-            var formHtml = `<div class="container mt-4" style="max-height: 80vh; overflow-y: auto; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); border-radius: 8px; padding: 20px; background: white;"> <h3>New IP Request</h3> <div class="row"> <div class="col-md-6"> <label for="numOfIps">No. Of IPs</label> <input type="number" id="numOfIps" class="form-control" value="2" min="1"> </div> <div class="col-md-6"> <label for="purpose">Purpose</label> <input type="text" id="purpose" class="form-control" value="NA"> </div> </div> <div class="row mt-2"> <div class="col-md-6"> <label for="username">User Name</label> <input type="text" id="username" class="form-control" value="${ipRequests.getUserName("userName")}" disabled> </div> </div> <div class="row mt-2"> <div class="col-md-12"> <div class="form-check"> <input type="checkbox" id="preferredSubnet" class="form-check-input"> <label for="preferredSubnet" class="form-check-label">Preferred Subnet</label> </div> </div> </div> <div class="row mt-2" id="subnetContainer"> <div class="col-md-12"> <select id="subnetDropdown" class="form-control custom-dropdown"></select> </div> </div> <div class="row mt-3" id="availableIpsContainer"> <div class="col-md-12"> <input type="text" id="searchIp" class="form-control" placeholder="Search IP..."> <div id="availableIpsGrid" class="mt-2"></div> <div class="selected-ips mt-2"> Selected IPs: <div id="selectedIpsContainer" style="max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; border-radius: 5px;"> <span id="selectedIps"></span> </div> </div> </div> </div> <div class="row mt-3" id="availableIpsContainer"> <div class="col-md-12"> <input type="text" id="searchIp" class="form-control" placeholder="Search IP..."> <div id="availableIpsGrid" class="mt-2"></div> <div class="selected-ips mt-2"> Selected IPs: <div id="selectedIpsContainer" style="max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; border-radius: 5px;"> <span id="selectedIps"></span> </div> </div> </div></div> <div class="row mt-3"> <div class="col-md-6"> <button id="saveRequest" class="k-button k-primary">Submit</button> </div> <div class="col-md-6"> <button id="cancelRequest" class="k-button k-primary">Cancel</button> </div> </div> </div>`;
+            var formHtml = `<div class="container mt-4" style="max-height: 80vh; overflow-y: auto; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); border-radius: 8px; padding: 20px; background: white;"> <h3>New IP Request</h3> <div class="row"> <div class="col-md-6"> <label for="numOfIps">No. Of IPs</label> <input type="number" id="numOfIps" class="form-control" value="2" min="1"> </div> <div class="col-md-6"> <label for="purpose">Purpose</label> <input type="text" id="purpose" class="form-control" value="NA"> </div> </div> <div class="row mt-2"> <div class="col-md-6"> <label for="username">User Name</label> <input type="text" id="username" class="form-control" value="${ipRequests.getUserName("userName")}" disabled> </div> </div> <div class="row mt-2"> <div class="col-md-12"> <div class="form-check"> <input type="checkbox" id="preferredSubnet" class="form-check-input"> <label for="preferredSubnet" class="form-check-label">Preferred Subnet</label> </div> </div> </div> <div class="row mt-2" id="subnetContainer"> <div class="col-md-12"> <select id="subnetDropdown" class="form-control custom-dropdown"></select> </div> </div> <div class="row mt-3" id="availableIpsContainer"> <div class="col-md-12"> <input type="text" id="searchIp" class="form-control" placeholder="Search IP..."> <div id="availableIpsGrid" class="mt-2"></div> <div class="selected-ips mt-2"> Selected IPs: <div id="selectedIpsContainer" style="max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; border-radius: 5px;"> <span id="selectedIps"></span> </div> </div> </div> </div> <div class="row mt-3"> <div class="col-md-6"> <button id="saveRequest" class="k-button k-primary">Submit</button> </div> <div class="col-md-6"> <button id="cancelRequest" class="k-button k-primary">Cancel</button> </div> </div> </div>`;
 
             $("#container-panel").html(formHtml);
 
@@ -362,7 +362,7 @@ var ipRequests=
                     var ipList = Array.isArray(request.json.data) ? request.json.data : [request.json.data];
 
                     var ipData = ipList
-                        .filter(item => item && item.status === "Available")
+                        .filter(item => item && String(item.status || "").toUpperCase() === "AVAILABLE")
                         .map(item => ({
                             ip: item.ipAddress || "N/A",
                             status: item.status || "Unknown",
@@ -458,7 +458,7 @@ var ipRequests=
         function handleCheckboxSelection(ip, isChecked) {
             var numOfIps = parseInt($("#numOfIps").val());
             if (isChecked) {
-                if (selectedIPs.size > numOfIps) {
+                if (selectedIPs.size >= numOfIps && !selectedIPs.has(ip)) {
                     notification.showNotification({
                         notificationTitle: "You can select only " + numOfIps + " IPs.",
                         notificationType: "error"
@@ -512,11 +512,6 @@ var ipRequests=
             }
         }
 
-        $(document).on("change", ".ip-checkbox", function () {
-            var ip = $(this).data("ip");
-            handleCheckboxSelection(ip, $(this).is(":checked"));
-        });
-
         $("#searchIp").on("input", function () {
                 var value = $(this).val().toLowerCase();
                 var grid = $("#availableIpsGrid").data("kendoGrid");
@@ -529,7 +524,8 @@ var ipRequests=
             $("#saveRequest").click(function () {
 
                 var requestData = {
-                    numberOfIps: $("#numOfIps").val(),
+                    numberOfIps: parseInt($("#numOfIps").val(), 10),
+                    createdBy: ipRequests.getUserName("userName"),
                     purpose: $("#purpose").val(),
                     location: $("#location").val(),
                     subnetId: $("#preferredSubnet").prop("checked") ? $("#subnetDropdown").data("kendoDropDownList").value() : null,
@@ -537,7 +533,7 @@ var ipRequests=
                     preferredSubnet: $("#preferredSubnet").prop("checked")
                 };
 
-                if(requestData.numberOfIps>0)
+                if(requestData.numberOfIps > 0)
                 {
                     appManager.executePOSTRequest({
                         url: '/ipRequests/',
@@ -612,7 +608,7 @@ var ipRequests=
                             var ipList = Array.isArray(request.json.data) ? request.json.data : [request.json.data];
 
                             var ipData = ipList
-                                .filter(item => item && item.status === "Available")
+                                .filter(item => item && String(item.status || "").toUpperCase() === "AVAILABLE")
                                 .map(item => ({
                                     ip: item.ipAddress || "N/A",
                                     status: item.status || "Unknown",
@@ -711,7 +707,7 @@ var ipRequests=
                     var numOfIps = $("#NumberOfIp").text();
 
                     if (isChecked) {
-                        if (selectedIPs.size > numOfIps) {
+                        if (selectedIPs.size >= numOfIps && !selectedIPs.has(ip)) {
                             notification.showNotification({
                                 notificationTitle: "You can select only " + numOfIps + " IPs.",
                                 notificationType: "error"
@@ -765,23 +761,7 @@ var ipRequests=
                     }
                 }
 
-                $(document).on("change", ".ip-checkbox", function () {
-                    var ip = $(this).data("ip");
-                    handleCheckboxSelection(ip, $(this).is(":checked"));
-                });
             }
-            $(document).on("change", ".ip-checkbox", function () {
-                var numOfIps = parseInt($("#numOfIps").val());
-
-                if (selectedIPs.size > numOfIps) {
-                    notification.showNotification({
-                        notificationTitle: "You can select only "+ data.numberOfIps + " IPs.",
-                        notificationType: "error"
-                    });
-                    $(this).prop("checked", false);
-                    return;
-                }
-            });
 
             $("#searchIp").on("input", function () {
                 var value = $(this).val().toLowerCase();
