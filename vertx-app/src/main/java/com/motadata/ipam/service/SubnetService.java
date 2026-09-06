@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Asynchronous Vert.x Business Service for Subnet, IP Address, Rogue Detection, IP Requests,
@@ -479,15 +480,97 @@ public class SubnetService {
 
     public Future<JsonObject> saveIpRequest(JsonObject req) {
         Promise<JsonObject> promise = Promise.promise();
-        String creator = req.getString("createdBy", "admin");
-        int count = req.getInteger("numberOfIps", 5);
-        String purpose = req.getString("purpose", "Server Cluster Allocation");
+        String creator = asString(req.getValue("createdBy"), "admin");
+        int count = 5;
+        Object countValue = req.getValue("numberOfIps");
+        if (countValue instanceof Number) {
+            count = ((Number) countValue).intValue();
+        } else if (countValue != null) {
+            try {
+                count = Integer.parseInt(String.valueOf(countValue));
+            } catch (NumberFormatException e) {
+                promise.fail("numberOfIps must be a positive integer");
+                return promise.future();
+            }
+        }
+        if (count < 1) {
+            promise.fail("numberOfIps must be a positive integer");
+            return promise.future();
+        }
 
-        String sql = "INSERT INTO ip_requests (created_by, requested_by, number_of_ips, subnet_id, subnet_address, status, purpose) " +
-                "VALUES ($1, $1, $2, '1', '192.168.10.0/24', 'PENDING', $3) RETURNING id";
+        String purpose = asString(req.getValue("purpose"), "Server Cluster Allocation");
+        String subnetId = asNullableString(req.getValue("subnetId"));
 
-        db.preparedQuery(sql).execute(Tuple.of(creator, count, purpose)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "IP Request submitted successfully"));
+        String sql = "INSERT INTO ip_requests (created_by, requested_by, number_of_ips, subnet_id, status, purpose) " +
+                "VALUES ($1, $1, $2, $3, 'PENDING', $4) RETURNING id";
+
+        db.preparedQuery(sql).execute(Tuple.of(creator, count, subnetId, purpose)).onComplete(ar -> {
+            if (ar.succeeded()) {
+                promise.complete(new JsonObject().put("success", true).put("message", "IP Request submitted successfully"));
+            } else {
+                promise.fail(ar.cause());
+            }
+        });
+        return promise.future();
+    }
+
+    private String asString(Object value, String defaultValue) {
+        String result = value == null ? null : String.valueOf(value).trim();
+        return result == null || result.isEmpty() ? defaultValue : result;
+    }
+
+    private String asNullableString(Object value) {
+        String result = value == null ? null : String.valueOf(value).trim();
+        return result == null || result.isEmpty() ? null : result;
+    }
+
+    public Future<JsonObject> updateIpRequestStatus(JsonObject req, String status) {
+        Promise<JsonObject> promise = Promise.promise();
+        Long requestId = req.getLong("id");
+        String subnetId = req.getString("subnetId");
+        String remark = req.getString("remark");
+
+        String sql = "UPDATE ip_requests SET status = $1, subnet_id = COALESCE($2, subnet_id), " +
+                "remark = COALESCE($3, remark) WHERE id = $4";
+        db.preparedQuery(sql).execute(Tuple.of(status, subnetId, remark, requestId)).onComplete(ar -> {
+            if (ar.failed()) {
+                promise.fail(ar.cause());
+                return;
+            }
+            if (ar.result().rowCount() == 0) {
+                promise.fail("IP request not found");
+                return;
+            }
+
+            JsonArray ips = req.getJsonArray("ips");
+            if (!"APPROVED".equals(status) || ips == null || ips.isEmpty()) {
+                promise.complete(new JsonObject().put("success", true).put("message", "IP Request status updated"));
+                return;
+            }
+
+            List<Tuple> updates = new java.util.ArrayList<>();
+            for (Object value : ips) {
+                if (value != null && !String.valueOf(value).isBlank()) {
+                    updates.add(Tuple.of("USED", String.valueOf(value)));
+                }
+            }
+            if (updates.isEmpty()) {
+                promise.complete(new JsonObject().put("success", true).put("message", "IP Request status updated"));
+                return;
+            }
+
+            Future<Void> chain = Future.succeededFuture();
+            for (Tuple update : updates) {
+                chain = chain.compose(ignored -> db.preparedQuery(
+                        "UPDATE subnet_ip_details SET status = $1 WHERE ip_address = $2").execute(update).mapEmpty());
+            }
+            chain.onComplete(updateResult -> {
+                if (updateResult.succeeded()) {
+                    promise.complete(new JsonObject().put("success", true).put("message", "IP Request status updated"));
+                } else {
+                    promise.fail(updateResult.cause());
+                }
+            });
         });
         return promise.future();
     }

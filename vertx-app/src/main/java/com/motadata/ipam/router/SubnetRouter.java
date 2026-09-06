@@ -390,25 +390,103 @@ public class SubnetRouter {
     }
 
     private void handleGetIpRequestById(RoutingContext ctx) {
+        String idParam = ctx.pathParam("id");
+        Long requestId;
+        try {
+            requestId = Long.valueOf(idParam);
+        } catch (Exception e) {
+            ctx.response().setStatusCode(400)
+                    .putHeader("Content-Type", "application/json;charset=UTF-8")
+                    .end(new JsonObject().put("success", false).put("message", "Invalid IP request id").encode());
+            return;
+        }
+
         subnetService.getIpRequests().onComplete(ar -> {
-            JsonObject data = ar.result().size() > 0 ? ar.result().getJsonObject(0) : new JsonObject();
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(new JsonObject().put("data", data).put("success", true).encode());
+            if (ar.failed()) {
+                ctx.response().setStatusCode(500)
+                        .putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(new JsonObject().put("success", false).put("message", "Unable to load IP request").encode());
+                return;
+            }
+
+            JsonObject data = null;
+            for (int i = 0; i < ar.result().size(); i++) {
+                JsonObject request = ar.result().getJsonObject(i);
+                if (requestId.equals(request.getLong("id"))) {
+                    data = request;
+                    break;
+                }
+            }
+
+            if (data == null) {
+                ctx.response().setStatusCode(404)
+                        .putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(new JsonObject().put("success", false).put("message", "IP request not found").encode());
+                return;
+            }
+
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8")
+                    .end(new JsonObject().put("data", data).put("success", true).encode());
         });
     }
 
     private void handleSaveIpRequest(RoutingContext ctx) {
-        JsonObject body = null;
-        try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
-        if (body == null) body = new JsonObject().put("createdBy", "admin").put("numberOfIps", 5);
+        JsonObject body;
+        try {
+            body = ctx.body().asJsonObject();
+        } catch (Exception e) {
+            body = null;
+        }
+
+        if (body == null) {
+            sendJsonError(ctx, 400, "A JSON request body is required");
+            return;
+        }
 
         subnetService.saveIpRequest(body).onComplete(ar -> {
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+            if (ar.succeeded()) {
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(ar.result().encode());
+            } else {
+                LOGGER.error("Failed to save IP request", ar.cause());
+                sendJsonError(ctx, 500, ar.cause().getMessage() != null
+                        ? ar.cause().getMessage()
+                        : "Unable to save IP request");
+            }
         });
     }
 
+    private void sendJsonError(RoutingContext ctx, int statusCode, String message) {
+        ctx.response().setStatusCode(statusCode)
+                .putHeader("Content-Type", "application/json;charset=UTF-8")
+                .end(new JsonObject().put("success", false).put("message", message).encode());
+    }
+
     private void handleIpRequestAction(RoutingContext ctx) {
-        JsonObject result = new JsonObject().put("success", true).put("message", "IP Request status updated");
-        ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        JsonObject body;
+        try {
+            body = ctx.body().asJsonObject();
+        } catch (Exception e) {
+            body = null;
+        }
+
+        if (body == null || body.getLong("id") == null) {
+            ctx.response().setStatusCode(400)
+                    .putHeader("Content-Type", "application/json;charset=UTF-8")
+                    .end(new JsonObject().put("success", false).put("message", "IP request id is required").encode());
+            return;
+        }
+
+        String status = ctx.request().path().endsWith("/approved") ? "APPROVED" : "REJECTED";
+        subnetService.updateIpRequestStatus(body, status).onComplete(ar -> {
+            if (ar.succeeded()) {
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+            } else {
+                ctx.response().setStatusCode(500)
+                        .putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(new JsonObject().put("success", false).put("message", ar.cause().getMessage()).encode());
+            }
+        });
     }
 
     private void handleGetIpSummary(RoutingContext ctx) {
