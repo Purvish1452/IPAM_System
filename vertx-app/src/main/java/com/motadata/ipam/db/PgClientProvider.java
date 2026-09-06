@@ -16,9 +16,12 @@ public class PgClientProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PgClientProvider.class);
 
+    // PostgreSQL connection pool used by the application
     private final Pool pool;
 
     public PgClientProvider(Vertx vertx, AppConfig config) {
+
+        // Read database connection details from application configuration
         String host = config.getDbHost();
         int port = config.getDbPort();
         String database = config.getDbName();
@@ -27,6 +30,7 @@ public class PgClientProvider {
 
         LOGGER.info("Initializing Vert.x PgPool for PostgreSQL database: {}:{}/{}", host, port, database);
 
+        // Configure PostgreSQL connection settings
         PgConnectOptions connectOptions = new PgConnectOptions()
                 .setHost(host)
                 .setPort(port)
@@ -36,10 +40,12 @@ public class PgClientProvider {
                 .setReconnectAttempts(5)
                 .setReconnectInterval(1000);
 
+        // Configure connection pool size and waiting queue
         PoolOptions poolOptions = new PoolOptions()
                 .setMaxSize(20)
                 .setMaxWaitQueueSize(100);
 
+        // Create the connection pool with all details
         this.pool = PgBuilder.pool()
                 .with(poolOptions)
                 .connectingTo(connectOptions)
@@ -49,10 +55,12 @@ public class PgClientProvider {
     }
 
 
+    // Return the PostgreSQL connection pool to user for all files
     public Pool getPool() {
         return pool;
     }
 
+    // Close the connection pool during application shutdown
     public void close() {
         if (pool != null) {
             pool.close();

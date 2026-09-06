@@ -18,6 +18,8 @@ public class DatabaseInit {
         Promise<Void> promise = Promise.promise();
 
         // Check if users table exists
+        //Check whether the users table exists → if yes, apply required schema/data migrations → if no, load init_ipam_postgres.sql and initialize the PostgreSQL database → return a Future when the process finishes.
+
         pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users'").execute().onComplete(ar -> {
             if (ar.succeeded() && ar.result().size() > 0) {
                 LOGGER.info("PostgreSQL database tables already present. Schema check passed.");
