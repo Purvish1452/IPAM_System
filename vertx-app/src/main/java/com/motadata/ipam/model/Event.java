@@ -1,12 +1,9 @@
 package com.motadata.ipam.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class Event implements Serializable {
 
     private static final long serialVersionUID = 1L;
