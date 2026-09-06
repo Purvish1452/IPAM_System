@@ -17,11 +17,13 @@ public class AlertRouter {
         this.alertService = alertService;
     }
 
+    // Registers Alert API routes with permission validation.
     public void attachRoutes(Router router) {
         router.get("/alerts").handler(PermissionHandler.require("PERM_ALERTS_READ")).handler(this::handleGetAlerts);
         router.get("/alerts/").handler(PermissionHandler.require("PERM_ALERTS_READ")).handler(this::handleGetAlerts);
     }
 
+    // Handles GET alert requests with filtering and pagination.
     private void handleGetAlerts(RoutingContext ctx) {
         String alertFilter = ctx.request().getParam("alertFilter");
 
@@ -38,6 +40,7 @@ public class AlertRouter {
                         .put("message", error.getMessage() != null ? error.getMessage() : "Unable to load alerts")));
     }
 
+    // Validates and parses positive integer query parameters.
     private Integer parsePositiveInteger(RoutingContext ctx, String parameterName, int defaultValue) {
         String value = ctx.request().getParam(parameterName);
         if (value == null || value.isBlank()) {
@@ -59,6 +62,7 @@ public class AlertRouter {
         return null;
     }
 
+    // Sends a JSON response with the given HTTP status.
     private void sendJson(RoutingContext ctx, int statusCode, JsonObject body) {
         ctx.response()
                 .setStatusCode(statusCode)

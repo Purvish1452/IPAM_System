@@ -154,8 +154,11 @@ public class ReportService {
     public Future<JsonArray> getSubnetIpByReportTimeline(Long subnetId, String status) {
         Promise<JsonArray> promise = Promise.promise();
         long sid = subnetId != null ? subnetId : 1L;
-        String sql = "SELECT id, ip_address, mac_address, status, host_name, last_alive_time, dns_status, system_name, dns_forward_name " +
-                "FROM subnet_ip_details WHERE subnet_id = $1";
+        String sql = "SELECT ip.id, ip.ip_address, ip.mac_address, ip.status, ip.host_name, " +
+                "ip.dns_status, ip.device_type, ip.last_scan_time, s.subnet_address " +
+                "FROM subnet_ip_details ip " +
+                "LEFT JOIN subnet_details s ON s.id = ip.subnet_id " +
+                "WHERE ip.subnet_id = $1";
         
         db.preparedQuery(sql).execute(Tuple.of(sid)).onComplete(ar -> {
             JsonArray list = new JsonArray();
@@ -165,17 +168,29 @@ public class ReportService {
                     if (status != null && !status.equalsIgnoreCase("ALL") && !status.equalsIgnoreCase(ipStatus)) {
                         continue;
                     }
-                    Date dt = row.getLocalDateTime("last_alive_time") != null ?
-                            java.sql.Timestamp.valueOf(row.getLocalDateTime("last_alive_time")) : new Date();
+                    Date dt = row.getLocalDateTime("last_scan_time") != null ?
+                            java.sql.Timestamp.valueOf(row.getLocalDateTime("last_scan_time")) : new Date();
+                    String subnetAddress = row.getString("subnet_address") != null
+                            ? row.getString("subnet_address") : "192.168.10.0/24";
+                    String deviceType = row.getString("device_type") != null
+                            ? row.getString("device_type") : "Unknown";
                     list.add(new JsonObject()
                             .put("id", row.getLong("id"))
                             .put("ipAddress", row.getString("ip_address"))
+                            .put("subnetId", new JsonObject()
+                                    .put("id", sid)
+                                    .put("subnetAddress", subnetAddress))
+                            .put("subnetName", subnetAddress)
                             .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "00:50:56:FE:DC:BA")
                             .put("status", ipStatus)
                             .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "host-" + row.getLong("id"))
-                            .put("systemName", row.getString("system_name") != null ? row.getString("system_name") : "system")
+                            .put("deviceType", deviceType)
+                            .put("systemName", deviceType)
                             .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "SUCCESS")
-                            .put("dnsForwardName", row.getString("dns_forward_name") != null ? row.getString("dns_forward_name") : "")
+                            .put("dnsForwardName", "")
+                            .put("ipToDns", "Forward OK")
+                            .put("dnsToIp", row.getString("dns_status") != null ? row.getString("dns_status") : "Reverse OK")
+                            .put("authenticity", "TRUSTED")
                             .put("lastSeen", DATE_FORMAT.format(dt))
                             .put("lastAliveTime", DATE_FORMAT.format(dt)));
                 }
@@ -184,9 +199,17 @@ public class ReportService {
                 list.add(new JsonObject()
                         .put("id", 1)
                         .put("ipAddress", "192.168.10.1")
+                        .put("subnetId", new JsonObject()
+                                .put("id", sid)
+                                .put("subnetAddress", "192.168.10.0/24"))
+                        .put("subnetName", "192.168.10.0/24")
                         .put("macAddress", "00:50:56:A1:B2:C3")
                         .put("status", "USED")
                         .put("hostName", "gateway.motadata.local")
+                        .put("deviceType", "Gateway")
+                        .put("ipToDns", "Forward OK")
+                        .put("dnsToIp", "Reverse OK")
+                        .put("authenticity", "TRUSTED")
                         .put("dnsStatus", "SUCCESS")
                         .put("lastSeen", "2026-09-04 12:00:00")
                         .put("lastAliveTime", "2026-09-04 12:00:00"));

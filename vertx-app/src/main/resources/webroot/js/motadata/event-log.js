@@ -24,13 +24,11 @@ var eventLog =
             }
         }
 
-        alerts.bindExportButtonClickEvent({element:'eventExportPdf', gridId:gridId, title:'Event Notifications', export:'PDF', timeline:$("#eventTimeLine")}, eventLog.onExportButtonClick);
+        flux.bindKendoButtonClickEvent({element:'eventExportPdf', export:'PDF'}, eventLog.onExportButtonClick);
 
-        alerts.bindExportButtonClickEvent({element:'eventExportCsv', gridId:gridId, title:'Event Notifications', export:'CSV', timeline:$("#eventTimeLine")}, eventLog.onExportButtonClick);
+        flux.bindKendoButtonClickEvent({element:'eventExportCsv', export:'CSV'}, eventLog.onExportButtonClick);
 
         eventLog.onChangeTimeLine();
-
-        navigationManager.stickyScroll();
     },
 
     // ----------------------------------------------------------------------Change timeline drop-down event----------------------------------------------------------------------------------------------------//
@@ -47,13 +45,40 @@ var eventLog =
 
         var callbackContexts =
         {
+            EventId: "eventLogTable",
+            Read: function (options)
+            {
+                var requestParams = $.extend({}, param, {
+                    page: options.data.page,
+                    pageSize: options.data.pageSize
+                });
+                appManager.executeGETRequest({
+                    url: "/event/",
+                    container: options,
+                    callback: eventLog.renderEventLogGridData,
+                    params: requestParams
+                });
+            },
             container : gridId,
-            url : '/event/',
-            params : param,
             pageSize : 20,
+            pageable: {
+                refresh: true,
+                pageSizes: [10, 20, 50, 100],
+                buttonCount: 10
+            },
+            schema: {
+                model: {
+                    id: "id",
+                    fields: {
+                        generatedTime: { type: "number" },
+                        eventLog: { type: "string" },
+                        ipAddress: { type: "string" },
+                        userName: { type: "string" }
+                    }
+                }
+            },
             sort : { field: "generatedTime", dir: "desc" },
-            callback : eventLog.renderEventLogGridData,
-            columns: [
+            Fields: [
                 {
                     field: "generatedTime",
                     title: "Generated Time",

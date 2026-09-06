@@ -17,6 +17,7 @@ public class DhcpRouter {
         this.dhcpService = dhcpService;
     }
 
+    // Initializes DhcpRouter with DhcpService.
     public void attachRoutes(Router router) {
         router.get("/dhcpCredential/").handler(this::handleGetDhcpCredentials);
         router.get("/dhcpCredential/:id").handler(this::handleGetDhcpCredentialById);

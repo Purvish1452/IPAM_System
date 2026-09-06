@@ -428,6 +428,7 @@ var report=
                             id: "id",
                             fields: {
                                 ipAddress: { type: "string"},
+                                subnetId: { type: "object" },
                                 status: { type: "string" },
                                 macAddress: { type: "string"},
                                 deviceType: { type: "string"},

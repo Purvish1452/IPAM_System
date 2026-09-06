@@ -53,14 +53,31 @@ public class ReportRouter {
     private void handleSubnetIpByReportTimeline(RoutingContext ctx) {
         String subnetIdStr = ctx.request().getParam("subnetId");
         String status = ctx.request().getParam("status");
+        if (status != null) {
+            String normalizedStatus = status.trim().toUpperCase();
+            if (normalizedStatus.endsWith(" IP")) {
+                normalizedStatus = normalizedStatus.substring(0, normalizedStatus.length() - 3);
+            }
+            status = switch (normalizedStatus) {
+                case "USED", "AVAILABLE", "RESERVED", "TRANSIENT" -> normalizedStatus;
+                default -> null;
+            };
+        }
         Long subnetId = 1L;
         try {
             if (subnetIdStr != null) subnetId = Long.parseLong(subnetIdStr);
         } catch (Exception ignored) {}
 
         reportService.getSubnetIpByReportTimeline(subnetId, status).onComplete(ar -> {
-            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            if (ar.succeeded()) {
+                JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            } else {
+                ctx.response().setStatusCode(500)
+                        .putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(new JsonObject().put("data", new JsonArray()).put("success", false)
+                                .put("message", ar.cause().getMessage()).encode());
+            }
         });
     }
 

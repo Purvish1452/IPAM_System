@@ -25,6 +25,7 @@ public class AuthRouter {
         this.userService = userService;
     }
 
+    // Registers authentication, session, page, permission, and search routes.
     public void attachRoutes(Router router) {
         // Static page views
         router.get("/").handler(this::handleIndexPage);
@@ -40,14 +41,17 @@ public class AuthRouter {
         router.post("/search/").handler(this::handleGlobalSearch);
     }
 
+    // Serves the application index/login page.
     private void handleIndexPage(RoutingContext ctx) {
         ctx.response().sendFile("webroot/index.html");
     }
 
+    // Serves the application home page.
     private void handleHomePage(RoutingContext ctx) {
         ctx.response().sendFile("webroot/home.html");
     }
 
+    // Authenticates the user, creates session cookies, and redirects to the home page.
     private void handleLogin(RoutingContext ctx) {
         String uName = ctx.request().getParam("userName");
         String pass = ctx.request().getParam("password");
@@ -92,6 +96,7 @@ public class AuthRouter {
         });
     }
 
+    // Clears authentication cookies and redirects to the login page.
     private void handleLogout(RoutingContext ctx) {
         ctx.response().removeCookie("token");
         ctx.response().removeCookie("userName");
@@ -99,6 +104,7 @@ public class AuthRouter {
         ctx.response().setStatusCode(302).putHeader("Location", "/").end();
     }
 
+    // Validates the current user's permissions.
     private void handleValidatePermission(RoutingContext ctx) {
         io.vertx.core.http.Cookie userCookie = ctx.request().getCookie("userName");
         String userName = userCookie != null ? userCookie.getValue() : null;
@@ -115,6 +121,7 @@ public class AuthRouter {
         });
     }
 
+    // Handles global search requests and returns the search result.
     private void handleGlobalSearch(RoutingContext ctx) {
         JsonObject result = new JsonObject()
                 .put("data", new JsonArray())
