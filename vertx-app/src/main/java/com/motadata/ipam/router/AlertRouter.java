@@ -1,5 +1,6 @@
 package com.motadata.ipam.router;
 
+import com.motadata.ipam.security.PermissionHandler;
 import com.motadata.ipam.service.AlertService;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -17,28 +18,51 @@ public class AlertRouter {
     }
 
     public void attachRoutes(Router router) {
-        router.get("/alerts/").handler(this::handleGetAlerts);
+        router.get("/alerts").handler(PermissionHandler.require("PERM_ALERTS_READ")).handler(this::handleGetAlerts);
+        router.get("/alerts/").handler(PermissionHandler.require("PERM_ALERTS_READ")).handler(this::handleGetAlerts);
     }
 
     private void handleGetAlerts(RoutingContext ctx) {
         String alertFilter = ctx.request().getParam("alertFilter");
-        String pageStr = ctx.request().getParam("page");
-        String pageSizeStr = ctx.request().getParam("pageSize");
 
-        Integer page = (pageStr != null) ? Integer.parseInt(pageStr) : 1;
-        Integer pageSize = (pageSizeStr != null) ? Integer.parseInt(pageSizeStr) : 20;
+        Integer page = parsePositiveInteger(ctx, "page", 1);
+        Integer pageSize = parsePositiveInteger(ctx, "pageSize", 20);
+        if (page == null || pageSize == null) {
+            return;
+        }
 
-        alertService.getAlerts(alertFilter, page, pageSize).onComplete(ar -> {
-            if (ar.succeeded()) {
-                ctx.response()
-                        .putHeader("Content-Type", "application/json;charset=UTF-8")
-                        .end(ar.result().encode());
-            } else {
-                ctx.response()
-                        .setStatusCode(500)
-                        .putHeader("Content-Type", "application/json;charset=UTF-8")
-                        .end(new JsonObject().put("success", false).put("message", ar.cause().getMessage()).encode());
+        alertService.getAlerts(alertFilter, page, pageSize)
+                .onSuccess(result -> sendJson(ctx, 200, result))
+                .onFailure(error -> sendJson(ctx, 500, new JsonObject()
+                        .put("success", false)
+                        .put("message", error.getMessage() != null ? error.getMessage() : "Unable to load alerts")));
+    }
+
+    private Integer parsePositiveInteger(RoutingContext ctx, String parameterName, int defaultValue) {
+        String value = ctx.request().getParam(parameterName);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed > 0) {
+                return parsed;
             }
-        });
+        } catch (NumberFormatException ignored) {
+            // Return a consistent client error below for malformed query parameters.
+        }
+
+        sendJson(ctx, 400, new JsonObject()
+                .put("success", false)
+                .put("message", parameterName + " must be a positive integer"));
+        return null;
+    }
+
+    private void sendJson(RoutingContext ctx, int statusCode, JsonObject body) {
+        ctx.response()
+                .setStatusCode(statusCode)
+                .putHeader("Content-Type", "application/json;charset=UTF-8")
+                .end(body.encode());
     }
 }
