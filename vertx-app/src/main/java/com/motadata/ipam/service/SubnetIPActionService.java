@@ -314,10 +314,11 @@ public class SubnetIPActionService {
                             gatewayUp);
 
                     String status = (gatewayUp || activeCount > 0) ? "Active" : "Discovered";
+                    Future<Void> hostPersistence = persistDiscoveryHosts(hosts, gatewayId);
                     String insertSubSql = "INSERT INTO discovered_subnet " +
                             "(subnet, subnet_address, subnet_mask, gateway, gateway_id, status, discovered_time) " +
                             "VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)";
-                    db.preparedQuery(insertSubSql)
+                    hostPersistence.onComplete(hostAr -> db.preparedQuery(insertSubSql)
                             .execute(Tuple.of(subnetCidr, subnetAddress, mask, gatewayIp, gatewayId, status))
                             .onComplete(subAr -> {
                                 if (subAr.succeeded()) {
@@ -325,7 +326,7 @@ public class SubnetIPActionService {
                                 } else {
                                     LOGGER.warn("Failed to insert discovered subnet: {}", subAr.cause().getMessage());
                                 }
-                            });
+                            }));
 
                     db.preparedQuery("UPDATE gateway SET status = 'Active', previous_scan = CURRENT_TIMESTAMP WHERE id = $1")
                             .execute(Tuple.of(gatewayId))
@@ -333,6 +334,7 @@ public class SubnetIPActionService {
                                 if (gwAr.failed()) {
                                     LOGGER.warn("Failed to update gateway previous_scan: {}", gwAr.cause().getMessage());
                                 }
+
                             });
                 } finally {
                     scanRunning.set(false);
@@ -342,6 +344,23 @@ public class SubnetIPActionService {
         });
 
         return promise.future();
+    }
+
+    private Future<Void> persistDiscoveryHosts(JsonArray hosts, Long gatewayId) {
+        Future<Void> chain = Future.succeededFuture();
+        for (Object value : hosts) {
+            if (!(value instanceof JsonObject host)) continue;
+            String ip = host.getString("ip");
+            if (ip == null || ip.isBlank()) continue;
+            String status = "UP".equalsIgnoreCase(host.getString("status")) ? "USED" : "AVAILABLE";
+            chain = chain.compose(ignored -> db.preparedQuery(
+                            "INSERT INTO subnet_ip_details (ip_address, status, host_name, last_scan_time) " +
+                                    "VALUES ($1, $2, $3, CURRENT_TIMESTAMP) " +
+                                    "ON CONFLICT (ip_address) DO UPDATE SET status = EXCLUDED.status, " +
+                                    "host_name = EXCLUDED.host_name, last_scan_time = CURRENT_TIMESTAMP")
+                    .execute(Tuple.of(ip, status, host.getString("hostname"))).mapEmpty());
+        }
+        return chain;
     }
 
 
