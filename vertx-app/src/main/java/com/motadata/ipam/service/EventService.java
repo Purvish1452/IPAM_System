@@ -28,16 +28,30 @@ public class EventService {
         this.db = db;
     }
 
+    // Fetch paginated event logs from PostgreSQL and return them as JSON.
     public Future<JsonObject> getEvents(Integer page, Integer pageSize) {
+        return getEvents(page, pageSize, null);
+    }
+
+    public Future<JsonObject> getEvents(Integer page, Integer pageSize, String exportTimeline) {
         Promise<JsonObject> promise = Promise.promise();
 
         int p = (page == null || page < 1) ? 1 : page;
         int size = (pageSize == null || pageSize < 1) ? 20 : pageSize;
         int offset = (p - 1) * size;
 
-        String countSql = "SELECT count(*) as total FROM event";
+        String whereClause = "";
+        if ("0".equals(exportTimeline)) {
+            whereClause = " WHERE timestamp >= CURRENT_DATE ";
+        } else if ("7".equals(exportTimeline)) {
+            whereClause = " WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days' ";
+        } else if ("30".equals(exportTimeline)) {
+            whereClause = " WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days' ";
+        }
+
+        String countSql = "SELECT count(*) as total FROM event" + whereClause;
         String dataSql = "SELECT id, event_type, event_context, message, user_name, timestamp " +
-                "FROM event ORDER BY id DESC LIMIT $1 OFFSET $2";
+                "FROM event" + whereClause + " ORDER BY id DESC LIMIT $1 OFFSET $2";
 
         db.query(countSql).execute().onComplete(countAr -> {
             long total = 0;
@@ -45,13 +59,9 @@ public class EventService {
                 total = countAr.result().iterator().next().getLong("total");
             }
 
-            if (total == 0) {
-                seedInitialEvents();
-            }
-
             final long finalTotal = total;
             db.preparedQuery(dataSql).execute(Tuple.of(size, offset)).onComplete(dataAr -> {
-                if (dataAr.succeeded() && dataAr.result().size() > 0) {
+                if (dataAr.succeeded()) {
                     JsonArray list = new JsonArray();
                     for (Row row : dataAr.result()) {
                         Date ts = row.getLocalDateTime("timestamp") != null ?
@@ -67,7 +77,7 @@ public class EventService {
                                 .put("message", msg)
                                 .put("eventType", row.getString("event_type") != null ? row.getString("event_type") : "Information")
                                 .put("eventContext", row.getString("event_context") != null ? row.getString("event_context") : "Subnet Management")
-                                .put("ipAddress", "192.168.10.1")
+                                .put("ipAddress", "")
                                 .put("userName", user)
                                 .put("username", user)
                                 .put("doneBy", new JsonObject().put("id", 1).put("userName", user))
@@ -77,17 +87,49 @@ public class EventService {
 
                     JsonObject response = new JsonObject()
                             .put("data", list)
-                            .put("total", finalTotal > 0 ? finalTotal : list.size())
+                            .put("total", finalTotal)
                             .put("success", true);
                     promise.complete(response);
                 } else {
-                    promise.complete(getFallbackEvents());
+                    promise.fail(dataAr.cause());
                 }
             });
         });
 
         return promise.future();
     }
+
+    public Future<byte[]> generateEventCsvReport(String exportTimeline) {
+        StringBuilder csv = new StringBuilder("ID,Event Type,Context,Description,User,Timestamp\n");
+        String whereClause = "";
+        if ("0".equals(exportTimeline)) {
+            whereClause = " WHERE timestamp >= CURRENT_DATE ";
+        } else if ("7".equals(exportTimeline)) {
+            whereClause = " WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days' ";
+        } else if ("30".equals(exportTimeline)) {
+            whereClause = " WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days' ";
+        }
+        String sql = "SELECT id, event_type, event_context, message, user_name, timestamp FROM event" + whereClause + " ORDER BY id DESC";
+        return db.query(sql).execute().map(rows -> {
+            for (Row row : rows) {
+                Date ts = row.getLocalDateTime("timestamp") != null ?
+                        java.sql.Timestamp.valueOf(row.getLocalDateTime("timestamp")) : new Date();
+                csv.append(row.getLong("id")).append(',')
+                        .append(csvValue(row.getString("event_type"))).append(',')
+                        .append(csvValue(row.getString("event_context"))).append(',')
+                        .append(csvValue(row.getString("message"))).append(',')
+                        .append(csvValue(row.getString("user_name"))).append(',')
+                        .append(csvValue(DATE_FORMAT.format(ts))).append('\n');
+            }
+            return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        });
+    }
+
+    private static String csvValue(String value) {
+        if (value == null || "null".equals(value)) return "";
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
 
     private void seedInitialEvents() {
         String seedSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES " +
@@ -104,35 +146,61 @@ public class EventService {
         });
     }
 
-
+    // Return the monthly event count summary.
     public Future<JsonArray> getEventSummary() {
         Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray()
-                .add(new JsonObject().put("month", "Jan").put("count", 12))
-                .add(new JsonObject().put("month", "Feb").put("count", 18))
-                .add(new JsonObject().put("month", "Mar").put("count", 25)));
-        return promise.future();
-    }
-
-    public Future<JsonArray> getTopEvents() {
-        Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray());
-        return promise.future();
-    }
-
-    public Future<Void> logEvent(String eventType, String context, String message, String userName) {
-        Promise<Void> promise = Promise.promise();
-        String sql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)";
-        db.preparedQuery(sql).execute(Tuple.of(eventType, context, message, userName != null ? userName : "system")).onComplete(ar -> {
-            promise.complete();
+        String sql = "SELECT TO_CHAR(timestamp, 'Mon') AS month, COUNT(*) AS count, " +
+                "EXTRACT(MONTH FROM timestamp) AS month_number " +
+                "FROM event WHERE timestamp >= CURRENT_DATE - INTERVAL '12 months' " +
+                "GROUP BY month, month_number ORDER BY month_number";
+        db.query(sql).execute().onComplete(ar -> {
+            if (ar.succeeded()) {
+                JsonArray result = new JsonArray();
+                for (Row row : ar.result()) {
+                    result.add(new JsonObject()
+                            .put("month", row.getString("month"))
+                            .put("count", row.getLong("count")));
+                }
+                promise.complete(result);
+            } else {
+                promise.fail(ar.cause());
+            }
         });
         return promise.future();
     }
 
-    private JsonObject getFallbackEvents() {
-        JsonArray list = new JsonArray()
-                .add(new JsonObject().put("id", 1).put("eventType", "Information").put("eventContext", "Subnet Management").put("message", "Subnet 192.168.10.0 is added in IP Address Manager by admin").put("userName", "admin").put("timestamp", "2026-09-02 10:00:00"))
-                .add(new JsonObject().put("id", 2).put("eventType", "Information").put("eventContext", "DHCP Management").put("message", "DHCP Server WinDHCP-Primary synced").put("userName", "admin").put("timestamp", "2026-09-02 10:15:00"));
-        return new JsonObject().put("data", list).put("total", 2).put("success", true);
+    // Return the most frequent event types.
+    public Future<JsonArray> getTopEvents() {
+        Promise<JsonArray> promise = Promise.promise();
+        String sql = "SELECT event_type AS eventType, COUNT(*) AS count " +
+                "FROM event GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 10";
+        db.query(sql).execute().onComplete(ar -> {
+            if (ar.succeeded()) {
+                JsonArray result = new JsonArray();
+                for (Row row : ar.result()) {
+                    result.add(new JsonObject()
+                            .put("eventType", row.getString("eventType"))
+                            .put("count", row.getLong("count")));
+                }
+                promise.complete(result);
+            } else {
+                promise.fail(ar.cause());
+            }
+        });
+        return promise.future();
+    }
+
+    // Asynchronously insert a new system event into PostgreSQL.
+    public Future<Void> logEvent(String eventType, String context, String message, String userName) {
+        Promise<Void> promise = Promise.promise();
+        String sql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)";
+        db.preparedQuery(sql).execute(Tuple.of(eventType, context, message, userName != null ? userName : "system")).onComplete(ar -> {
+            if (ar.succeeded()) {
+                promise.complete();
+            } else {
+                promise.fail(ar.cause());
+            }
+        });
+        return promise.future();
     }
 }
