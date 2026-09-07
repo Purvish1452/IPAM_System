@@ -3,6 +3,7 @@ package com.motadata.ipam.security;
 import io.vertx.core.Handler;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.auth.User;
 import io.vertx.ext.web.RoutingContext;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
@@ -29,7 +30,12 @@ public class PermissionHandler implements Handler<RoutingContext> {
 
     @Override
     public void handle(RoutingContext ctx) {
-        if (ctx.user() != null && hasAuthority(ctx.user().principal(), requiredPermission)) {
+        User authenticatedUser = ctx.user();
+        if (authenticatedUser == null) {
+            authenticatedUser = ctx.get("user");
+        }
+
+        if (authenticatedUser != null && hasAuthority(authenticatedUser.principal(), requiredPermission)) {
             ctx.next();
             return;
         }
@@ -39,8 +45,16 @@ public class PermissionHandler implements Handler<RoutingContext> {
             return;
         }
 
+        // Fallback: check authorities stored in the Vert.x session during login.
+        // This handles the case where the browser loses the authorities cookie
+        // but the vertx-web.session cookie (used by SessionHandler) is still active.
+        if (hasAuthoritySession(ctx, requiredPermission)) {
+            ctx.next();
+            return;
+        }
+
         LOGGER.debug("User lacks required permission {}: principal={}", requiredPermission,
-                ctx.user() != null ? ctx.user().principal() : "anonymous");
+                authenticatedUser != null ? authenticatedUser.principal() : "anonymous");
         sendAccessDenied(ctx, "Access is denied");
     }
 
@@ -56,6 +70,30 @@ public class PermissionHandler implements Handler<RoutingContext> {
             return hasAuthorityValue(authorities, required);
         } catch (RuntimeException e) {
             LOGGER.debug("Unable to parse authorities cookie", e);
+            return false;
+        }
+    }
+
+    /**
+     * Checks the Vert.x session for the authorities list stored during login.
+     * Acts as a fallback when the browser has the vertx-web.session cookie but not the
+     * custom authorities cookie.
+     */
+    private boolean hasAuthoritySession(RoutingContext ctx, String required) {
+        if (ctx.session() == null) {
+            return false;
+        }
+
+        String authoritiesJson = ctx.session().get("authorities");
+        if (authoritiesJson == null || authoritiesJson.isEmpty()) {
+            return false;
+        }
+
+        try {
+            JsonArray authorities = new JsonArray(authoritiesJson);
+            return hasAuthorityValue(authorities, required);
+        } catch (RuntimeException e) {
+            LOGGER.debug("Unable to parse session authorities", e);
             return false;
         }
     }
@@ -96,11 +134,26 @@ public class PermissionHandler implements Handler<RoutingContext> {
         }
 
         String authority = String.valueOf(value);
-        return required.equalsIgnoreCase(authority)
+        return matchesPermission(authority, required)
                 || "ROLE_ADMIN".equalsIgnoreCase(authority)
                 || "ROLE_ROLE_ADMIN".equalsIgnoreCase(authority)
                 || ("PERM_READ_ALL".equalsIgnoreCase(authority) && required.endsWith("_READ"))
                 || ("PERM_WRITE_ALL".equalsIgnoreCase(authority) && required.endsWith("_WRITE"));
+    }
+
+    private boolean matchesPermission(String authority, String required) {
+        if (required.equalsIgnoreCase(authority)) {
+            return true;
+        }
+
+        // Accept the legacy PERM_READ_FEATURE form while sessions issued before
+        // the authority naming fix are still active.
+        String legacyRequired = required.startsWith("PERM_") && required.endsWith("_READ")
+                ? "PERM_READ_" + required.substring("PERM_".length(), required.length() - "_READ".length())
+                : required.startsWith("PERM_") && required.endsWith("_WRITE")
+                ? "PERM_WRITE_" + required.substring("PERM_".length(), required.length() - "_WRITE".length())
+                : required;
+        return legacyRequired.equalsIgnoreCase(authority);
     }
 
     private void sendAccessDenied(RoutingContext ctx, String message) {

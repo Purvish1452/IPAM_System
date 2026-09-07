@@ -17,6 +17,7 @@ public class EventRouter {
         this.eventService = eventService;
     }
 
+    // Registers event log, summary, and top-event routes.
     public void attachRoutes(Router router) {
         router.get("/event/").handler(this::handleGetEvents);
         router.get("/events/").handler(this::handleGetEvents);
@@ -24,6 +25,7 @@ public class EventRouter {
         router.get("/topEvent/").handler(this::handleGetTopEvents);
     }
 
+    // Retrieves event logs and handles CSV/PDF export requests.
     private void handleGetEvents(RoutingContext ctx) {
         String pdfParam = ctx.request().getParam("pdf");
         String csvParam = ctx.request().getParam("csv");
@@ -70,6 +72,7 @@ public class EventRouter {
         });
     }
 
+    // Returns monthly event summary data.
     private void handleGetEventSummary(RoutingContext ctx) {
         JsonArray data = new JsonArray()
                 .add(new JsonObject().put("month", "Jan").put("count", 12))
@@ -85,6 +88,7 @@ public class EventRouter {
                 .end(result.encode());
     }
 
+    // Returns top event data.
     private void handleGetTopEvents(RoutingContext ctx) {
         JsonArray data = new JsonArray();
 

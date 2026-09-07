@@ -86,6 +86,14 @@ public class AuthRouter {
                     LOGGER.warn("Failed to encode auth cookie: {}", e.getMessage());
                 }
 
+                // Also store in session so PermissionHandler can use it as a fallback
+                // when the browser does not send the authorities cookie.
+                if (ctx.session() != null) {
+                    ctx.session().put("authorities", authorities);
+                    ctx.session().put("userName", finalUserName);
+                    ctx.session().put("token", token != null ? token : "");
+                }
+
                 LOGGER.info("Login successful for user {}, redirecting to /loadHomePage", finalUserName);
                 ctx.response().setStatusCode(302).putHeader("Location", "/loadHomePage").end();
             } else {

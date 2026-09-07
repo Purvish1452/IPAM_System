@@ -26,6 +26,7 @@ public class JwtAuthProvider {
 
     private final JWTAuth jwtAuth;
 
+    // Initialize Vert.x JWT authentication using HS256 and the configured secret key.
     public JwtAuthProvider(Vertx vertx) {
         JWTAuthOptions config = new JWTAuthOptions()
                 .addPubSecKey(new PubSecKeyOptions()
@@ -36,13 +37,22 @@ public class JwtAuthProvider {
         LOGGER.info("Initialized Vert.x JWTAuth provider.");
     }
 
+    // Return the configured JWTAuth provider for token authentication and validation.
     public JWTAuth getJwtAuth() {
         return jwtAuth;
     }
 
+    // Generate a JWT token containing the user's roles and permissions.
     public String generateToken(User user) {
-        List<String> authoritiesList = extractAuthorities(user);
+        return generateToken(user, extractAuthorities(user));
+    }
 
+    /**
+     * Generates a JWT token embedding the provided authorities list into the token claims.
+     * Use this overload when PBAC permissions have already been fetched from the database
+     * so they are included in the JWT and do not depend on the authorities cookie.
+     */
+    public String generateToken(User user, List<String> authoritiesList) {
         JsonArray authoritiesJson = new JsonArray();
         for (String auth : authoritiesList) {
             authoritiesJson.add(auth);
@@ -68,7 +78,10 @@ public class JwtAuthProvider {
         return jwtAuth.generateToken(claims, jwtOptions);
     }
 
+    //This function is responsible for collecting the user's role and feature permissions.
     public List<String> extractAuthorities(User user) {
+
+        // Create a list to store the user's roles and permissions.
         List<String> list = new ArrayList<>();
         if (user != null && user.getUserRoleId() != null) {
             String roleName = user.getUserRoleId().getRole();
@@ -79,6 +92,8 @@ public class JwtAuthProvider {
                     list.add(roleName.toUpperCase());
                 }
             }
+
+            // Iterate through the role's feature permissions.
             if (user.getUserRoleId().getRoleFeaturePermissions() != null) {
                 for (RoleFeaturePermission rfp : user.getUserRoleId().getRoleFeaturePermissions()) {
                     if (rfp.getFeature() != null && rfp.getFeature().getName() != null) {

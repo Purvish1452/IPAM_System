@@ -1,23 +1,19 @@
 package com.motadata.ipam.scheduler;
 
+import io.vertx.core.json.JsonObject;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
-import org.quartz.Job;
-import org.quartz.JobDataMap;
-import org.quartz.JobExecutionContext;
-import org.quartz.JobExecutionException;
 
 /**
- * Quartz Job implementation for background DHCP Server lease polling and utilization sync.
+ * Vert.x job implementation for background DHCP Server lease polling and utilization sync.
  */
-public class DhcpScanJob implements Job {
+public class DhcpScanJob implements VertxScheduledJob {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DhcpScanJob.class);
 
     @Override
-    public void execute(JobExecutionContext context) throws JobExecutionException {
-        JobDataMap dataMap = context.getMergedJobDataMap();
-        Long dhcpCredentialId = dataMap.containsKey("dhcpCredentialId") ? dataMap.getLong("dhcpCredentialId") : null;
+    public void execute(JsonObject dataMap) {
+        Long dhcpCredentialId = dataMap.getLong("dhcpCredentialId");
         String serverHost = dataMap.getString("serverHost");
 
         LOGGER.info("Executing background DhcpScanJob for DHCP server credentialId: {}, host: {}", dhcpCredentialId, serverHost);
@@ -27,7 +23,7 @@ public class DhcpScanJob implements Job {
             LOGGER.info("DhcpScanJob completed successfully for server {}", serverHost != null ? serverHost : dhcpCredentialId);
         } catch (Exception e) {
             LOGGER.error("DhcpScanJob failed for server {}: {}", serverHost, e.getMessage(), e);
-            throw new JobExecutionException(e);
+            throw e;
         }
     }
 }

@@ -20,6 +20,7 @@ public class JwtAuthHandler implements Handler<RoutingContext> {
         this.jwtAuthProvider = jwtAuthProvider;
     }
 
+    //Main interceptor; checks the request path, extracts JWT, validates it, and continues the request.
     @Override
     public void handle(RoutingContext ctx) {
         String path = ctx.normalizedPath();
@@ -53,6 +54,7 @@ public class JwtAuthHandler implements Handler<RoutingContext> {
     }
 
 
+    //Searches for JWT in accessToken, Authorization: Bearer ..., or token cookie.
     private String extractToken(RoutingContext ctx) {
         String token = ctx.request().getHeader("accessToken");
         if (token != null && !token.isEmpty()) {
@@ -73,6 +75,7 @@ public class JwtAuthHandler implements Handler<RoutingContext> {
         return null;
     }
 
+    //Identifies URLs that don't require JWT validation.
     private boolean isPublicPath(String path) {
         return path.equals("/")
                 || path.startsWith("/login")

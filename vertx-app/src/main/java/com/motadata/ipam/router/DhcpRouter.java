@@ -17,7 +17,7 @@ public class DhcpRouter {
         this.dhcpService = dhcpService;
     }
 
-    // Initializes DhcpRouter with DhcpService.
+    // Registers DHCP credential, utilization, and scan routes
     public void attachRoutes(Router router) {
         router.get("/dhcpCredential/").handler(this::handleGetDhcpCredentials);
         router.get("/dhcpCredential/:id").handler(this::handleGetDhcpCredentialById);
@@ -35,6 +35,7 @@ public class DhcpRouter {
         router.get("/scanDhcp/:id").handler(this::handleScanDhcp);
     }
 
+    // Retrieves all DHCP credentials.
     private void handleGetDhcpCredentials(RoutingContext ctx) {
         dhcpService.getCredentials().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -42,6 +43,7 @@ public class DhcpRouter {
         });
     }
 
+    // Retrieves a DHCP credential by ID.
     private void handleGetDhcpCredentialById(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -53,6 +55,7 @@ public class DhcpRouter {
         });
     }
 
+    // Saves or updates a DHCP credential.
     private void handleSaveDhcpCredential(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -63,6 +66,7 @@ public class DhcpRouter {
         });
     }
 
+    // Deletes a DHCP credential by ID.
     private void handleDeleteDhcpCredential(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -73,6 +77,7 @@ public class DhcpRouter {
         });
     }
 
+    // Retrieves Windows DHCP credentials.
     private void handleGetWindowsDhcpCredentials(RoutingContext ctx) {
         dhcpService.getWindowsCredentials().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -80,6 +85,7 @@ public class DhcpRouter {
         });
     }
 
+    // Retrieves Cisco DHCP credentials.
     private void handleGetCiscoDhcpCredentials(RoutingContext ctx) {
         dhcpService.getCiscoCredentials().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -87,12 +93,14 @@ public class DhcpRouter {
         });
     }
 
+    // Validates the DHCP credentials
     private void handleCheckDhcpCredential(RoutingContext ctx) {
         dhcpService.checkCredential(new JsonObject()).onComplete(ar -> {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
         });
     }
 
+    // Retrieves DHCP utilization information
     private void handleGetDhcpUtilization(RoutingContext ctx) {
         dhcpService.getDhcpUtilization().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -100,6 +108,7 @@ public class DhcpRouter {
         });
     }
 
+    // Retrieves DHCP utilization by ID
     private void handleGetDhcpUtilizationById(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -111,6 +120,7 @@ public class DhcpRouter {
         });
     }
 
+    // Starts a DHCP scan for the specified ID.
     private void handleScanDhcp(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;

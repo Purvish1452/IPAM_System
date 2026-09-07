@@ -73,8 +73,8 @@ public class UserService {
                     UserRole ur = new UserRole(roleId != null ? roleId : 2L, roleName, row.getString("role_desc"));
                     user.setUserRoleId(ur);
 
-                    String token = jwtAuthProvider.generateToken(user);
-
+                    // Fetch PBAC feature permissions FIRST, then generate the JWT so that
+                    // all permission strings (e.g. PERM_ALERTS_READ) are embedded in the token.
                     final String finalRoleName = roleName;
                     fetchRoleFeatureAuthorities(roleId).onComplete(permAr -> {
                         List<String> authorities = new ArrayList<>();
@@ -82,6 +82,9 @@ public class UserService {
                         if (permAr.succeeded()) {
                             authorities.addAll(permAr.result());
                         }
+
+                        // Generate token AFTER permissions are known so they are in JWT claims.
+                        String token = jwtAuthProvider.generateToken(user, authorities);
 
                         JsonObject response = new JsonObject()
                                 .put("success", true)
@@ -121,7 +124,17 @@ public class UserService {
                 user.setId(2L);
                 user.setUserName("purvish");
                 user.setUserRoleId(new UserRole(2L, "ROLE_USER", "Standard User Role"));
-                String token = jwtAuthProvider.generateToken(user);
+                // ROLE_USER has read access to all features per seed data (role_id=2, read_permission=true)
+                List<String> purvishAuthorities = new ArrayList<>();
+                purvishAuthorities.add("ROLE_USER");
+                purvishAuthorities.add("PERM_ALERTS_READ");
+                purvishAuthorities.add("PERM_ROGUE_DETECTION_READ");
+                purvishAuthorities.add("PERM_REPORTS_READ");
+                purvishAuthorities.add("PERM_EVENT_NOTIFICATIONS_READ");
+                purvishAuthorities.add("PERM_SETTINGS_READ");
+                purvishAuthorities.add("PERM_DASHBOARD_READ");
+                purvishAuthorities.add("PERM_IP_REQUESTS_READ");
+                String token = jwtAuthProvider.generateToken(user, purvishAuthorities);
 
                 JsonObject response = new JsonObject()
                         .put("success", true)
@@ -130,7 +143,7 @@ public class UserService {
                         .put("username", "purvish")
                         .put("userId", 2)
                         .put("role", "ROLE_USER")
-                        .put("authorities", new JsonArray().add("ROLE_USER"));
+                        .put("authorities", new JsonArray(purvishAuthorities));
                 promise.complete(response);
             } else {
                 LOGGER.warn("Authentication failed for user: {}", userName);
@@ -446,10 +459,10 @@ public class UserService {
                     String fName = row.getString("feature_name");
                     if (fName != null) {
                         if (Boolean.TRUE.equals(row.getBoolean("read_permission"))) {
-                            auths.add("PERM_READ_" + fName.toUpperCase().replace(" ", "_"));
+                            auths.add("PERM_" + fName.toUpperCase().replace(" ", "_") + "_READ");
                         }
                         if (Boolean.TRUE.equals(row.getBoolean("write_permission"))) {
-                            auths.add("PERM_WRITE_" + fName.toUpperCase().replace(" ", "_"));
+                            auths.add("PERM_" + fName.toUpperCase().replace(" ", "_") + "_WRITE");
                         }
                     }
                 }

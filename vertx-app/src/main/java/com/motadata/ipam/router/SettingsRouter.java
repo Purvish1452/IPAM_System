@@ -28,6 +28,7 @@ public class SettingsRouter {
         this.discoveryService = discoveryService;
     }
 
+    // Registers user, role, settings, discovery, and database maintenance routes.
     public void attachRoutes(Router router) {
         // User & Role Management endpoints
         router.get("/user/").handler(this::handleGetUsers);
@@ -80,6 +81,7 @@ public class SettingsRouter {
         router.put("/runDatabaseBackup/1").handler(this::handleSaveDatabaseMaintenance);
     }
 
+    // Retrieves all users.
     private void handleGetUsers(RoutingContext ctx) {
         userService.getAllUsers().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -87,6 +89,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves a user by ID.
     private void handleGetUserById(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -98,6 +101,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves or updates a user.
     private void handleSaveUser(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -128,6 +132,7 @@ public class SettingsRouter {
         });
     }
 
+    // Deletes a user by ID.
     private void handleDeleteUser(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -138,6 +143,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves all user roles.
     private void handleGetRoles(RoutingContext ctx) {
         userService.getAllRoles().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -145,6 +151,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves a role by ID.
     private void handleGetRoleById(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         if (idStr == null) idStr = ctx.request().getParam("id");
@@ -158,6 +165,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves features assigned to roles.
     private void handleGetRoleFeatures(RoutingContext ctx) {
         userService.getRoleFeatures().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -165,6 +173,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves or updates a user role.
     private void handleSaveRole(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -193,6 +202,7 @@ public class SettingsRouter {
         });
     }
 
+    // Deletes a user role by ID.
     private void handleDeleteRole(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -203,6 +213,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves global application settings.
     private void handleGetGlobalSetting(RoutingContext ctx) {
         settingsService.getGlobalSetting().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -210,6 +221,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves or updates global application settings.
     private void handleSaveGlobalSetting(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -220,6 +232,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves application branding settings.
     private void handleGetBrand(RoutingContext ctx) {
         settingsService.getBrand().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -227,6 +240,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves or updates application branding settings.
     private void handleSaveBrand(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -237,6 +251,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves mail server configuration.
     private void handleGetMailConfig(RoutingContext ctx) {
         settingsService.getMailConfig().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -244,6 +259,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves mail configuration by ID.
     private void handleGetMailConfigById(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -255,6 +271,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves or updates mail server configuration.
     private void handleSaveMailConfig(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -265,12 +282,14 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves alert configuration.
     private void handleGetConfigureAlert(RoutingContext ctx) {
         alertService.getAlertConfig().onComplete(ar -> {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
         });
     }
 
+    // Saves alert configuration settings.
     private void handleSaveConfigureAlert(RoutingContext ctx) {
         JsonObject alertMap = new JsonObject();
         try {
@@ -297,6 +316,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves configured custom columns.
     private void handleGetCustomColumn(RoutingContext ctx) {
         settingsService.getCustomColumns().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -304,6 +324,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves or updates a custom column.
     private void handleSaveCustomColumn(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -314,6 +335,7 @@ public class SettingsRouter {
         });
     }
 
+    // Deletes a custom column by ID.
     private void handleDeleteCustomColumn(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -324,6 +346,7 @@ public class SettingsRouter {
         });
     }
 
+    // Retrieves discovery profiles.
     private void handleGetDiscovery(RoutingContext ctx) {
         discoveryService.getDiscoveryProfiles().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -331,12 +354,14 @@ public class SettingsRouter {
         });
     }
 
+    // Saves a discovery profile.
     private void handleSaveDiscovery(RoutingContext ctx) {
         discoveryService.saveDiscoveryProfile(new JsonObject()).onComplete(ar -> {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
         });
     }
 
+    // Retrieves discovery scheduler configuration.
     private void handleGetDiscoveryScheduler(RoutingContext ctx) {
         discoveryService.getDiscoveryProfiles().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -344,12 +369,14 @@ public class SettingsRouter {
         });
     }
 
+    // Saves discovery scheduler configuration.
     private void handleSaveDiscoveryScheduler(RoutingContext ctx) {
         discoveryService.saveDiscoveryProfile(new JsonObject()).onComplete(ar -> {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
         });
     }
 
+    // Retrieves database maintenance settings.
     private void handleGetDatabaseMaintenance(RoutingContext ctx) {
         settingsService.getDatabaseMaintenance().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -357,6 +384,7 @@ public class SettingsRouter {
         });
     }
 
+    // Saves database maintenance or backup settings.
     private void handleSaveDatabaseMaintenance(RoutingContext ctx) {
         settingsService.saveDatabaseMaintenance(new JsonObject()).onComplete(ar -> {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
