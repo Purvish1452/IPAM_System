@@ -77,12 +77,19 @@ public class ServiceTest {
 
     @Test
     public void testEventService(VertxTestContext testContext) {
-        eventService.getEvents(1, 20).onComplete(testContext.succeeding(result -> {
+        eventService.getEvents(1, 20, "0").onComplete(testContext.succeeding(result -> {
             testContext.verify(() -> {
                 assertNotNull(result);
                 assertTrue(result.getBoolean("success"));
                 assertNotNull(result.getJsonArray("data"));
-                testContext.completeNow();
+
+                eventService.generateEventCsvReport("0").onComplete(testContext.succeeding(csvBytes -> {
+                    testContext.verify(() -> {
+                        assertNotNull(csvBytes);
+                        assertTrue(csvBytes.length > 0);
+                        testContext.completeNow();
+                    });
+                }));
             });
         }));
     }
