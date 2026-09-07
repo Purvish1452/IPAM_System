@@ -28,6 +28,7 @@ public class AlertService {
         this.db = db;
     }
 
+    // Fetch, filter, paginate, and convert alert records into a JSON response.
     public Future<JsonObject> getAlerts(String alertFilter, Integer page, Integer pageSize) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -91,6 +92,7 @@ public class AlertService {
         return promise.future();
     }
 
+    // Insert default alert records when the alert stream is initially empty.
     private void seedInitialAlerts() {
         String seedSql = "INSERT INTO alert_stream (subnet_id, alert_type, message, subnet, timestamp, status) VALUES " +
                 "(1, 'CRITICAL', 'Subnet 192.168.10.0/24 utilization reached 85.2%', '192.168.10.0', CURRENT_TIMESTAMP - INTERVAL '10 minutes', true), " +
@@ -106,6 +108,7 @@ public class AlertService {
         });
     }
 
+    // Retrieve alert configuration from the database and return it as JSON.
     public Future<JsonObject> getAlertConfig() {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -125,6 +128,7 @@ public class AlertService {
         return promise.future();
     }
 
+    // Save or update alert configuration values in the database.
     public Future<JsonObject> saveAlertConfig(JsonObject config) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -141,6 +145,7 @@ public class AlertService {
         return promise.future();
     }
 
+    // Delete alert records older than the specified number of days.
     public Future<Integer> cleanupOldAlerts(int days) {
         Promise<Integer> promise = Promise.promise();
         String sql = "DELETE FROM alert_stream WHERE timestamp < CURRENT_TIMESTAMP - INTERVAL '" + days + " days'";
@@ -154,6 +159,7 @@ public class AlertService {
         return promise.future();
     }
 
+    // Return default sample alerts when no database alert data is available.
     private JsonObject getFallbackAlerts() {
         JsonArray list = new JsonArray()
                 .add(new JsonObject().put("id", 1).put("alertType", "CRITICAL").put("message", "Subnet 192.168.10.0 utilization exceeded 80%").put("subnet", "192.168.10.0").put("timestamp", "2026-09-02 08:00:00").put("status", true))
@@ -161,6 +167,7 @@ public class AlertService {
         return new JsonObject().put("data", list).put("total", 2).put("success", true);
     }
 
+    // Return default alert configuration values when database configuration is unavailable.
     private JsonObject getFallbackAlertConfig() {
         return new JsonObject()
                 .put("ipUtilizationBelowFlag", "true")
