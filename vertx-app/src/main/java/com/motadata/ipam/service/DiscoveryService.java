@@ -30,6 +30,7 @@ public class DiscoveryService {
         this(vertx, db, "localhost", 8081);
     }
 
+    // Initialize database, Go service configuration, and asynchronous HTTP client.
     public DiscoveryService(Vertx vertx, Pool db, String goDiscoveryHost, int goDiscoveryPort) {
         this.db = db;
         this.goDiscoveryHost = goDiscoveryHost;
@@ -39,6 +40,7 @@ public class DiscoveryService {
                 .setIdleTimeout(120));
     }
 
+    // Fetch discovered subnets from PostgreSQL and convert them to JSON.
     public Future<JsonArray> getDiscoveredSubnets() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT d.id, COALESCE(d.subnet, d.subnet_address, '192.168.1.0') as subnet_val, " +
@@ -76,6 +78,7 @@ public class DiscoveryService {
         return promise.future();
     }
 
+    // Fetch a discovered subnet by ID and return its details.
     public Future<JsonObject> getDiscoveredSubnetById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT d.id, d.subnet_address, d.subnet_mask, d.gateway_id, g.gateway " +
@@ -105,6 +108,7 @@ public class DiscoveryService {
         return promise.future();
     }
 
+    // Delete the discovered subnet with the specified ID from PostgreSQL.
     public Future<JsonObject> deleteDiscoveredSubnet(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM discovered_subnet WHERE id = $1";
@@ -114,22 +118,43 @@ public class DiscoveryService {
         return promise.future();
     }
 
+    // Return the configured subnet discovery profiles.
     public Future<JsonArray> getDiscoveryProfiles() {
-        Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray()
-                .add(new JsonObject().put("id", 1).put("profileName", "Subnet Auto Discovery").put("subnetRange", "192.168.1.0/24").put("schedule", "Daily at 00:00").put("status", "Active")));
-        return promise.future();
+        return db.query("SELECT id, subnet_address, subnet_mask, discovered_time, status " +
+                        "FROM discovered_subnet ORDER BY id DESC")
+                .execute()
+                .map(rows -> {
+                    JsonArray result = new JsonArray();
+                    for (Row row : rows) {
+                        result.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("profileName", "Discovery " + row.getString("subnet_address"))
+                                .put("subnetRange", row.getString("subnet_address") +
+                                        (row.getString("subnet_mask") != null ? "/" + row.getString("subnet_mask") : ""))
+                                .put("schedule", "On demand")
+                                .put("status", row.getString("status")));
+                    }
+                    return result;
+                });
     }
 
+    // Save the subnet discovery profile configuration.
     public Future<JsonObject> saveDiscoveryProfile(JsonObject json) {
-        Promise<JsonObject> promise = Promise.promise();
-        promise.complete(new JsonObject().put("success", true).put("message", "Discovery Profile Saved Successfully"));
-        return promise.future();
+        String subnetRange = json != null ? json.getString("subnetRange") : null;
+        if (subnetRange == null || subnetRange.isBlank()) {
+            return Future.failedFuture("subnetRange is required");
+        }
+        return triggerGoSubnetScan(subnetRange)
+                .map(result -> new JsonObject()
+                        .put("success", true)
+                        .put("message", "Discovery scan completed successfully")
+                        .put("data", result));
     }
 
     /**
      * Dispatch a subnet CIDR scan to the Go discovery microservice on port 8081.
      */
+    // Send the subnet CIDR scan request asynchronously to the Go discovery service.
     public Future<JsonObject> triggerGoSubnetScan(String subnetCidr) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -163,7 +188,8 @@ public class DiscoveryService {
         return promise.future();
     }
 
-    public Future<JsonObject> triggerDiscovery() {
-        return triggerGoSubnetScan("192.168.1.0/24");
+    // Trigger subnet discovery for the CIDR range provided by the caller.
+    public Future<JsonObject> triggerDiscovery(String subnetCidr) {
+        return triggerGoSubnetScan(subnetCidr);
     }
 }
