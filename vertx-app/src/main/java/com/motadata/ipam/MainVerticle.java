@@ -31,6 +31,7 @@ public class MainVerticle extends AbstractVerticle {
     private PgClientProvider pgClientProvider;
     private JobScheduler jobScheduler;
 
+    // Create Vert.x and deploy the main application verticle.
     public static void main(String[] args) {
         io.vertx.core.Vertx vertx = io.vertx.core.Vertx.vertx();
         vertx.deployVerticle(new MainVerticle()).onComplete(ar -> {
@@ -77,7 +78,7 @@ public class MainVerticle extends AbstractVerticle {
                 // Initialize Direct Reactive Services (No DAO layer)
                 UserService userService = new UserService(db, jwtAuthProvider);
                 SubnetService subnetService = new SubnetService(db);
-                DhcpService dhcpService = new DhcpService(db);
+                DhcpService dhcpService = new DhcpService(vertx, db);
                 AlertService alertService = new AlertService(db);
                 EventService eventService = new EventService(db);
                 SettingsService settingsService = new SettingsService(db);
@@ -98,7 +99,7 @@ public class MainVerticle extends AbstractVerticle {
                 new SubnetRouter(subnetService, userService, subnetIPActionService, discoveryService).attachRoutes(router);
                 new DhcpRouter(dhcpService).attachRoutes(router);
                 new SettingsRouter(userService, settingsService, alertService, discoveryService).attachRoutes(router);
-                new EventRouter(eventService).attachRoutes(router);
+                new EventRouter(eventService, reportService).attachRoutes(router);
                 new AlertRouter(alertService).attachRoutes(router);
                 new ReportRouter(reportService).attachRoutes(router);
 
