@@ -85,7 +85,7 @@ var globalSearch =
                             title: "IP Address",
                             width:'10%'
                         },
-                        {field: "status", width:"8%", title: "Status",template:"#if(status == 'Available'){#<i class='fa fa-circle normal-v'></i><span>#:status#</span>#}else if(status == 'Used'){#<i class='fa fa-circle warning-v'></i><span>#:status#</span>#}if(status == 'Transient'){#<i class='fa fa-circle transient-v'></i><span>#:status#</span>#}else if(status == 'Reserved'){#<i class='fa fa-circle reserved-v'></i><span>#:status#</span>#}#"},
+                        {field: "status", width:"8%", title: "Status",template:"# var s = (typeof status !== 'undefined' && status) ? status.toUpperCase() : ''; if(s === 'AVAILABLE'){ #<i class='fa fa-circle normal-v'></i><span>Available</span># } else if(s === 'USED'){ #<i class='fa fa-circle warning-v'></i><span>Used</span># } else if(s === 'TRANSIENT'){ #<i class='fa fa-circle transient-v'></i><span>Transient</span># } else if(s === 'RESERVED'){ #<i class='fa fa-circle reserved-v'></i><span>Reserved</span># } else { #<span>#: status || '' #</span># } #"},
                         {
                             field: "subnetName",
                             template: "<a data-uid='#: subnetId.id #' data-link='subnetAddress' data-name='#: subnetName #' title='#: subnetName #'>#: subnetId.subnetName #</a>",
