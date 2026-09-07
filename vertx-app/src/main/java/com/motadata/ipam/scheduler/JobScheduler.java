@@ -26,6 +26,7 @@ public class JobScheduler {
         this.vertx = vertx;
     }
 
+    // Start the scheduler and register all predefined periodic Vert.x timers.
     public synchronized void start() {
         if (started) {
             return;
@@ -42,6 +43,7 @@ public class JobScheduler {
         LOGGER.info("Vert.x JobScheduler successfully started with {} periodic timers.", periodicTimerIds.size());
     }
 
+    // Stop the scheduler and cancel all registered Vert.x timers and jobs.
     public synchronized void stop() {
         LOGGER.info("Stopping IPAM JobScheduler...");
         periodicTimerIds.forEach(vertx::cancelTimer);
@@ -53,6 +55,7 @@ public class JobScheduler {
         LOGGER.info("Vert.x JobScheduler stopped.");
     }
 
+    // Schedule or replace a recurring job using a Vert.x periodic timer.
     public synchronized boolean scheduleCronJob(String jobName, String groupName,
                                                 Class<? extends VertxScheduledJob> jobClass,
                                                 String cronExpression, Map<String, Object> jobDataMap) {
@@ -77,6 +80,7 @@ public class JobScheduler {
         return true;
     }
 
+    // Manually trigger a previously scheduled job immediately.
     public synchronized boolean triggerJob(String jobName, String groupName) {
         ScheduledDefinition definition = scheduledDefinitions.get(groupName + ":" + jobName);
         if (definition == null) {
@@ -86,6 +90,7 @@ public class JobScheduler {
         return true;
     }
 
+    // Remove a scheduled job and cancel its associated Vert.x timer.
     public synchronized boolean deleteJob(String jobName, String groupName) {
         String key = groupName + ":" + jobName;
         Long timerId = scheduledJobs.remove(key);
@@ -93,14 +98,17 @@ public class JobScheduler {
         return timerId != null && vertx.cancelTimer(timerId);
     }
 
+    // Check whether the scheduler is currently running.
     public synchronized boolean isStarted() {
         return started;
     }
 
+    // Return the number of predefined periodic timers.
     public synchronized int getPeriodicTimerCount() {
         return periodicTimerIds.size();
     }
 
+    // Create the scheduled job instance and execute it with the provided data.
     private void execute(Class<? extends VertxScheduledJob> jobClass, JsonObject data) {
         try {
             jobClass.getDeclaredConstructor().newInstance().execute(data);
@@ -109,6 +117,7 @@ public class JobScheduler {
         }
     }
 
+    // Convert supported cron expressions into a recurring interval in milliseconds.
     private long intervalForCron(String cronExpression) {
         if (cronExpression != null && cronExpression.matches("0 0/\\d+ \\* \\* \\* \\?")) {
             int minutes = Integer.parseInt(cronExpression.split(" ")[1].substring(2));
