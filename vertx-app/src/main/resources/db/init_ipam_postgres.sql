@@ -247,10 +247,16 @@ CREATE TABLE ip_requests (
     number_of_ips INTEGER DEFAULT 1,
     subnet_id VARCHAR(100),
     subnet_address VARCHAR(100),
+    device_type VARCHAR(100) DEFAULT 'Server',
+    duration VARCHAR(100) DEFAULT 'Permanent',
     status VARCHAR(50) DEFAULT 'PENDING',
-    purpose VARCHAR(255),
-    remark VARCHAR(255),
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    purpose VARCHAR(500),
+    remark VARCHAR(500),
+    preferred_subnet BOOLEAN DEFAULT FALSE,
+    ips TEXT,
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_modified_by VARCHAR(100),
+    last_modified_date TIMESTAMP
 );
 
 -- 19. Global Settings
@@ -448,8 +454,9 @@ INSERT INTO rogue_detection_details (id, mac_address, ip_address, nic_type, auth
 (1, '00:50:56:FE:DC:BA', '192.168.1.99', 'VMware Virtual NIC', 'UNAUTHORIZED', 1, 'rogue-node-01');
 
 -- IP Requests
-INSERT INTO ip_requests (id, created_by, requested_by, number_of_ips, subnet_id, subnet_address, status, purpose, remark) VALUES
-(1, 'purvish', 'purvish', 5, '1', '192.168.10.0/24', 'PENDING', 'Development Server Cluster', 'Need 5 static IPs for new microservices deployment');
+INSERT INTO ip_requests (id, created_by, requested_by, number_of_ips, subnet_id, subnet_address, device_type, duration, status, purpose, remark, preferred_subnet, ips, created_date, last_modified_by, last_modified_date) VALUES
+(1, 'purvish', 'purvish', 2, '1', '192.168.10.0/24', 'Server', 'Permanent', 'PENDING', 'Development Server Cluster', 'Need 2 static IPs for new microservices deployment', true, '["192.168.10.51", "192.168.10.52"]', CURRENT_TIMESTAMP - INTERVAL '2 days', NULL, NULL),
+(2, 'admin', 'admin', 1, '1', '192.168.10.0/24', 'Virtual Machine (VM)', '90 Days', 'APPROVED', 'Testing VM node for QA pipeline', 'Approved for QA test environment', true, '["192.168.10.15"]', CURRENT_TIMESTAMP - INTERVAL '5 days', 'admin', CURRENT_TIMESTAMP - INTERVAL '4 days');
 
 -- Global Settings
 INSERT INTO global_setting (id, logging_level, css_mode, session_timeout) VALUES

@@ -443,6 +443,17 @@ public class SubnetRouter {
             return;
         }
 
+        String sessionUser = ctx.session() != null ? ctx.session().get("userName") : null;
+        if (sessionUser == null && ctx.request().getCookie("userName") != null) {
+            sessionUser = ctx.request().getCookie("userName").getValue();
+        }
+        if (sessionUser != null && !body.containsKey("createdBy")) {
+            body.put("createdBy", sessionUser);
+        }
+        if (sessionUser != null && !body.containsKey("userName")) {
+            body.put("userName", sessionUser);
+        }
+
         subnetService.saveIpRequest(body).onComplete(ar -> {
             if (ar.succeeded()) {
                 ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8")
@@ -470,21 +481,51 @@ public class SubnetRouter {
             body = null;
         }
 
-        if (body == null || body.getLong("id") == null) {
+        Long requestId = null;
+        if (body != null) {
+            Object idVal = body.getValue("id");
+            if (idVal instanceof Number) {
+                requestId = ((Number) idVal).longValue();
+            } else if (idVal != null) {
+                try {
+                    requestId = Long.parseLong(String.valueOf(idVal).trim());
+                } catch (Exception ignored) {}
+            }
+        }
+
+        if (body == null || requestId == null) {
             ctx.response().setStatusCode(400)
                     .putHeader("Content-Type", "application/json;charset=UTF-8")
-                    .end(new JsonObject().put("success", false).put("message", "IP request id is required").encode());
+                    .end(new JsonObject().put("success", false).put("message", "Valid IP request id is required").encode());
             return;
         }
 
-        String status = ctx.request().path().endsWith("/approved") ? "APPROVED" : "REJECTED";
-        subnetService.updateIpRequestStatus(body, status).onComplete(ar -> {
+        body.put("id", requestId);
+
+        String sessionUser = ctx.session() != null ? ctx.session().get("userName") : null;
+        if (sessionUser == null && ctx.request().getCookie("userName") != null) {
+            sessionUser = ctx.request().getCookie("userName").getValue();
+        }
+        if (sessionUser != null && !body.containsKey("lastModifiedBy")) {
+            body.put("lastModifiedBy", sessionUser);
+        }
+        if (sessionUser != null && !body.containsKey("userName")) {
+            body.put("userName", sessionUser);
+        }
+
+        final JsonObject finalBody = body;
+        final Long finalRequestId = requestId;
+        final String status = ctx.request().path().endsWith("/approved") ? "APPROVED" : "REJECTED";
+
+        subnetService.updateIpRequestStatus(finalBody, status).onComplete(ar -> {
             if (ar.succeeded()) {
                 ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
             } else {
+                LOGGER.error("Failed to {} IP request #{}: {}", status, finalRequestId, ar.cause() != null ? ar.cause().getMessage() : "Unknown error");
+                String errorMsg = ar.cause() != null && ar.cause().getMessage() != null ? ar.cause().getMessage() : "Unable to process IP request action";
                 ctx.response().setStatusCode(500)
                         .putHeader("Content-Type", "application/json;charset=UTF-8")
-                        .end(new JsonObject().put("success", false).put("message", ar.cause().getMessage()).encode());
+                        .end(new JsonObject().put("success", false).put("message", errorMsg).encode());
             }
         });
     }

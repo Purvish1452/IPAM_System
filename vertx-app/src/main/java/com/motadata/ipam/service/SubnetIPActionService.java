@@ -46,19 +46,25 @@ public class SubnetIPActionService {
     private final Pool db;
     private final Vertx vertx;
     private final DiscoveryService discoveryService;
+    private final AlertService alertService;
 
     // Track running scans to prevent duplicate scans
     private static final AtomicBoolean scanRunning = new AtomicBoolean(false);
     private static volatile String lastScanSubnetAddress = null;
 
     public SubnetIPActionService(Vertx vertx, Pool db) {
-        this(vertx, db, null);
+        this(vertx, db, null, null);
     }
 
     public SubnetIPActionService(Vertx vertx, Pool db, DiscoveryService discoveryService) {
+        this(vertx, db, discoveryService, null);
+    }
+
+    public SubnetIPActionService(Vertx vertx, Pool db, DiscoveryService discoveryService, AlertService alertService) {
         this.vertx = vertx;
         this.db = db;
         this.discoveryService = discoveryService;
+        this.alertService = alertService;
         // Ensure export directory exists
         try {
             Files.createDirectories(Paths.get(EXPORT_DIR));
@@ -145,10 +151,19 @@ public class SubnetIPActionService {
                     "available_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE'), " +
                     "transient_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'TRANSIENT'), " +
                     "last_scan_time = CURRENT_TIMESTAMP " +
-                    "WHERE id = $1";
+                    "WHERE id = $1 RETURNING total_ip, used_ip, available_ip";
 
             CompletableFuture<Void> finalCf = new CompletableFuture<>();
-            db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).onComplete(res -> finalCf.complete(null));
+            db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).onComplete(res -> {
+                if (res.succeeded() && res.result().iterator().hasNext() && alertService != null) {
+                    Row r = res.result().iterator().next();
+                    long total = r.getLong("total_ip");
+                    long used = r.getLong("used_ip");
+                    long avail = r.getLong("available_ip");
+                    alertService.checkAndGenerateSubnetAlerts(subnetId, networkAddress, total, used, avail);
+                }
+                finalCf.complete(null);
+            });
             finalCf.get(5, TimeUnit.SECONDS);
 
         } catch (Exception e) {

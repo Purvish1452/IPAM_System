@@ -401,11 +401,13 @@ public class SubnetService {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
+                    Date discTs = row.getLocalDateTime("discovered_at") != null ?
+                            java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
                     result.add(new JsonObject()
                             .put("id", row.getLong("id"))
                             .put("macAddress", row.getString("mac_address"))
                             .put("ipAddress", row.getString("ip_address"))
-                            .put("discoveredAt", "2026-09-02 10:00:00")
+                            .put("discoveredAt", DATE_FORMAT.format(discTs))
                             .put("nicType", row.getString("nic_type") != null ? row.getString("nic_type") : "Virtual NIC")
                             .put("authenticity", row.getString("authenticity") != null ? row.getString("authenticity") : "UNAUTHORIZED")
                             .put("hostName", row.getString("host_name")));
@@ -428,49 +430,83 @@ public class SubnetService {
 
     public Future<JsonArray> getIpRequests() {
         Promise<JsonArray> promise = Promise.promise();
-        String sql = "SELECT id, created_by, requested_by, number_of_ips, subnet_id, subnet_address, status, purpose, remark, created_date FROM ip_requests ORDER BY id ASC";
+        String sql = "SELECT ir.id, ir.created_by, ir.requested_by, ir.number_of_ips, ir.subnet_id, " +
+                "COALESCE(ir.subnet_address, sd.subnet_address, '192.168.10.0/24') AS subnet_address, " +
+                "ir.device_type, ir.duration, ir.status, ir.purpose, ir.remark, ir.preferred_subnet, ir.ips, " +
+                "ir.created_date, ir.last_modified_by, ir.last_modified_date " +
+                "FROM ip_requests ir " +
+                "LEFT JOIN subnet_details sd ON (ir.subnet_id = CAST(sd.id AS VARCHAR)) " +
+                "ORDER BY ir.id DESC";
         db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
-                    int ipCount = row.getInteger("number_of_ips") != null ? row.getInteger("number_of_ips") : 5;
+                    int ipCount = row.getInteger("number_of_ips") != null ? row.getInteger("number_of_ips") : 1;
                     String creator = row.getString("created_by") != null ? row.getString("created_by") : "admin";
+                    String requestedBy = row.getString("requested_by") != null ? row.getString("requested_by") : creator;
                     String status = row.getString("status") != null ? row.getString("status") : "PENDING";
-                    
-                    JsonArray dateArr = new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0);
-                    if (row.getLocalDateTime("created_date") != null) {
-                        java.time.LocalDateTime ldt = row.getLocalDateTime("created_date");
-                        dateArr = new JsonArray()
-                                .add(ldt.getYear())
-                                .add(ldt.getMonthValue())
-                                .add(ldt.getDayOfMonth())
-                                .add(ldt.getHour())
-                                .add(ldt.getMinute())
-                                .add(ldt.getSecond());
+                    String subnetId = row.getString("subnet_id") != null ? row.getString("subnet_id") : "1";
+                    String subnetAddress = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0/24";
+                    String deviceType = row.getString("device_type") != null ? row.getString("device_type") : "Server";
+                    String duration = row.getString("duration") != null ? row.getString("duration") : "Permanent";
+                    String purpose = row.getString("purpose") != null ? row.getString("purpose") : "Static IP Allocation";
+                    String remark = row.getString("remark") != null ? row.getString("remark") : "";
+                    boolean preferredSubnet = Boolean.TRUE.equals(row.getBoolean("preferred_subnet"));
+
+                    // Parse IPs
+                    JsonArray ipsJson = new JsonArray();
+                    String rawIps = row.getString("ips");
+                    if (rawIps != null && !rawIps.isBlank()) {
+                        rawIps = rawIps.trim();
+                        if (rawIps.startsWith("[") && rawIps.endsWith("]")) {
+                            try {
+                                ipsJson = new JsonArray(rawIps);
+                            } catch (Exception e) {
+                                ipsJson.add(rawIps);
+                            }
+                        } else {
+                            for (String part : rawIps.split("[,;\\s]+")) {
+                                if (!part.isBlank()) ipsJson.add(part.trim());
+                            }
+                        }
                     }
 
-                    result.add(new JsonObject()
+                    JsonArray createdDateArr = toDateArray(row.getLocalDateTime("created_date"));
+                    JsonArray lastModifiedDateArr = toDateArray(row.getLocalDateTime("last_modified_date"));
+                    String lastModifiedBy = row.getString("last_modified_by");
+
+                    JsonObject item = new JsonObject()
                             .put("id", row.getLong("id"))
                             .put("createdBy", creator)
-                            .put("requestedBy", row.getString("requested_by") != null ? row.getString("requested_by") : creator)
+                            .put("requestedBy", requestedBy)
                             .put("numberOfIps", ipCount)
                             .put("noOfIps", ipCount)
                             .put("ipCount", ipCount)
-                            .put("subnetId", row.getString("subnet_id") != null ? row.getString("subnet_id") : "1")
-                            .put("subnetAddress", row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0")
+                            .put("subnetId", subnetId)
+                            .put("subnetAddress", subnetAddress)
+                            .put("deviceType", deviceType)
+                            .put("duration", duration)
                             .put("status", status)
-                            .put("purpose", row.getString("purpose") != null ? row.getString("purpose") : "Server Allocation")
-                            .put("remark", row.getString("remark") != null ? row.getString("remark") : "")
-                            .put("lastModifiedBy", "admin")
-                            .put("lastModifiedDate", dateArr)
-                            .put("createdDate", dateArr));
+                            .put("purpose", purpose)
+                            .put("remark", remark)
+                            .put("preferredSubnet", preferredSubnet)
+                            .put("ips", ipsJson)
+                            .put("createdDate", createdDateArr)
+                            .put("lastModifiedBy", lastModifiedBy != null ? lastModifiedBy : "N/A")
+                            .put("lastModifiedDate", lastModifiedDateArr);
+
+                    result.add(item);
                 }
                 promise.complete(result);
             } else {
+                LOGGER.error("Failed to query IP requests: {}", ar.cause().getMessage());
                 promise.complete(new JsonArray().add(new JsonObject()
-                        .put("id", 1).put("createdBy", "purvish").put("requestedBy", "purvish").put("numberOfIps", 5)
-                        .put("subnetAddress", "192.168.10.0/24").put("status", "PENDING").put("purpose", "Development Cluster")
-                        .put("lastModifiedBy", "admin")
+                        .put("id", 1L).put("createdBy", "purvish").put("requestedBy", "purvish").put("numberOfIps", 2)
+                        .put("subnetId", "1").put("subnetAddress", "192.168.10.0/24").put("deviceType", "Server")
+                        .put("duration", "Permanent").put("status", "PENDING").put("purpose", "Development Server Cluster")
+                        .put("remark", "Need 2 static IPs for new microservices deployment").put("preferredSubnet", true)
+                        .put("ips", new JsonArray().add("192.168.10.51").add("192.168.10.52"))
+                        .put("lastModifiedBy", "N/A")
                         .put("lastModifiedDate", new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0))
                         .put("createdDate", new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0))));
             }
@@ -478,10 +514,23 @@ public class SubnetService {
         return promise.future();
     }
 
+    private JsonArray toDateArray(java.time.LocalDateTime ldt) {
+        if (ldt == null) {
+            return new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0);
+        }
+        return new JsonArray()
+                .add(ldt.getYear())
+                .add(ldt.getMonthValue())
+                .add(ldt.getDayOfMonth())
+                .add(ldt.getHour())
+                .add(ldt.getMinute())
+                .add(ldt.getSecond());
+    }
+
     public Future<JsonObject> saveIpRequest(JsonObject req) {
         Promise<JsonObject> promise = Promise.promise();
-        String creator = asString(req.getValue("createdBy"), "admin");
-        int count = 5;
+        String creator = asString(req.getValue("createdBy"), asString(req.getValue("userName"), "admin"));
+        int count = 1;
         Object countValue = req.getValue("numberOfIps");
         if (countValue instanceof Number) {
             count = ((Number) countValue).intValue();
@@ -498,19 +547,60 @@ public class SubnetService {
             return promise.future();
         }
 
-        String purpose = asString(req.getValue("purpose"), "Server Cluster Allocation");
+        String deviceType = asString(req.getValue("deviceType"), "Server");
+        String duration = asString(req.getValue("duration"), "Permanent");
+        String purpose = asString(req.getValue("purpose"), "Static IP Allocation");
+        boolean preferredSubnet = Boolean.TRUE.equals(req.getBoolean("preferredSubnet"));
         String subnetId = asNullableString(req.getValue("subnetId"));
 
-        String sql = "INSERT INTO ip_requests (created_by, requested_by, number_of_ips, subnet_id, status, purpose) " +
-                "VALUES ($1, $1, $2, $3, 'PENDING', $4) RETURNING id";
+        JsonArray ipsArray = req.getJsonArray("ips");
+        String ipsJson = (ipsArray != null && !ipsArray.isEmpty()) ? ipsArray.encode() : null;
+        String subnetAddress = asNullableString(req.getValue("subnetAddress"));
 
-        db.preparedQuery(sql).execute(Tuple.of(creator, count, subnetId, purpose)).onComplete(ar -> {
+        final int finalCount = count;
+        final String finalCreator = creator;
+        final String finalDeviceType = deviceType;
+        final String finalDuration = duration;
+        final String finalPurpose = purpose;
+        final String finalSubnetId = subnetId;
+        final String finalIpsJson = ipsJson;
+        final boolean finalPreferredSubnet = preferredSubnet;
+
+        Future<String> resolveSubnetAddress;
+        if (finalSubnetId != null && (subnetAddress == null || subnetAddress.isBlank())) {
+            Long sid = null;
+            try { sid = Long.parseLong(finalSubnetId); } catch (Exception ignored) {}
+            if (sid != null) {
+                resolveSubnetAddress = db.preparedQuery("SELECT subnet_address FROM subnet_details WHERE id = $1")
+                        .execute(Tuple.of(sid))
+                        .map(rows -> rows.size() > 0 ? rows.iterator().next().getString("subnet_address") : null)
+                        .otherwise((String) null);
+            } else {
+                resolveSubnetAddress = Future.succeededFuture(null);
+            }
+        } else {
+            resolveSubnetAddress = Future.succeededFuture(subnetAddress);
+        }
+
+        resolveSubnetAddress.compose(resolvedAddr -> {
+            String insertSql = "INSERT INTO ip_requests (created_by, requested_by, number_of_ips, subnet_id, subnet_address, device_type, duration, status, purpose, preferred_subnet, ips, created_date) " +
+                    "VALUES ($1, $1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, CURRENT_TIMESTAMP) RETURNING id";
+            return db.preparedQuery(insertSql)
+                    .execute(Tuple.of(finalCreator, finalCount, finalSubnetId, resolvedAddr, finalDeviceType, finalDuration, finalPurpose, finalPreferredSubnet, finalIpsJson));
+        }).compose(rows -> {
+            Long newId = rows.size() > 0 ? rows.iterator().next().getLong("id") : 1L;
+            String msg = "New IP Request #" + newId + " submitted by " + finalCreator + " for " + finalCount + " IP(s) (" + finalDeviceType + ", " + finalDuration + "): " + finalPurpose;
+            String eventSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ('Information', 'IP Request', $1, $2, CURRENT_TIMESTAMP)";
+            return db.preparedQuery(eventSql).execute(Tuple.of(msg, finalCreator)).map(newId);
+        }).onComplete(ar -> {
             if (ar.succeeded()) {
                 promise.complete(new JsonObject().put("success", true).put("message", "IP Request submitted successfully"));
             } else {
+                LOGGER.error("Failed to save IP request: {}", ar.cause().getMessage());
                 promise.fail(ar.cause());
             }
         });
+
         return promise.future();
     }
 
@@ -524,54 +614,173 @@ public class SubnetService {
         return result == null || result.isEmpty() ? null : result;
     }
 
+    private Long asLong(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value != null) {
+            try {
+                return Long.parseLong(String.valueOf(value).trim());
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
     public Future<JsonObject> updateIpRequestStatus(JsonObject req, String status) {
         Promise<JsonObject> promise = Promise.promise();
-        Long requestId = req.getLong("id");
-        String subnetId = req.getString("subnetId");
-        String remark = req.getString("remark");
+        Long requestId = asLong(req.getValue("id"));
+        if (requestId == null) {
+            promise.fail("Valid IP request id is required");
+            return promise.future();
+        }
 
-        String sql = "UPDATE ip_requests SET status = $1, subnet_id = COALESCE($2, subnet_id), " +
-                "remark = COALESCE($3, remark) WHERE id = $4";
-        db.preparedQuery(sql).execute(Tuple.of(status, subnetId, remark, requestId)).onComplete(ar -> {
-            if (ar.failed()) {
-                promise.fail(ar.cause());
-                return;
+        String subnetId = asNullableString(req.getValue("subnetId"));
+        String remark = asString(req.getValue("remark"), "");
+        String reviewer = asString(req.getValue("lastModifiedBy"), asString(req.getValue("userName"), "admin"));
+        
+        JsonArray tempRequestedIps = null;
+        Object ipsVal = req.getValue("ips");
+        if (ipsVal instanceof JsonArray) {
+            tempRequestedIps = (JsonArray) ipsVal;
+        } else if (ipsVal instanceof List) {
+            tempRequestedIps = new JsonArray((List<?>) ipsVal);
+        } else if (ipsVal != null) {
+            String s = String.valueOf(ipsVal).trim();
+            if (s.startsWith("[") && s.endsWith("]")) {
+                try {
+                    tempRequestedIps = new JsonArray(s);
+                } catch (Exception ignored) {}
             }
-            if (ar.result().rowCount() == 0) {
-                promise.fail("IP request not found");
-                return;
-            }
+        }
+        final JsonArray requestedIps = tempRequestedIps;
+        final String finalSubnetId = subnetId;
+        final String finalRemark = remark;
+        final String finalReviewer = reviewer;
 
-            JsonArray ips = req.getJsonArray("ips");
-            if (!"APPROVED".equals(status) || ips == null || ips.isEmpty()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "IP Request status updated"));
-                return;
-            }
-
-            List<Tuple> updates = new java.util.ArrayList<>();
-            for (Object value : ips) {
-                if (value != null && !String.valueOf(value).isBlank()) {
-                    updates.add(Tuple.of("USED", String.valueOf(value)));
-                }
-            }
-            if (updates.isEmpty()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "IP Request status updated"));
-                return;
-            }
-
-            Future<Void> chain = Future.succeededFuture();
-            for (Tuple update : updates) {
-                chain = chain.compose(ignored -> db.preparedQuery(
-                        "UPDATE subnet_ip_details SET status = $1 WHERE ip_address = $2").execute(update).mapEmpty());
-            }
-            chain.onComplete(updateResult -> {
-                if (updateResult.succeeded()) {
-                    promise.complete(new JsonObject().put("success", true).put("message", "IP Request status updated"));
+        if ("REJECTED".equalsIgnoreCase(status)) {
+            String updateSql = "UPDATE ip_requests SET status = 'REJECTED', remark = $1, last_modified_by = $2, last_modified_date = CURRENT_TIMESTAMP WHERE id = $3";
+            db.preparedQuery(updateSql).execute(Tuple.of(finalRemark, finalReviewer, requestId)).compose(rows -> {
+                String msg = "IP Request #" + requestId + " rejected by " + finalReviewer + ". Reason: " + (finalRemark.isBlank() ? "No reason provided" : finalRemark);
+                String eventSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ('Warning', 'IP Request', $1, $2, CURRENT_TIMESTAMP)";
+                return db.preparedQuery(eventSql).execute(Tuple.of(msg, finalReviewer));
+            }).onComplete(ar -> {
+                if (ar.succeeded()) {
+                    promise.complete(new JsonObject().put("success", true).put("message", "IP Request rejected successfully"));
                 } else {
-                    promise.fail(updateResult.cause());
+                    LOGGER.error("Failed to reject IP request #{}: {}", requestId, ar.cause().getMessage());
+                    promise.fail(ar.cause());
                 }
             });
+            return promise.future();
+        }
+
+        // Handle APPROVED
+        String selectSql = "SELECT * FROM ip_requests WHERE id = $1";
+        db.preparedQuery(selectSql).execute(Tuple.of(requestId)).compose(rows -> {
+            if (rows.size() == 0) {
+                return Future.failedFuture("IP request not found");
+            }
+            Row reqRow = rows.iterator().next();
+            String effectiveSubnetId = finalSubnetId != null ? finalSubnetId : reqRow.getString("subnet_id");
+            String purpose = reqRow.getString("purpose") != null ? reqRow.getString("purpose") : "Allocated IP";
+            String deviceType = reqRow.getString("device_type") != null ? reqRow.getString("device_type") : "Server";
+            int count = reqRow.getInteger("number_of_ips") != null ? reqRow.getInteger("number_of_ips") : 1;
+
+            List<String> ipsToAllocate = new java.util.ArrayList<>();
+            if (requestedIps != null && !requestedIps.isEmpty()) {
+                for (Object v : requestedIps) {
+                    if (v != null && !String.valueOf(v).isBlank()) {
+                        ipsToAllocate.add(String.valueOf(v).trim());
+                    }
+                }
+            }
+
+            if (!ipsToAllocate.isEmpty() || effectiveSubnetId == null) {
+                return Future.succeededFuture(new JsonObject()
+                        .put("subnetId", effectiveSubnetId)
+                        .put("purpose", purpose)
+                        .put("deviceType", deviceType)
+                        .put("ips", new JsonArray(ipsToAllocate)));
+            }
+
+            Long sid = null;
+            try { sid = Long.parseLong(effectiveSubnetId); } catch (Exception ignored) {}
+            if (sid != null) {
+                return db.preparedQuery("SELECT ip_address FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE' ORDER BY id ASC LIMIT $2")
+                        .execute(Tuple.of(sid, count))
+                        .map(availRows -> {
+                            JsonArray autoIps = new JsonArray();
+                            for (Row r : availRows) {
+                                autoIps.add(r.getString("ip_address"));
+                            }
+                            return new JsonObject()
+                                    .put("subnetId", effectiveSubnetId)
+                                    .put("purpose", purpose)
+                                    .put("deviceType", deviceType)
+                                    .put("ips", autoIps);
+                        });
+            } else {
+                return Future.succeededFuture(new JsonObject()
+                        .put("subnetId", effectiveSubnetId)
+                        .put("purpose", purpose)
+                        .put("deviceType", deviceType)
+                        .put("ips", new JsonArray()));
+            }
+        }).compose(allocData -> {
+            String effSubnetId = allocData.getString("subnetId");
+            String purpose = allocData.getString("purpose");
+            String deviceType = allocData.getString("deviceType");
+            JsonArray finalIps = allocData.getJsonArray("ips");
+
+            Future<Void> updateIpsChain = Future.succeededFuture();
+            if (finalIps != null && !finalIps.isEmpty()) {
+                for (int i = 0; i < finalIps.size(); i++) {
+                    String ipAddr = finalIps.getString(i);
+                    updateIpsChain = updateIpsChain.compose(ignored ->
+                            db.preparedQuery("UPDATE subnet_ip_details SET status = 'USED', " +
+                                            "host_name = CASE WHEN host_name IS NULL OR host_name = '-' THEN $1 ELSE host_name END, " +
+                                            "system_description = CASE WHEN system_description IS NULL OR system_description = '-' THEN $1 ELSE system_description END, " +
+                                            "device_type = CASE WHEN device_type IS NULL OR device_type = '-' THEN $2 ELSE device_type END " +
+                                            "WHERE ip_address = $3")
+                                    .execute(Tuple.of(purpose, deviceType, ipAddr)).mapEmpty()
+                    );
+                }
+            }
+
+            return updateIpsChain.compose(ignored -> {
+                if (effSubnetId != null) {
+                    Long sid = null;
+                    try { sid = Long.parseLong(effSubnetId); } catch (Exception ignored2) {}
+                    if (sid != null) {
+                        String syncStatsSql = "UPDATE subnet_details SET " +
+                                "used_ip = (SELECT COUNT(*) FROM subnet_ip_details WHERE subnet_id = subnet_details.id AND status = 'USED'), " +
+                                "available_ip = (SELECT COUNT(*) FROM subnet_ip_details WHERE subnet_id = subnet_details.id AND status = 'AVAILABLE'), " +
+                                "transient_ip = (SELECT COUNT(*) FROM subnet_ip_details WHERE subnet_id = subnet_details.id AND status = 'TRANSIENT') " +
+                                "WHERE id = $1";
+                        return db.preparedQuery(syncStatsSql).execute(Tuple.of(sid)).mapEmpty();
+                    }
+                }
+                return Future.succeededFuture();
+            }).compose(ignored -> {
+                String updateReqSql = "UPDATE ip_requests SET status = 'APPROVED', subnet_id = COALESCE($1, subnet_id), " +
+                        "remark = $2, ips = $3, last_modified_by = $4, last_modified_date = CURRENT_TIMESTAMP WHERE id = $5";
+                String ipsStr = finalIps != null ? finalIps.encode() : "[]";
+                return db.preparedQuery(updateReqSql).execute(Tuple.of(effSubnetId, finalRemark, ipsStr, finalReviewer, requestId));
+            }).compose(ignored -> {
+                String ipsAllocatedStr = (finalIps != null && !finalIps.isEmpty()) ? finalIps.encode() : "None";
+                String msg = "IP Request #" + requestId + " approved by " + finalReviewer + ". Allocated IPs: " + ipsAllocatedStr + (finalRemark.isBlank() ? "" : " (Remark: " + finalRemark + ")");
+                String eventSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ('Information', 'IP Request', $1, $2, CURRENT_TIMESTAMP)";
+                return db.preparedQuery(eventSql).execute(Tuple.of(msg, finalReviewer));
+            });
+        }).onComplete(ar -> {
+            if (ar.succeeded()) {
+                promise.complete(new JsonObject().put("success", true).put("message", "IP Request approved successfully"));
+            } else {
+                LOGGER.error("Failed to approve IP request #{}: {}", requestId, ar.cause().getMessage());
+                promise.fail(ar.cause());
+            }
         });
+
         return promise.future();
     }
 

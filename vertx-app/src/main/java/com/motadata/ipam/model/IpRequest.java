@@ -13,6 +13,9 @@ public class IpRequest implements Serializable {
     private List<String> ips;
     private String status;
     private String subnetId;
+    private String subnetAddress;
+    private String deviceType;
+    private String duration;
     private String remark;
     private Boolean preferredSubnet;
     private String purpose;
@@ -62,6 +65,30 @@ public class IpRequest implements Serializable {
 
     public void setSubnetId(String subnetId) {
         this.subnetId = subnetId;
+    }
+
+    public String getSubnetAddress() {
+        return subnetAddress;
+    }
+
+    public void setSubnetAddress(String subnetAddress) {
+        this.subnetAddress = subnetAddress;
+    }
+
+    public String getDeviceType() {
+        return deviceType;
+    }
+
+    public void setDeviceType(String deviceType) {
+        this.deviceType = deviceType;
+    }
+
+    public String getDuration() {
+        return duration;
+    }
+
+    public void setDuration(String duration) {
+        this.duration = duration;
     }
 
     public String getRemark() {
