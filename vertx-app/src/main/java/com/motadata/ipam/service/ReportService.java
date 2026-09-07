@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -67,8 +68,7 @@ public class ReportService {
                 }
                 promise.complete(result);
             } else {
-                promise.complete(new JsonArray().add(new JsonObject()
-                        .put("id", 1).put("scheduleName", "Weekly Subnet Summary").put("reportType", "PDF").put("scheduleTime", "09:00")));
+                promise.fail(ar.cause());
             }
         });
         return promise.future();
@@ -76,11 +76,23 @@ public class ReportService {
 
     public Future<JsonObject> getReportSchedulerById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
-        promise.complete(new JsonObject()
-                .put("id", id)
-                .put("scheduleName", "Weekly Subnet Summary")
-                .put("reportType", "PDF")
-                .put("scheduleTime", "09:00"));
+        db.preparedQuery("SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients " +
+                "FROM report WHERE id = $1").execute(Tuple.of(id)).onComplete(ar -> {
+            if (ar.succeeded() && ar.result().iterator().hasNext()) {
+                Row row = ar.result().iterator().next();
+                promise.complete(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("scheduleName", row.getString("schedule_name"))
+                        .put("reportType", row.getString("report_type"))
+                        .put("scheduleTime", row.getString("schedule_time"))
+                        .put("scheduleStatus", row.getBoolean("schedule_status"))
+                        .put("recipients", row.getString("recipients")));
+            } else if (ar.succeeded()) {
+                promise.fail("Report schedule " + id + " was not found");
+            } else {
+                promise.fail(ar.cause());
+            }
+        });
         return promise.future();
     }
 
@@ -89,9 +101,18 @@ public class ReportService {
         String name = json.getString("scheduleName", "Report Schedule");
         String type = json.getString("reportType", "PDF");
         String time = json.getString("scheduleTime", "09:00");
-        String sql = "INSERT INTO report (schedule_name, report_type, schedule_time, schedule_status) VALUES ($1, $2, $3, true) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(name, type, time)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Saved Successfully"));
+        Long id = json.getLong("id");
+        String sql = id == null
+                ? "INSERT INTO report (schedule_name, report_type, schedule_time, schedule_status, recipients) VALUES ($1, $2, $3, true, $4)"
+                : "UPDATE report SET schedule_name = $1, report_type = $2, schedule_time = $3, recipients = $4 WHERE id = $5";
+        String recipients = json.getString("recipients", "");
+        Tuple params = id == null ? Tuple.of(name, type, time, recipients) : Tuple.of(name, type, time, recipients, id);
+        db.preparedQuery(sql).execute(params).onComplete(ar -> {
+            if (ar.succeeded()) {
+                promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Saved Successfully"));
+            } else {
+                promise.fail(ar.cause());
+            }
         });
         return promise.future();
     }
@@ -100,7 +121,11 @@ public class ReportService {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM report WHERE id = $1";
         db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Deleted"));
+            if (ar.succeeded()) {
+                promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Deleted"));
+            } else {
+                promise.fail(ar.cause());
+            }
         });
         return promise.future();
     }
@@ -131,90 +156,212 @@ public class ReportService {
                             .put("subnetAddress", name)
                             .put("subnets", children));
                 }
-            } else {
-                JsonArray children = new JsonArray()
-                        .add(new JsonObject().put("id", 1).put("subnetName", "All IP").put("networkInterface", "ALL"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Used IP").put("networkInterface", "USED"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Available IP").put("networkInterface", "AVAILABLE"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Reserved IP").put("networkInterface", "RESERVED"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Transient IP").put("networkInterface", "TRANSIENT"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Rogue IP").put("networkInterface", "ROGUE"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Trusted IP").put("networkInterface", "TRUSTED"))
-                        .add(new JsonObject().put("id", 1).put("subnetName", "Vendor Summary").put("networkInterface", "VENDOR SUMMARY"));
-                result.add(new JsonObject()
-                        .put("id", 1)
-                        .put("subnetAddress", "192.168.10.0/24")
-                        .put("subnets", children));
             }
-            promise.complete(result);
+            if (ar.succeeded()) promise.complete(result); else promise.fail(ar.cause());
         });
         return promise.future();
     }
 
     public Future<JsonArray> getSubnetIpByReportTimeline(Long subnetId, String status) {
+        return getSubnetIpByReportTimeline(subnetId != null ? List.of(subnetId) : List.of(), status);
+    }
+
+    public Future<JsonArray> getSubnetIpByReportTimeline(List<Long> subnetIds, String status) {
         Promise<JsonArray> promise = Promise.promise();
-        long sid = subnetId != null ? subnetId : 1L;
-        String sql = "SELECT ip.id, ip.ip_address, ip.mac_address, ip.status, ip.host_name, " +
-                "ip.dns_status, ip.device_type, ip.last_scan_time, s.subnet_address " +
+        String normalizedStatus = normalizeStatus(status);
+
+        if ("VENDOR SUMMARY".equals(normalizedStatus)) {
+            return getVendorSummaryReport(subnetIds);
+        }
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT ip.id, ip.ip_address, ip.mac_address, ip.status, ip.host_name, " +
+                "ip.dns_status, COALESCE(NULLIF(TRIM(ip.device_type), ''), NULLIF(TRIM(ip.vendor), ''), 'Unknown') AS device_type, " +
+                "ip.last_scan_time, ip.subnet_id, s.subnet_address, s.subnet_name, " +
+                "COALESCE(r.authenticity, CASE WHEN UPPER(ip.status) = 'ROGUE' THEN 'UNAUTHORIZED' ELSE 'TRUSTED' END) AS authenticity " +
                 "FROM subnet_ip_details ip " +
                 "LEFT JOIN subnet_details s ON s.id = ip.subnet_id " +
-                "WHERE ip.subnet_id = $1";
-        
-        db.preparedQuery(sql).execute(Tuple.of(sid)).onComplete(ar -> {
-            JsonArray list = new JsonArray();
-            if (ar.succeeded() && ar.result().size() > 0) {
+                "LEFT JOIN (SELECT ip_address, MAX(authenticity) AS authenticity FROM rogue_detection_details GROUP BY ip_address) r " +
+                "  ON r.ip_address = ip.ip_address "
+        );
+
+        Tuple tuple = Tuple.tuple();
+        List<String> whereClauses = new ArrayList<>();
+        int paramIndex = 1;
+
+        if (subnetIds != null && !subnetIds.isEmpty()) {
+            StringBuilder inClause = new StringBuilder("ip.subnet_id IN (");
+            for (int i = 0; i < subnetIds.size(); i++) {
+                if (i > 0) inClause.append(", ");
+                inClause.append("$").append(paramIndex++);
+                tuple.addLong(subnetIds.get(i));
+            }
+            inClause.append(")");
+            whereClauses.add(inClause.toString());
+        }
+
+        if ("USED".equals(normalizedStatus)) {
+            whereClauses.add("UPPER(ip.status) = 'USED'");
+        } else if ("AVAILABLE".equals(normalizedStatus)) {
+            whereClauses.add("UPPER(ip.status) = 'AVAILABLE'");
+        } else if ("RESERVED".equals(normalizedStatus)) {
+            whereClauses.add("(UPPER(ip.status) = 'RESERVED' OR ip.ip_reserved = true)");
+        } else if ("TRANSIENT".equals(normalizedStatus)) {
+            whereClauses.add("UPPER(ip.status) = 'TRANSIENT'");
+        } else if ("ROGUE".equals(normalizedStatus)) {
+            whereClauses.add("(UPPER(ip.status) = 'ROGUE' OR UPPER(COALESCE(r.authenticity, '')) = 'UNAUTHORIZED' OR UPPER(COALESCE(r.authenticity, '')) = 'ROGUE')");
+        } else if ("TRUSTED".equals(normalizedStatus)) {
+            whereClauses.add("(UPPER(ip.status) != 'ROGUE' AND UPPER(COALESCE(r.authenticity, 'TRUSTED')) != 'UNAUTHORIZED' AND UPPER(COALESCE(r.authenticity, 'TRUSTED')) != 'ROGUE')");
+        }
+
+        if (!whereClauses.isEmpty()) {
+            sql.append("WHERE ").append(String.join(" AND ", whereClauses)).append(" ");
+        }
+
+        sql.append("ORDER BY ip.subnet_id ASC, ip.id ASC");
+
+        db.preparedQuery(sql.toString()).execute(tuple).onComplete(ar -> {
+            if (ar.succeeded()) {
+                JsonArray list = new JsonArray();
                 for (Row row : ar.result()) {
-                    String ipStatus = row.getString("status") != null ? row.getString("status") : "USED";
-                    if (status != null && !status.equalsIgnoreCase("ALL") && !status.equalsIgnoreCase(ipStatus)) {
-                        continue;
-                    }
+                    String ipStatus = row.getString("status") != null ? row.getString("status").toUpperCase() : "AVAILABLE";
                     Date dt = row.getLocalDateTime("last_scan_time") != null ?
                             java.sql.Timestamp.valueOf(row.getLocalDateTime("last_scan_time")) : new Date();
+                    long sid = row.getLong("subnet_id") != null ? row.getLong("subnet_id") : 1L;
+                    String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
+                            (row.getString("subnet_address") != null ? row.getString("subnet_address") : "Subnet-" + sid);
                     String subnetAddress = row.getString("subnet_address") != null
-                            ? row.getString("subnet_address") : "192.168.10.0/24";
+                            ? row.getString("subnet_address") : sName;
                     String deviceType = row.getString("device_type") != null
                             ? row.getString("device_type") : "Unknown";
+                    String auth = row.getString("authenticity") != null
+                            ? row.getString("authenticity") : ("ROGUE".equals(ipStatus) ? "UNAUTHORIZED" : "TRUSTED");
+
                     list.add(new JsonObject()
                             .put("id", row.getLong("id"))
                             .put("ipAddress", row.getString("ip_address"))
                             .put("subnetId", new JsonObject()
                                     .put("id", sid)
                                     .put("subnetAddress", subnetAddress))
-                            .put("subnetName", subnetAddress)
-                            .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "00:50:56:FE:DC:BA")
+                            .put("subnetName", sName)
+                            .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
                             .put("status", ipStatus)
                             .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "host-" + row.getLong("id"))
                             .put("deviceType", deviceType)
                             .put("systemName", deviceType)
-                            .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "SUCCESS")
+                            .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK")
                             .put("dnsForwardName", "")
                             .put("ipToDns", "Forward OK")
-                            .put("dnsToIp", row.getString("dns_status") != null ? row.getString("dns_status") : "Reverse OK")
-                            .put("authenticity", "TRUSTED")
+                            .put("dnsToIp", "Reverse OK")
+                            .put("authenticity", auth)
                             .put("lastSeen", DATE_FORMAT.format(dt))
                             .put("lastAliveTime", DATE_FORMAT.format(dt)));
                 }
+                promise.complete(list);
+            } else {
+                LOGGER.error("Failed to query subnet IP report: {}", ar.cause().getMessage());
+                promise.fail(ar.cause());
             }
-            if (list.isEmpty()) {
-                list.add(new JsonObject()
-                        .put("id", 1)
-                        .put("ipAddress", "192.168.10.1")
-                        .put("subnetId", new JsonObject()
-                                .put("id", sid)
-                                .put("subnetAddress", "192.168.10.0/24"))
-                        .put("subnetName", "192.168.10.0/24")
-                        .put("macAddress", "00:50:56:A1:B2:C3")
-                        .put("status", "USED")
-                        .put("hostName", "gateway.motadata.local")
-                        .put("deviceType", "Gateway")
-                        .put("ipToDns", "Forward OK")
-                        .put("dnsToIp", "Reverse OK")
-                        .put("authenticity", "TRUSTED")
-                        .put("dnsStatus", "SUCCESS")
-                        .put("lastSeen", "2026-09-04 12:00:00")
-                        .put("lastAliveTime", "2026-09-04 12:00:00"));
+        });
+
+        return promise.future();
+    }
+
+    public Future<JsonArray> getVendorSummaryReport(List<Long> subnetIds) {
+        Promise<JsonArray> promise = Promise.promise();
+        StringBuilder sql = new StringBuilder(
+                "SELECT COALESCE(NULLIF(TRIM(ip.device_type), ''), NULLIF(TRIM(ip.vendor), ''), 'Unknown') AS vendor_name, " +
+                "COUNT(*)::bigint AS vendor_count " +
+                "FROM subnet_ip_details ip "
+        );
+
+        Tuple tuple = Tuple.tuple();
+        if (subnetIds != null && !subnetIds.isEmpty()) {
+            sql.append("WHERE ip.subnet_id IN (");
+            for (int i = 0; i < subnetIds.size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append("$").append(i + 1);
+                tuple.addLong(subnetIds.get(i));
             }
-            promise.complete(list);
+            sql.append(") ");
+        }
+        sql.append("GROUP BY COALESCE(NULLIF(TRIM(ip.device_type), ''), NULLIF(TRIM(ip.vendor), ''), 'Unknown') ORDER BY vendor_count DESC, vendor_name ASC");
+
+        db.preparedQuery(sql.toString()).execute(tuple).onComplete(ar -> {
+            if (ar.succeeded()) {
+                JsonArray list = new JsonArray();
+                long total = 0;
+                for (Row row : ar.result()) {
+                    total += row.getLong("vendor_count");
+                }
+                for (Row row : ar.result()) {
+                    long count = row.getLong("vendor_count");
+                    double pct = total > 0 ? Math.round(((double) count / total * 100.0) * 100.0) / 100.0 : 0.0;
+                    list.add(new JsonObject()
+                            .put("VendorName", row.getString("vendor_name"))
+                            .put("VendorCount", count)
+                            .put("VendorPercentage", pct));
+                }
+                promise.complete(list);
+            } else {
+                LOGGER.error("Failed to query vendor summary report: {}", ar.cause().getMessage());
+                promise.fail(ar.cause());
+            }
+        });
+
+        return promise.future();
+    }
+
+    public Future<String> generateSubnetIpPdfReport(Long subnetId, String status) {
+        return generateSubnetIpPdfReport(subnetId != null ? List.of(subnetId) : List.of(), status);
+    }
+
+    public Future<String> generateSubnetIpPdfReport(List<Long> subnetIds, String status) {
+        Promise<String> promise = Promise.promise();
+        String normalizedStatus = normalizeStatus(status);
+
+        if ("VENDOR SUMMARY".equals(normalizedStatus)) {
+            getVendorSummaryReport(subnetIds).onComplete(ar -> {
+                if (ar.failed()) {
+                    promise.fail(ar.cause());
+                    return;
+                }
+                JsonArray data = ar.result();
+                vertx.<String>executeBlocking(() -> {
+                    String subLabel = (subnetIds != null && !subnetIds.isEmpty()) ? String.join("_", subnetIds.stream().map(Object::toString).toList()) : "All";
+                    String filename = "Vendor_Summary_Export_" + subLabel + "_" + System.currentTimeMillis() + ".pdf";
+                    String exportDir = "file-uploads/exports/";
+                    java.nio.file.Files.createDirectories(java.nio.file.Paths.get(exportDir));
+                    String filePath = exportDir + filename;
+                    byte[] pdfBytes = generateVendorSummaryPdf(data, subLabel);
+                    java.nio.file.Files.write(java.nio.file.Paths.get(filePath), pdfBytes);
+                    return filename;
+                }).onComplete(promise);
+            });
+            return promise.future();
+        }
+
+        getSubnetIpByReportTimeline(subnetIds, status).onComplete(ar -> {
+            if (ar.failed()) {
+                promise.fail(ar.cause());
+                return;
+            }
+            JsonArray data = ar.result();
+            List<JsonObject> list = new ArrayList<>();
+            for (int i = 0; i < data.size(); i++) {
+                list.add(data.getJsonObject(i));
+            }
+
+            vertx.<String>executeBlocking(() -> {
+                String subLabel = (subnetIds != null && !subnetIds.isEmpty()) ? String.join("_", subnetIds.stream().map(Object::toString).toList()) : "All";
+                String filename = "SubnetIP_Export_" + subLabel + "_" + System.currentTimeMillis() + ".pdf";
+                String exportDir = "file-uploads/exports/";
+                java.nio.file.Files.createDirectories(java.nio.file.Paths.get(exportDir));
+                String filePath = exportDir + filename;
+                byte[] pdfBytes = generateSimplePdf(list, subLabel);
+                java.nio.file.Files.write(java.nio.file.Paths.get(filePath), pdfBytes);
+                return filename;
+            }).onComplete(promise);
         });
         return promise.future();
     }
@@ -236,21 +383,216 @@ public class ReportService {
                     s.setCreatedBy(row.getString("created_by") != null ? row.getString("created_by") : "admin");
                     subnets.add(s);
                 }
-            }
-            if (subnets.isEmpty()) {
-                SubnetDetails s = new SubnetDetails();
-                s.setId(1L);
-                s.setSubnetAddress("192.168.10.0");
-                s.setSubnetMask("255.255.255.0");
-                s.setDescription("Primary Office Subnet");
-                s.setCreatedBy("admin");
-                subnets.add(s);
-            }
 
-            executeBlockingReportGeneration("Subnet Utilization Report", subnets, createSubnetReportColumns()).onComplete(promise);
+            }
+            if (ar.failed()) {
+                promise.fail(ar.cause());
+            } else {
+                executeBlockingReportGeneration("Subnet Utilization Report", subnets, createSubnetReportColumns()).onComplete(promise);
+            }
         });
 
         return promise.future();
+    }
+
+    public Future<byte[]> generateSubnetCsvReport(Long subnetId, String status) {
+        return generateSubnetCsvReport(subnetId != null ? List.of(subnetId) : List.of(), status);
+    }
+
+    public Future<byte[]> generateSubnetCsvReport(List<Long> subnetIds, String status) {
+        String normalizedStatus = normalizeStatus(status);
+        if ("VENDOR SUMMARY".equals(normalizedStatus)) {
+            return getVendorSummaryReport(subnetIds).map(data -> {
+                StringBuilder csv = new StringBuilder("Vendor Name,Vendor Count,Percentage (%)\n");
+                for (int i = 0; i < data.size(); i++) {
+                    JsonObject row = data.getJsonObject(i);
+                    csv.append(csvValue(row.getString("VendorName"))).append(',')
+                            .append(row.getLong("VendorCount")).append(',')
+                            .append(row.getDouble("VendorPercentage")).append('\n');
+                }
+                return csv.toString().getBytes(StandardCharsets.UTF_8);
+            });
+        }
+
+        return getSubnetIpByReportTimeline(subnetIds, status).map(data -> {
+            StringBuilder csv = new StringBuilder("ID,IP Address,Scope,Status,MAC Address,Vendor,Host Name,DNS Status,Authenticity,Last Seen\n");
+            for (int i = 0; i < data.size(); i++) {
+                JsonObject row = data.getJsonObject(i);
+                csv.append(row.getLong("id")).append(',')
+                        .append(csvValue(row.getString("ipAddress"))).append(',')
+                        .append(csvValue(row.getString("subnetName"))).append(',')
+                        .append(csvValue(row.getString("status"))).append(',')
+                        .append(csvValue(row.getString("macAddress"))).append(',')
+                        .append(csvValue(row.getString("deviceType"))).append(',')
+                        .append(csvValue(row.getString("hostName"))).append(',')
+                        .append(csvValue(row.getString("dnsStatus"))).append(',')
+                        .append(csvValue(row.getString("authenticity"))).append(',')
+                        .append(csvValue(row.getString("lastSeen"))).append('\n');
+            }
+            return csv.toString().getBytes(StandardCharsets.UTF_8);
+        });
+    }
+
+    private static String csvValue(String value) {
+        if (value == null || "null".equals(value)) return "";
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) {
+            return "ALL";
+        }
+        String s = status.trim().toUpperCase();
+        if (s.contains("VENDOR")) {
+            return "VENDOR SUMMARY";
+        }
+        if (s.endsWith(" IP")) {
+            s = s.substring(0, s.length() - 3).trim();
+        }
+        return switch (s) {
+            case "USED" -> "USED";
+            case "AVAILABLE" -> "AVAILABLE";
+            case "RESERVED" -> "RESERVED";
+            case "TRANSIENT" -> "TRANSIENT";
+            case "ROGUE" -> "ROGUE";
+            case "TRUSTED" -> "TRUSTED";
+            default -> "ALL";
+        };
+    }
+
+    private byte[] generateSimplePdf(List<JsonObject> ipList, String subnetLabel) throws Exception {
+        StringBuilder pdf = new StringBuilder();
+        List<String> objects = new ArrayList<>();
+
+        StringBuilder content = new StringBuilder();
+        content.append("BT\n");
+        content.append("/F1 12 Tf\n");
+        content.append("50 750 Td\n");
+        content.append("(Subnet IP Address Report - Subnets: ").append(sanitize(subnetLabel)).append(") Tj\n");
+        content.append("0 -20 Td\n");
+        content.append("/F1 9 Tf\n");
+        content.append("(Generated: ").append(DATE_FORMAT.format(new Date())).append(") Tj\n");
+        content.append("0 -25 Td\n");
+        content.append("/F1 10 Tf\n");
+        content.append("(IP Address            Status     Scope              MAC Address        Host Name) Tj\n");
+        content.append("0 -18 Td\n");
+        content.append("(--------------------------------------------------------------------------------) Tj\n");
+        content.append("0 -5 Td\n");
+
+        int lineCount = 0;
+        for (JsonObject ip : ipList) {
+            if (lineCount++ >= 45) break;
+            String ipAddr = pad(ip.getString("ipAddress", "-"), 22);
+            String st = pad(ip.getString("status", "-"), 11);
+            String sc = pad(ip.getString("subnetName", "-"), 19);
+            String mac = pad(ip.getString("macAddress", "-"), 19);
+            String host = pad(ip.getString("hostName", "-"), 15);
+
+            content.append("0 -14 Td\n");
+            content.append("/F1 9 Tf\n");
+            content.append("(").append(sanitize(ipAddr + st + sc + mac + host)).append(") Tj\n");
+        }
+        content.append("ET\n");
+
+        byte[] streamBytes = content.toString().getBytes(StandardCharsets.ISO_8859_1);
+
+        objects.add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        objects.add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        objects.add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n");
+        objects.add("4 0 obj\n<< /Length " + streamBytes.length + " >>\nstream\n" + content + "\nendstream\nendobj\n");
+        objects.add("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+
+        pdf.append("%PDF-1.4\n");
+        List<Integer> offsets = new ArrayList<>();
+        int currentOffset = pdf.length();
+
+        for (String obj : objects) {
+            offsets.add(currentOffset);
+            pdf.append(obj);
+            currentOffset = pdf.length();
+        }
+
+        int xrefOffset = pdf.length();
+        pdf.append("xref\n0 ").append(objects.size() + 1).append("\n");
+        pdf.append("0000000000 65535 f \n");
+        for (int offset : offsets) {
+            pdf.append(String.format("%010d 00000 n \n", offset));
+        }
+
+        pdf.append("trailer\n<< /Size ").append(objects.size() + 1).append(" /Root 1 0 R >>\n");
+        pdf.append("startxref\n").append(xrefOffset).append("\n%%EOF\n");
+
+        return pdf.toString().getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    private byte[] generateVendorSummaryPdf(JsonArray data, String subnetLabel) throws Exception {
+        StringBuilder content = new StringBuilder();
+        content.append("BT\n");
+        content.append("/F1 12 Tf\n");
+        content.append("50 750 Td\n");
+        content.append("(Vendor Summary Report - Subnets: ").append(sanitize(subnetLabel)).append(") Tj\n");
+        content.append("0 -20 Td\n");
+        content.append("/F1 9 Tf\n");
+        content.append("(Generated: ").append(DATE_FORMAT.format(new Date())).append(") Tj\n");
+        content.append("0 -25 Td\n");
+        content.append("/F1 10 Tf\n");
+        content.append("(Vendor Name                         Count          Percentage) Tj\n");
+        content.append("0 -18 Td\n");
+        content.append("(----------------------------------------------------------------) Tj\n");
+        content.append("0 -5 Td\n");
+
+        for (int i = 0; i < data.size(); i++) {
+            JsonObject row = data.getJsonObject(i);
+            String vName = pad(row.getString("VendorName", "Unknown"), 36);
+            String vCount = pad(String.valueOf(row.getValue("VendorCount", "0")), 15);
+            String vPct = String.valueOf(row.getValue("VendorPercentage", "0")) + " %";
+
+            content.append("0 -15 Td\n");
+            content.append("/F1 9 Tf\n");
+            content.append("(").append(sanitize(vName + vCount + vPct)).append(") Tj\n");
+        }
+        content.append("ET\n");
+
+        byte[] streamBytes = content.toString().getBytes(StandardCharsets.ISO_8859_1);
+        List<String> objects = new ArrayList<>();
+        objects.add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        objects.add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        objects.add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n");
+        objects.add("4 0 obj\n<< /Length " + streamBytes.length + " >>\nstream\n" + content + "\nendstream\nendobj\n");
+        objects.add("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+
+        StringBuilder pdf = new StringBuilder();
+        pdf.append("%PDF-1.4\n");
+        List<Integer> offsets = new ArrayList<>();
+        int currentOffset = pdf.length();
+
+        for (String obj : objects) {
+            offsets.add(currentOffset);
+            pdf.append(obj);
+            currentOffset = pdf.length();
+        }
+
+        int xrefOffset = pdf.length();
+        pdf.append("xref\n0 ").append(objects.size() + 1).append("\n");
+        pdf.append("0000000000 65535 f \n");
+        for (int offset : offsets) {
+            pdf.append(String.format("%010d 00000 n \n", offset));
+        }
+
+        pdf.append("trailer\n<< /Size ").append(objects.size() + 1).append(" /Root 1 0 R >>\n");
+        pdf.append("startxref\n").append(xrefOffset).append("\n%%EOF\n");
+
+        return pdf.toString().getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    private static String pad(String s, int len) {
+        if (s == null) s = "-";
+        if (s.length() >= len) return s.substring(0, len);
+        return String.format("%-" + len + "s", s);
+    }
+
+    private static String sanitize(String s) {
+        return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)");
     }
 
     public Future<byte[]> generateAlertPdfReport() {
@@ -270,16 +612,8 @@ public class ReportService {
                     alerts.add(a);
                 }
             }
-            if (alerts.isEmpty()) {
-                AlertStream a = new AlertStream();
-                a.setId(1L);
-                a.setAlertType("CRITICAL");
-                a.setMessage("Subnet utilization exceeded 80%");
-                a.setSubnet("192.168.10.0");
-                alerts.add(a);
-            }
-
-            executeBlockingReportGeneration("Alert History Report", alerts, createAlertReportColumns()).onComplete(promise);
+            if (ar.failed()) promise.fail(ar.cause());
+            else executeBlockingReportGeneration("Alert History Report", alerts, createAlertReportColumns()).onComplete(promise);
         });
 
         return promise.future();
@@ -302,15 +636,8 @@ public class ReportService {
                     events.add(e);
                 }
             }
-            if (events.isEmpty()) {
-                Event e = new Event();
-                e.setId(1L);
-                e.setEventType("Information");
-                e.setEventContext("Subnet Management");
-                events.add(e);
-            }
-
-            executeBlockingReportGeneration("Event Audit Log Report", events, createEventReportColumns()).onComplete(promise);
+            if (ar.failed()) promise.fail(ar.cause());
+            else executeBlockingReportGeneration("Event Audit Log Report", events, createEventReportColumns()).onComplete(promise);
         });
 
         return promise.future();
@@ -332,11 +659,8 @@ public class ReportService {
                     ));
                 }
             }
-            if (dhcpServers.isEmpty()) {
-                dhcpServers.add(new DhcpReportItem("WinDHCP-Primary", "192.168.1.1", "WINDOWS", "admin"));
-            }
-
-            executeBlockingReportGeneration("DHCP Server Statistics Report", dhcpServers, createDhcpReportColumns()).onComplete(promise);
+            if (ar.failed()) promise.fail(ar.cause());
+            else executeBlockingReportGeneration("DHCP Server Statistics Report", dhcpServers, createDhcpReportColumns()).onComplete(promise);
         });
 
         return promise.future();

@@ -158,6 +158,7 @@ var report=
                                 reportTreeId.find(".Available").prop('checked', false);
                                 reportTreeId.find(".Transient").prop('checked', false);
                                 reportTreeId.find(".Rogue").prop('checked', false);
+                                reportTreeId.find(".Trusted").prop('checked', false);
                                 reportTreeId.find(".Vendor").prop('checked', false);
                                 break;
                             case 'Transient':
@@ -442,7 +443,7 @@ var report=
                     },
                     Fields: [
                         {field: "ipAddress",width:"10%",title:"IP Address",template : "<a title='#: ipAddress #' data-uid='#: subnetId.id #' data-id='#: id#' data-link='ipAddress' data-value='#: ipAddress #' data-name='#:subnetId.subnetAddress#'>#: ipAddress #</a>"},
-                        {field: "status", width:"8%", title: "Status",template:"#if(status == 'Available'){#<i class='fa fa-circle normal-v'></i><span>#:status#</span>#}else if(status == 'Used'){#<i class='fa fa-circle warning-v'></i><span>#:status#</span>#}if(status == 'Transient'){#<i class='fa fa-circle transient-v'></i><span>#:status#</span>#}else if(status == 'Reserved'){#<i class='fa fa-circle reserved-v'></i><span>#:status#</span>#}#"},
+                        {field: "status", width:"8%", title: "Status",template:"# var s = (typeof status !== 'undefined' && status) ? status.toUpperCase() : ''; if(s === 'AVAILABLE'){ #<i class='fa fa-circle normal-v'></i><span>Available</span># } else if(s === 'USED'){ #<i class='fa fa-circle warning-v'></i><span>Used</span># } else if(s === 'TRANSIENT'){ #<i class='fa fa-circle transient-v'></i><span>Transient</span># } else if(s === 'RESERVED'){ #<i class='fa fa-circle reserved-v'></i><span>Reserved</span># } else { #<span>#: status || '' #</span># } #"},
                         {
                             field:"subnetName",
                             template:"<span title='#:subnetName#'>#:subnetName#</span>",
@@ -1313,7 +1314,7 @@ var report=
                         }
                         if(exportType == 2)
                         {
-                            appManager.executeGETRequest({url:'/exportsubnetIpCsvByReportTimeline/',callback:report.downloadCsv,params:param});
+                            window.location.href = '/exportsubnetIpCsvByReportTimeline/?' + $.param(param);
                         }
                     }
                     else

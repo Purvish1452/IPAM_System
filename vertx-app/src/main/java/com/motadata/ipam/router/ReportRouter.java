@@ -9,6 +9,9 @@ import io.vertx.ext.web.RoutingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Vert.x Web Router for Report Scheduling and PDF/CSV Reporting API Endpoints.
  * Architecture: Handler -> Service -> PgPool -> PostgreSQL
@@ -37,7 +40,7 @@ public class ReportRouter {
 
         // PDF / CSV Export Endpoints
         router.get("/exportsubnetIpByReportTimeline/").handler(this::handleSubnetPdfReport);
-        router.get("/exportsubnetIpCsvByReportTimeline/").handler(this::handleSubnetPdfReport);
+        router.get("/exportsubnetIpCsvByReportTimeline/").handler(this::handleSubnetCsvReport);
         router.get("/api/v1/reports/subnets/pdf").handler(this::handleSubnetPdfReport);
         router.get("/api/v1/reports/alerts/pdf").handler(this::handleAlertPdfReport);
         router.get("/api/v1/reports/events/pdf").handler(this::handleEventPdfReport);
@@ -56,22 +59,11 @@ public class ReportRouter {
     private void handleSubnetIpByReportTimeline(RoutingContext ctx) {
         String subnetIdStr = ctx.request().getParam("subnetId");
         String status = ctx.request().getParam("status");
-        if (status != null) {
-            String normalizedStatus = status.trim().toUpperCase();
-            if (normalizedStatus.endsWith(" IP")) {
-                normalizedStatus = normalizedStatus.substring(0, normalizedStatus.length() - 3);
-            }
-            status = switch (normalizedStatus) {
-                case "USED", "AVAILABLE", "RESERVED", "TRANSIENT" -> normalizedStatus;
-                default -> null;
-            };
-        }
-        Long subnetId = 1L;
-        try {
-            if (subnetIdStr != null) subnetId = Long.parseLong(subnetIdStr);
-        } catch (Exception ignored) {}
+        if (status == null) status = ctx.request().getParam("ipStatus");
 
-        reportService.getSubnetIpByReportTimeline(subnetId, status).onComplete(ar -> {
+        List<Long> subnetIds = parseSubnetIds(subnetIdStr);
+
+        reportService.getSubnetIpByReportTimeline(subnetIds, status).onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
                 ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
@@ -79,7 +71,7 @@ public class ReportRouter {
                 ctx.response().setStatusCode(500)
                         .putHeader("Content-Type", "application/json;charset=UTF-8")
                         .end(new JsonObject().put("data", new JsonArray()).put("success", false)
-                                .put("message", ar.cause().getMessage()).encode());
+                                .put("message", ar.cause() != null ? ar.cause().getMessage() : "Unknown error").encode());
             }
         });
     }
@@ -134,14 +126,57 @@ public class ReportRouter {
 
     // Generates and downloads the subnet PDF report.
     private void handleSubnetPdfReport(RoutingContext ctx) {
-        LOGGER.info("Generating Subnet PDF Report download");
-        reportService.generateSubnetPdfReport().onComplete(ar -> {
+        String subnetIdStr = ctx.request().getParam("subnetId");
+        String status = ctx.request().getParam("status");
+        if (status == null) status = ctx.request().getParam("ipStatus");
+
+        List<Long> subnetIds = parseSubnetIds(subnetIdStr);
+
+        LOGGER.info("Generating Subnet PDF Report download for subnetIds={}, status={}", subnetIds, status);
+
+        reportService.generateSubnetIpPdfReport(subnetIds, status).onComplete(ar -> {
             if (ar.succeeded()) {
-                sendPdfResponse(ctx, ar.result(), "Subnet_Utilization_Report.pdf");
+                String filename = ar.result();
+                ctx.response()
+                        .putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(new JsonObject().put("data", filename).put("success", true).encode());
             } else {
-                sendErrorResponse(ctx, 500, "Failed to generate Subnet PDF Report: " + ar.cause().getMessage());
+                sendErrorResponse(ctx, 500, "Failed to generate Subnet PDF Report: " + (ar.cause() != null ? ar.cause().getMessage() : "Unknown error"));
             }
         });
+    }
+
+    private void handleSubnetCsvReport(RoutingContext ctx) {
+        String subnetIdStr = ctx.request().getParam("subnetId");
+        String status = ctx.request().getParam("status");
+        if (status == null) status = ctx.request().getParam("ipStatus");
+
+        List<Long> subnetIds = parseSubnetIds(subnetIdStr);
+
+        reportService.generateSubnetCsvReport(subnetIds, status).onComplete(ar -> {
+            if (ar.succeeded()) {
+                ctx.response().putHeader("Content-Type", "text/csv;charset=UTF-8")
+                        .putHeader("Content-Disposition", "attachment; filename=\"Subnet_IP_Report.csv\"")
+                        .end(Buffer.buffer(ar.result()));
+            } else {
+                sendErrorResponse(ctx, 500, "Failed to generate Subnet CSV Report: " + (ar.cause() != null ? ar.cause().getMessage() : "Unknown error"));
+            }
+        });
+    }
+
+    private List<Long> parseSubnetIds(String value) {
+        List<Long> list = new ArrayList<>();
+        if (value != null && !value.trim().isEmpty() && !"undefined".equalsIgnoreCase(value.trim()) && !"null".equalsIgnoreCase(value.trim())) {
+            for (String part : value.split(",")) {
+                try {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        list.add(Long.parseLong(trimmed));
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return list;
     }
 
     // Generates and downloads the alert PDF report.
