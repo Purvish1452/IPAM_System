@@ -48,4 +48,34 @@ public class ModelTest {
         assertTrue(json.contains("\"success\":true"));
         assertTrue(json.contains("\"currentUserRole\":\"ROLE_ADMIN\""));
     }
+
+    @Test
+    public void testIpRequestJsonSerialization() throws Exception {
+        IpRequest req = new IpRequest();
+        req.setId(101L);
+        req.setNumberOfIps(3);
+        req.setCreatedBy("engineer");
+        req.setDeviceType("Server");
+        req.setDuration("Permanent");
+        req.setPurpose("Database Cluster Node");
+        req.setStatus("PENDING");
+        req.setPreferredSubnet(true);
+        req.setSubnetId("2");
+        req.setSubnetAddress("10.0.0.0/24");
+        req.setIps(java.util.Arrays.asList("10.0.0.10", "10.0.0.11", "10.0.0.12"));
+
+        String json = objectMapper.writeValueAsString(req);
+        assertTrue(json.contains("\"numberOfIps\":3"));
+        assertTrue(json.contains("\"deviceType\":\"Server\""));
+        assertTrue(json.contains("\"duration\":\"Permanent\""));
+        assertTrue(json.contains("\"purpose\":\"Database Cluster Node\""));
+        assertTrue(json.contains("\"10.0.0.10\""));
+
+        IpRequest deserialized = objectMapper.readValue(json, IpRequest.class);
+        assertEquals(101L, deserialized.getId());
+        assertEquals(3, deserialized.getNumberOfIps());
+        assertEquals("Server", deserialized.getDeviceType());
+        assertEquals("Permanent", deserialized.getDuration());
+        assertEquals(3, deserialized.getIps().size());
+    }
 }

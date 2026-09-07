@@ -84,7 +84,7 @@ public class MainVerticle extends AbstractVerticle {
                 SettingsService settingsService = new SettingsService(db);
                 DiscoveryService discoveryService = new DiscoveryService(vertx, db);
                 ReportService reportService = new ReportService(vertx, db);
-                SubnetIPActionService subnetIPActionService = new SubnetIPActionService(vertx, db, discoveryService);
+                SubnetIPActionService subnetIPActionService = new SubnetIPActionService(vertx, db, discoveryService, alertService);
 
                 // Configure Vert.x Web Router
                 Router router = Router.router(vertx);

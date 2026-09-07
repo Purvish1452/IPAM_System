@@ -28,8 +28,15 @@ public class DatabaseInit {
                         "ALTER TABLE gateway ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Active'; " +
                         "ALTER TABLE discovered_subnet ADD COLUMN IF NOT EXISTS subnet VARCHAR(100); " +
                         "ALTER TABLE discovered_subnet ADD COLUMN IF NOT EXISTS gateway VARCHAR(100); " +
+                        "ALTER TABLE ip_requests ADD COLUMN IF NOT EXISTS device_type VARCHAR(100) DEFAULT 'Server'; " +
+                        "ALTER TABLE ip_requests ADD COLUMN IF NOT EXISTS duration VARCHAR(100) DEFAULT 'Permanent'; " +
+                        "ALTER TABLE ip_requests ADD COLUMN IF NOT EXISTS ips TEXT; " +
+                        "ALTER TABLE ip_requests ADD COLUMN IF NOT EXISTS preferred_subnet BOOLEAN DEFAULT FALSE; " +
+                        "ALTER TABLE ip_requests ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(100); " +
+                        "ALTER TABLE ip_requests ADD COLUMN IF NOT EXISTS last_modified_date TIMESTAMP; " +
                         "UPDATE gateway SET name = COALESCE(name, description, 'Core Gateway Router'), status = COALESCE(status, 'Active'), previous_scan = COALESCE(previous_scan, CURRENT_TIMESTAMP); " +
                         "UPDATE discovered_subnet SET subnet = COALESCE(subnet, subnet_address), gateway = COALESCE(gateway, '192.168.1.1'); " +
+                        "UPDATE ip_requests SET device_type = COALESCE(device_type, 'Server'), duration = COALESCE(duration, 'Permanent') WHERE device_type IS NULL; " +
                         "CREATE UNIQUE INDEX IF NOT EXISTS subnet_ip_details_ip_address_uq ON subnet_ip_details (ip_address);";
                 pool.query(migrationSql).execute().onComplete(indexAr -> {
                     if (indexAr.failed()) {
