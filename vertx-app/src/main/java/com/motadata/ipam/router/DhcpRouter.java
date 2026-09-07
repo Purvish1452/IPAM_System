@@ -115,19 +115,38 @@ public class DhcpRouter {
         try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
 
         dhcpService.getDhcpUtilizationById(id).onComplete(ar -> {
-            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            if (ar.succeeded()) {
+                JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            } else {
+                sendError(ctx, 500, ar.cause() != null ? ar.cause().getMessage() : "Unable to load DHCP utilization");
+            }
         });
     }
 
     // Starts a DHCP scan for the specified ID.
     private void handleScanDhcp(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
-        Long id = 1L;
-        try { if (idStr != null) id = Long.parseLong(idStr); } catch (Exception ignored) {}
+        final Long id;
+        try {
+            id = Long.parseLong(idStr);
+        } catch (Exception e) {
+            sendError(ctx, 400, "A valid DHCP credential id is required");
+            return;
+        }
 
         dhcpService.scanDhcp(id).onComplete(ar -> {
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+            if (ar.succeeded()) {
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+            } else {
+                sendError(ctx, 502, ar.cause() != null ? ar.cause().getMessage() : "DHCP scan failed");
+            }
         });
+    }
+
+    private void sendError(RoutingContext ctx, int statusCode, String message) {
+        ctx.response().setStatusCode(statusCode)
+                .putHeader("Content-Type", "application/json;charset=UTF-8")
+                .end(new JsonObject().put("success", false).put("message", message).encode());
     }
 }

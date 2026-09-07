@@ -307,19 +307,14 @@ var dhcpServerStatistics=
         {
             if(callbackContexts && callbackContexts.json.success == true)
             {
-                clearInterval(subnetSummary.checkScanStatus);
-
-                subnetSummary.subnetScopeAddress = callbackContexts.scopeAddress;
-
-                subnetSummary.setRunningDiscoveryBlinkHTML();
-
-                subnetSummary.checkScanStatus = setInterval(function()
-                {
-                    appManager.executeGETRequest({url:'/statusScanSubnet/',intervalFunctionCall:true,callback:subnetSummary.afterStatusChecked});
-
-                }, 2000);
-
-                notification.showNotification({notificationTitle: callbackContexts.json.message, notificationType:"info"});
+                var serverId = callbackContexts.scanId || navigationManager.getUrlParameter("serverId");
+                appManager.executeGETRequest({
+                    url:'/dhcpUtilization/'+serverId,
+                    callback:dhcpServerStatistics.renderDHCPStatisticsContext,
+                    eventId:serverId,
+                    eventName:callbackContexts.scopeAddress
+                });
+                notification.showNotification({notificationTitle: callbackContexts.json.message, notificationType:"success"});
             }
             else if(callbackContexts)
             {

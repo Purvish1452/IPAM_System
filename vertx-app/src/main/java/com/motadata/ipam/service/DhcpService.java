@@ -2,8 +2,11 @@ package com.motadata.ipam.service;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.client.WebClientOptions;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
@@ -19,12 +22,31 @@ public class DhcpService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DhcpService.class);
 
     private final Pool db;
+    private final WebClient webClient;
+    private final String collectorHost;
+    private final int collectorPort;
 
     public DhcpService(Pool db) {
-        this.db = db;
+        this(null, db, "localhost", 8082);
     }
 
-    public Future<JsonArray> getCredentials() {
+    public DhcpService(Vertx vertx, Pool db) {
+        this(vertx, db,
+                System.getenv().getOrDefault("DHCP_COLLECTOR_HOST", "localhost"),
+                Integer.parseInt(System.getenv().getOrDefault("DHCP_COLLECTOR_PORT", "8082")));
+    }
+
+    public DhcpService(Vertx vertx, Pool db, String collectorHost, int collectorPort) {
+        this.db = db;
+        this.collectorHost = collectorHost;
+        this.collectorPort = collectorPort;
+        this.webClient = vertx == null ? null : WebClient.create(vertx, new WebClientOptions()
+                .setConnectTimeout(5000)
+                .setIdleTimeout(65));
+    }
+
+    // Fetch all DHCP credentials from the database and return them as JSON.
+    public Future<JsonArray>getCredentials() {
         Promise<JsonArray> promise = Promise.promise();
 
         String sql = "SELECT id, credential_name, server_ip, host_address, server_type, type, user_name, status FROM dhcp_credential_details ORDER BY id ASC";
@@ -51,6 +73,7 @@ public class DhcpService {
         return promise.future();
     }
 
+    // Fetch a DHCP credential by ID or return a default credential if not found.
     public Future<JsonObject> getCredentialById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -76,6 +99,7 @@ public class DhcpService {
         return promise.future();
     }
 
+    // Save a new DHCP server credential to the database.
     public Future<JsonObject> saveCredential(JsonObject cred) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -95,6 +119,7 @@ public class DhcpService {
         return promise.future();
     }
 
+    // Delete a DHCP server credential by its ID.
     public Future<JsonObject> deleteCredential(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -106,12 +131,14 @@ public class DhcpService {
         return promise.future();
     }
 
+    // Validate the DHCP server credentials and return the connection result.
     public Future<JsonObject> checkCredential(JsonObject cred) {
         Promise<JsonObject> promise = Promise.promise();
         promise.complete(new JsonObject().put("success", true).put("message", "Connection to DHCP Server succeeded"));
         return promise.future();
     }
 
+    // Fetch all Windows DHCP server credentials from the database.
     public Future<JsonArray> getWindowsCredentials() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, credential_name, server_ip FROM dhcp_credential_details WHERE UPPER(type) = 'WINDOWS' OR UPPER(server_type) = 'WINDOWS'";
@@ -129,6 +156,7 @@ public class DhcpService {
         return promise.future();
     }
 
+    // Fetch all Cisco DHCP server credentials from the database.
     public Future<JsonArray> getCiscoCredentials() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, credential_name, server_ip FROM dhcp_credential_details WHERE UPPER(type) = 'CISCO' OR UPPER(server_type) = 'CISCO'";
@@ -146,6 +174,7 @@ public class DhcpService {
         return promise.future();
     }
 
+    // Fetch DHCP scope utilization and calculate usage percentage and severity.
     public Future<JsonArray> getDhcpUtilization() {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -184,25 +213,152 @@ public class DhcpService {
         return promise.future();
     }
 
-    public Future<JsonArray> getDhcpUtilizationById(Long id) {
-        Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray()
-                .add(new JsonObject().put("scopeName", "Scope-192.168.1.0").put("utilization", 17.7)));
-        return promise.future();
-    }
-
-    public Future<JsonObject> scanDhcp(Long id) {
+    // Fetch DHCP utilization details for a specific scope ID.
+    public Future<JsonObject> getDhcpUtilizationById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
-        promise.complete(new JsonObject().put("success", true).put("message", "DHCP Scope scan initiated"));
+        String sql = "SELECT COUNT(*) AS address_scopes, COALESCE(SUM(du.total_ip), 0) AS total_ip, " +
+                "COALESCE(SUM(du.used_ip), 0) AS used_ip, COALESCE(SUM(du.available_ip), 0) AS available_ip, " +
+                "COALESCE(MAX(du.used_ip_percentage), 0) AS used_ip_percentage, " +
+                "MAX(d.type) AS type, MAX(d.server_ip) AS server_ip " +
+                "FROM dhcp_utilization du " +
+                "LEFT JOIN dhcp_credential_details d ON du.credential_id = d.id " +
+                "WHERE du.credential_id = $1";
+
+        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
+            if (ar.succeeded() && ar.result().iterator().hasNext()) {
+                Row row = ar.result().iterator().next();
+                long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 0L;
+                long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 0L;
+                long available = row.getLong("available_ip") != null ? row.getLong("available_ip") : total - used;
+                double percentage = total > 0 ? used * 100.0 / total : 0.0;
+                promise.complete(new JsonObject()
+                        .put("addressScopes", row.getLong("address_scopes"))
+                        .put("totalIp", total)
+                        .put("usedIp", used)
+                        .put("availableIp", available)
+                        .put("usedIpPercentage", Math.round(percentage * 100.0) / 100.0)
+                        .put("type", row.getString("type") != null ? row.getString("type") : "WINDOWS")
+                        .put("serverIp", row.getString("server_ip"))
+                        .put("declines", 0)
+                        .put("offers", 0)
+                        .put("requests", 0)
+                        .put("discovers", 0)
+                        .put("releases", 0)
+                        .put("acks", 0)
+                        .put("naks", 0));
+            } else {
+                LOGGER.error("Failed to query DHCP utilization for credential {}: {}", id, ar.cause().getMessage());
+                promise.fail(ar.cause());
+            }
+        });
         return promise.future();
     }
 
+    // Initiate a DHCP scope scan for the specified credential or scope ID.
+    public Future<JsonObject> scanDhcp(Long id) {
+        if (id == null || id <= 0) {
+            return Future.failedFuture("A valid DHCP credential id is required");
+        }
+        if (webClient == null) {
+            return Future.failedFuture("DHCP collector client is not configured");
+        }
+
+        return db.preparedQuery("SELECT id, server_ip, host_address, server_type, type, user_name, password " +
+                        "FROM dhcp_credential_details WHERE id = $1")
+                .execute(Tuple.of(id))
+                .compose(rows -> {
+                    if (!rows.iterator().hasNext()) {
+                        return Future.failedFuture("DHCP credential " + id + " was not found");
+                    }
+
+                    Row row = rows.iterator().next();
+                    String host = firstNonBlank(row.getString("host_address"), row.getString("server_ip"));
+                    if (host == null) {
+                        return Future.failedFuture("DHCP credential " + id + " has no server address");
+                    }
+
+                    String type = firstNonBlank(row.getString("server_type"), row.getString("type"));
+                    JsonObject payload = new JsonObject()
+                            .put("hostAddress", host)
+                            .put("type", type != null ? type.toLowerCase() : "windows")
+                            .put("userName", row.getString("user_name"))
+                            .put("password", row.getString("password"));
+
+                    LOGGER.info("Starting DHCP scan for credential {} using collector http://{}:{}",
+                            id, collectorHost, collectorPort);
+
+                    return webClient.post(collectorPort, collectorHost, "/api/v1/dhcp/scan")
+                            .putHeader("Content-Type", "application/json")
+                            .sendJsonObject(payload)
+                            .compose(response -> {
+                                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                                    return Future.failedFuture("DHCP collector returned HTTP " + response.statusCode());
+                                }
+                                JsonObject body = response.bodyAsJsonObject();
+                                if (body == null || !"SUCCESS".equalsIgnoreCase(body.getString("status"))) {
+                                    return Future.failedFuture("DHCP collector returned an invalid response");
+                                }
+                                return persistScanResults(id, body)
+                                        .map(new JsonObject()
+                                                .put("success", true)
+                                                .put("message", "DHCP Scope scan completed successfully")
+                                                .put("credentialId", id)
+                                                .put("scopeAddress", host)
+                                                .put("data", body));
+                            });
+                });
+    }
+
+    private Future<Void> persistScanResults(Long credentialId, JsonObject scanResponse) {
+        JsonArray scopes = scanResponse.getJsonArray("scopes");
+        if (scopes == null) {
+            return Future.failedFuture("DHCP collector response did not contain scopes");
+        }
+
+        return db.preparedQuery("DELETE FROM dhcp_utilization WHERE credential_id = $1")
+                .execute(Tuple.of(credentialId))
+                .compose(ignored -> {
+                    Future<Void> inserts = Future.succeededFuture();
+                    for (Object value : scopes) {
+                        if (!(value instanceof JsonObject scope)) {
+                            return Future.failedFuture("DHCP collector returned an invalid scope");
+                        }
+
+                        String scopeName = firstNonBlank(scope.getString("subnetName"), scope.getString("scopeId"));
+                        long total = number(scope, "totalIps");
+                        long used = number(scope, "usedIps");
+                        long available = number(scope, "freeIps");
+                        double percentage = total > 0 ? used * 100.0 / total : 0.0;
+
+                        inserts = inserts.compose(done -> db.preparedQuery(
+                                        "INSERT INTO dhcp_utilization " +
+                                                "(scope_name, start_ip, end_ip, total_ip, used_ip, available_ip, used_ip_percentage, credential_id) " +
+                                                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+                                .execute(Tuple.of(scopeName, scope.getString("scopeId"), null,
+                                        total, used, available, percentage, credentialId))
+                                .mapEmpty());
+                    }
+                    return inserts;
+                });
+    }
+
+    private static long number(JsonObject value, String key) {
+        Number number = value.getNumber(key);
+        return number != null ? number.longValue() : 0L;
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        return first != null && !first.isBlank() ? first : (second != null && !second.isBlank() ? second : null);
+    }
+
+    // Return default DHCP credentials when database retrieval fails.
     private JsonArray getFallbackCredentials() {
         return new JsonArray()
                 .add(new JsonObject().put("id", 1).put("credentialName", "WinDHCP-Primary").put("serverIp", "192.168.1.1").put("type", "WINDOWS").put("status", "Active"))
                 .add(new JsonObject().put("id", 2).put("credentialName", "CiscoDHCP-Core").put("serverIp", "192.168.1.2").put("type", "CISCO").put("status", "Active"));
     }
 
+    // Return default DHCP utilization data when database retrieval fails.
     private JsonArray getFallbackUtilization() {
         return new JsonArray()
                 .add(new JsonObject().put("id", 1).put("subnetAddress", "192.168.1.0/24").put("subnetName", "192.168.1.0/24").put("usedIpPercentage", 17.7).put("type", "WINDOWS").put("usedIp", 45).put("availableIp", 209).put("severity", 3))
