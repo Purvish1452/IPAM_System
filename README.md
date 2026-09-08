@@ -92,6 +92,10 @@ flowchart TD
         APIs["REST API Routers<br/>(AuthRouter, SubnetRouter, AlertRouter, ReportRouter, etc.)"]
         Services["Reactive Services<br/>(SubnetService, UserService, AlertService)"]
         PgPoolClient["PgPool Reactive Driver<br/>(20 pooled socket connections)"]
+        
+        Router --> APIs
+        APIs --> Services
+        Services --> PgPoolClient
     end
 
     subgraph EventBusSystem["2. Non-Blocking EventBus Messaging Backbone"]
@@ -120,14 +124,12 @@ flowchart TD
         end
     end
 
-    subgraph DB[(PostgreSQL Database)]
+    subgraph DatabaseLayer["5. PostgreSQL Storage"]
+        DB[("PostgreSQL Database")]
     end
 
     External -->|TCP / HTTP Traffic| NettyEventLoops
     NettyEventLoops --> Router
-    Router --> APIs
-    APIs --> Services
-    Services --> PgPoolClient
     PgPoolClient <-->|Async Wire Protocol via Netty| DB
 
     APIs -->|eventBus.request()| EventBusSystem
