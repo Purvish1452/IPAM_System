@@ -75,70 +75,49 @@ The application is architected around **Eclipse Vert.x 5** and **Netty**, adopti
 
 ```mermaid
 flowchart TD
-    subgraph External["External Clients"]
-        Client1["Browser / REST Client 1"]
-        Client2["Browser / REST Client 2"]
-        ClientN["Concurrent Clients (10,000+)"]
+    subgraph Clients["1. External Layer"]
+        C["Web Browsers & REST Clients"]
     end
 
-    subgraph NettyEventLoops["Netty Event Loop Pool (2 x CPU Cores)"]
-        EL0["vert.x-eventloop-thread-0"]
-        EL1["vert.x-eventloop-thread-1"]
-        ELN["vert.x-eventloop-thread-N"]
+    subgraph EventLoopLayer["2. Event Loop Layer: HttpServerVerticle"]
+        EL["Netty Event Loop Threads (2 x Cores)"]
+        Router["HTTP Router & JWT Auth Middleware"]
+        Services["Reactive Services (SubnetService, UserService)"]
+        PgDriver["PgPool Reactive Driver (20 Sockets)"]
     end
 
-    subgraph StandardVerticle["1. Event Loop Verticle: HttpServerVerticle"]
-        Router["Vert.x Web Router & Middleware<br/>(BodyHandler, SessionHandler, JwtAuthHandler)"]
-        APIs["REST API Routers<br/>(AuthRouter, SubnetRouter, AlertRouter, ReportRouter, etc.)"]
-        Services["Reactive Services<br/>(SubnetService, UserService, AlertService)"]
-        PgPoolClient["PgPool Reactive Driver<br/>(20 pooled socket connections)"]
-        
-        Router --> APIs
-        APIs --> Services
-        Services --> PgPoolClient
+    subgraph EventBusLayer["3. Messaging Backbone"]
+        EB["Vert.x EventBus (Non-Blocking Message Queue)"]
     end
 
-    subgraph EventBusSystem["2. Non-Blocking EventBus Messaging Backbone"]
-        EBPing["'ipam.worker.network.ping'"]
-        EBScan["'ipam.worker.network.scan'"]
-        EBDns["'ipam.worker.network.dns'"]
-        EBPort["'ipam.worker.network.portscan'"]
-        EBCsv["'ipam.worker.network.importCsv'"]
-        EBPdfSub["'ipam.worker.report.subnet.pdf'"]
-        EBPdfVen["'ipam.worker.report.vendor.pdf'"]
-        EBPdfDyn["'ipam.worker.report.dynamic.pdf'"]
+    subgraph NetworkWorker["4. Worker Verticle: NetworkWorkerVerticle"]
+        NetPool["Network Worker Pool (30 Threads)"]
+        NetTasks["ICMP Ping Sweeps<br/>TCP Port Probing<br/>DNS Lookups & CSV Parsing"]
     end
 
-    subgraph WorkerVerticle1["3. Worker Verticle: NetworkWorkerVerticle"]
-        subgraph NetPool["Dedicated Pool: 'ipam-network-worker-pool' (30 Threads)"]
-            T1["Worker Thread 1 (ICMP Ping)"]
-            T2["Worker Thread 2 (Port Probing)"]
-            TN["Worker Thread 30 (DNS & Traceroute)"]
-        end
+    subgraph ReportWorker["5. Worker Verticle: ReportWorkerVerticle"]
+        RepPool["Report Worker Pool (5 Threads)"]
+        RepTasks["DynamicJasper Compilation<br/>OpenPDF Layout Export<br/>Excel Data Streams"]
     end
 
-    subgraph WorkerVerticle2["4. Worker Verticle: ReportWorkerVerticle"]
-        subgraph RepPool["Dedicated Pool: 'ipam-report-worker-pool' (5 Threads - Capped)"]
-            R1["Worker Thread 1 (JasperReports)"]
-            RN["Worker Thread 5 (OpenPDF Export)"]
-        end
-    end
-
-    subgraph DatabaseLayer["5. PostgreSQL Storage"]
+    subgraph DatabaseLayer["6. Persistent Storage"]
         DB[("PostgreSQL Database")]
     end
 
-    External -->|TCP / HTTP Traffic| NettyEventLoops
-    NettyEventLoops --> Router
-    PgPoolClient <-->|Async Wire Protocol via Netty| DB
+    C -->|"HTTP Requests"| EL
+    EL --> Router
+    Router --> Services
+    Services --> PgDriver
+    PgDriver <-->|"Non-Blocking SQL"| DB
 
-    APIs -->|eventBus.request()| EventBusSystem
+    Router -->|"Asynchronous Request"| EB
+    EB -->|"Dispatch Network Tasks"| NetPool
+    NetPool --> NetTasks
+    NetTasks -.->|"Async Result Reply"| Router
 
-    EventBusSystem --> NetPool
-    EventBusSystem --> RepPool
-
-    NetPool -.->|Async Message Reply| APIs
-    RepPool -.->|Async Message Reply| APIs
+    EB -->|"Dispatch Report Tasks"| RepPool
+    RepPool --> RepTasks
+    RepTasks -.->|"Async Buffer Reply"| Router
 ```
 
 ---
