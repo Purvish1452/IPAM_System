@@ -1,118 +1,233 @@
-# Motadata IPAM
+# Motadata IPAM (IP Address Management)
 
-Motadata IPAM is a web-based IP Address Management system for managing subnets, IP addresses, DHCP data, discovery results, users, permissions, alerts, events, reports, and related network settings.
+**Motadata IPAM** is an enterprise-grade, high-performance web-based IP Address Management system designed to discover, track, allocate, monitor, and audit IPv4 subnets, IP addresses, DHCP servers, and rogue network devices.
 
-The current implementation is a Vert.x 5 application backed by PostgreSQL, with optional Go services for subnet discovery and DHCP collection.
+The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive **Multi-Reactor & Worker Verticle Architecture** backed by **PostgreSQL** (`vertx-pg-client`), with high-speed **Go microservices** for network subnet discovery and DHCP collection.
 
-## Highlights
+---
 
-- Subnet, supernet, gateway, category, and IP address management
-- IP request workflows and IP utilization summaries
-- DHCP credentials, utilization, and scan operations
-- User and role management with feature-level permissions
-- JWT authentication and PBAC/RBAC-style permission checks
-- Rogue-device detection and trusted MAC address imports
-- Event and alert management
-- PDF/CSV reporting and scheduled report configuration
-- Discovery and DHCP helper services written in Go
-- Database initialization and compatibility migrations at startup
-- Vert.x background timers for scan queues and alert cleanup
+## Table of Contents
+- [Key Features](#key-features)
+- [Architecture & Concurrency Model](#architecture--concurrency-model)
+- [Threading & Worker Pool Design](#threading--worker-pool-design)
+- [Technology Stack](#technology-stack)
+- [Project Directory Structure](#project-directory-structure)
+- [Prerequisites](#prerequisites)
+- [Configuration](#configuration)
+- [Database Setup & Migrations](#database-setup--migrations)
+- [Build & Run Instructions](#build--run-instructions)
+- [REST API Reference](#rest-api-reference)
+- [Go Microservices](#go-microservices)
+- [Testing & Verification](#testing--verification)
 
-## Architecture
+---
 
-```text
-Browser (HTML/CSS/JavaScript)
-          |
-          v
-Vert.x Web Router
-  - Body and session handlers
-  - JWT authentication handler
-  - Permission handlers
-          |
-          v
-Vert.x service layer
-          |
-          v
-Reactive PostgreSQL connection pool
-          |
-          v
-PostgreSQL
+## Key Features
 
-Optional network helpers:
-  Go Discovery service :8081
-  Go DHCP service      :8082
-  Go command-line ping engine
+### 1. Subnet & Supernet Management
+- **Hierarchy & Allocation**: Organize subnets by Supernet, Gateway, and Category.
+- **Real-Time Utilization**: Live tracking of `TOTAL`, `USED`, `AVAILABLE`, `RESERVED`, and `TRANSIENT` IP counts with visual utilization gauges.
+- **Bulk Operations**: Add IP ranges, batch-edit statuses, reserve IP blocks, and delete ranges reactively.
+- **CSV Import / Export**: Import subnet allocations from CSV files; export complete IP tables to CSV and PDF.
+
+### 2. IP Request & Approval Workflow
+- **Self-Service Portal**: Internal teams can submit static IP allocation requests specifying Device Type (Server, VM, Container, Router, Switch, Firewall, AP, IoT), Allocation Duration (Permanent, 30/60/90 Days, 6 Months, 1 Year, Temporary), Quantity, and Business Justification.
+- **Admin Review Queue**: Network administrators can review, modify subnet assignments, select specific available IPs from interactive grids, enter approval/rejection remarks, and trigger one-click IP reservation.
+- **Automated Lifecycle**: Approved requests automatically transition target IPs to `USED`, update subnet utilization metrics, and write immutable audit records to the event log.
+
+### 3. Network Discovery & Live Probing
+- **High-Speed ICMP Scans**: Concurrent subnet ping sweeps with real-time status updates.
+- **TCP Port Probing**: Multi-port scanning (e.g. ports 21, 22, 23, 25, 53, 80, 443, 3306, 3389, 5432, 8080).
+- **DNS & Reverse DNS**: Automatic hostname discovery and reverse DNS resolution.
+- **Traceroute**: Network path inspection and hop-by-hop latency measurement.
+- **Go Discovery Engine**: Standalone high-concurrency Go microservice for massive CIDR sweeps.
+
+### 4. Rogue Device & Threat Detection
+- **Unauthorized IP Identification**: Flags unknown MAC addresses and unauthorized devices on active subnets.
+- **Trusted MAC Whitelist**: Bulk import and management of authorized device MAC addresses.
+- **Instant Categorization**: Distinguish between `TRUSTED` and `UNAUTHORIZED / ROGUE` assets.
+
+### 5. DHCP Server Management
+- **Multi-Vendor Support**: Windows DHCP Server and Cisco DHCP monitoring.
+- **Scope Utilization**: Real-time lease tracking, active reservations, and free address pool metrics.
+- **Automated Sync**: Background DHCP polling via dedicated Go collection worker.
+
+### 6. Alerts & Event Audit Trail
+- **Live Alert Stream**: Subnet capacity threshold alerts (e.g., >80% used), rogue device alerts, and IP conflict notifications.
+- **Event Timeline**: Audit log recording every user action, IP request status change, subnet scan, and system event.
+- **Automated Maintenance**: Background cleanup timers to prune resolved alerts and archive logs.
+
+### 7. Document Reporting & Scheduling
+- **Custom PDF Reports**: Generated using DynamicJasper and OpenPDF layout engines.
+- **Spreadsheet Exports**: CSV and Excel (.xlsx) export streams for Subnets, Alerts, Events, and DHCP data.
+- **Report Schedulers**: Cron-based automated report delivery with recipient email lists.
+
+### 8. Security & RBAC
+- **JWT Authentication**: Token-based authentication with HS256 signatures, 30-day lifespans, and cookie fallbacks.
+- **Granular Permissions**: Role-Based & Policy-Based Access Control (`ROLE_ADMIN`, `PERM_SUBNET_READ`, `PERM_SUBNET_WRITE`, `PERM_ALERTS_READ`, etc.).
+- **Password Hashing**: Industry-standard BCrypt password encryption.
+
+---
+
+## Architecture & Concurrency Model
+
+The application leverages **Vert.x 5** to decouple non-blocking web I/O from heavy background worker tasks using the **Vert.x EventBus**.
+
+```mermaid
+flowchart TD
+    subgraph Clients["Web Browsers & REST Clients"]
+        HTTPReq["HTTP Requests (Port 8080)"]
+    end
+
+    subgraph Deployer["MainVerticle (Deployer & Orchestrator)"]
+        InitDB["Initialize Reactive PgPool & Schema"]
+    end
+
+    subgraph EventLoopLayer["1. Event Loop Verticle (Netty Reactor Engine)"]
+        direction TB
+        HttpVerticle["HttpServerVerticle<br/>(Runs on Event Loop Threads)"]
+        Routers["HTTP Routers & REST Endpoints"]
+        ReactiveDB["Reactive Services (SubnetService, UserService, AlertService)"]
+        PgPool["PgPool (Reactive PostgreSQL Client)"]
+        
+        HttpVerticle --> Routers
+        Routers --> ReactiveDB
+        ReactiveDB --> PgPool
+    end
+
+    subgraph EventBus["2. Vert.x EventBus (Non-Blocking Message Backbone)"]
+        AddrPing["'ipam.worker.network.ping'"]
+        AddrScan["'ipam.worker.network.scan'"]
+        AddrDns["'ipam.worker.network.dns'"]
+        AddrPort["'ipam.worker.network.portscan'"]
+        AddrCsv["'ipam.worker.network.importCsv'"]
+        AddrSubPdf["'ipam.worker.report.subnet.pdf'"]
+        AddrVendPdf["'ipam.worker.report.vendor.pdf'"]
+        AddrDynPdf["'ipam.worker.report.dynamic.pdf'"]
+    end
+
+    subgraph WorkerLayer["3. Dedicated Worker Verticles (Worker Thread Pools)"]
+        direction TB
+        subgraph NetWorker["NetworkWorkerVerticle (ipam-network-worker-pool: 30 Threads)"]
+            ICMP["ICMP Ping Sweeps"]
+            PortScan["TCP Port Probing"]
+            DNSLookup["DNS Hostname Lookups"]
+            CSVParse["CSV Import Parsing"]
+        end
+        
+        subgraph RepWorker["ReportWorkerVerticle (ipam-report-worker-pool: 5 Threads)"]
+            Jasper["DynamicJasper Compilation"]
+            OpenPDF["Subnet & Vendor PDF Export"]
+        end
+    end
+
+    HTTPReq --> HttpVerticle
+    Deployer -->|Deploys| HttpVerticle
+    Deployer -->|Deploys with ThreadingModel.WORKER| NetWorker
+    Deployer -->|Deploys with ThreadingModel.WORKER| RepWorker
+
+    Routers -->|request()| AddrPing
+    Routers -->|request()| AddrScan
+    Routers -->|request()| AddrDns
+    Routers -->|request()| AddrPort
+    Routers -->|request()| AddrCsv
+    Routers -->|request()| AddrSubPdf
+    Routers -->|request()| AddrVendPdf
+    Routers -->|request()| AddrDynPdf
+
+    AddrPing --> NetWorker
+    AddrScan --> NetWorker
+    AddrDns --> NetWorker
+    AddrPort --> NetWorker
+    AddrCsv --> NetWorker
+
+    AddrSubPdf --> RepWorker
+    AddrVendPdf --> RepWorker
+    AddrDynPdf --> RepWorker
+
+    NetWorker -.->|reply()| Routers
+    RepWorker -.->|reply()| Routers
 ```
 
-The Java application is assembled in `MainVerticle` using the following flow:
+---
 
-```text
-HTTP handler -> service -> Vert.x PostgreSQL pool -> PostgreSQL
-```
+## Threading & Worker Pool Design
 
-## Repository Layout
+| Layer | Component | Thread Pool / Size | Responsibilities |
+| :--- | :--- | :--- | :--- |
+| **Event Loop** | [`HttpServerVerticle`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/verticle/HttpServerVerticle.java) | `2 * CPU Cores`<br>*(e.g., 16 threads on 8 cores)* | HTTP server, REST route matching, JWT verification, JSON serialization, and non-blocking SQL queries via `PgPool`. **Zero blocking operations.** |
+| **Network Worker** | [`NetworkWorkerVerticle`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/verticle/NetworkWorkerVerticle.java) | `30 Threads`<br>(`ipam-network-worker-pool`) | Synchronous ICMP ping sweeps, TCP port probing, DNS reverse lookups, traceroute probes, and CSV import parsing. |
+| **Report Worker** | [`ReportWorkerVerticle`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/verticle/ReportWorkerVerticle.java) | `5 Threads`<br>(`ipam-report-worker-pool`) | DynamicJasper layout compilation, OpenPDF generation, and heavy workbook rendering. Capped at 5 threads to protect JVM heap. |
+| **Database Pool** | [`PgClientProvider`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/db/PgClientProvider.java) | `20 Connections`<br>(`maxSize = 20`) | Non-blocking reactive PostgreSQL socket connections. |
+
+---
+
+## Technology Stack
+
+| Domain | Technologies |
+| :--- | :--- |
+| **Backend Core** | Java 21, Eclipse Vert.x 5.0.0 (`vertx-core`, `vertx-web`, `vertx-auth-jwt`, `vertx-sql-client`, `vertx-pg-client`) |
+| **Database** | PostgreSQL 12+, Flyway migrations, Vert.x Reactive PgPool |
+| **Security** | JWT (HS256), BCrypt, PBAC/RBAC permission interceptors |
+| **Document Generation** | DynamicJasper 5.0.9, JasperReports 6.3.0, OpenPDF 1.3.30 |
+| **Frontend** | HTML5, CSS3, JavaScript (ES6+), jQuery, Kendo UI, Bootstrap |
+| **Microservices** | Go 1.20 (HTTP REST Discovery & DHCP services), Go 1.18 (CLI Ping Engine) |
+| **Build & Test** | Maven 3.8+, JUnit 5, Vert.x JUnit 5 Extension, Mockito, AssertJ |
+
+---
+
+## Project Directory Structure
 
 ```text
 IPAM_Real/
 ├── config/
-│   └── ipm-conf.yml                 # Runtime server and database configuration
+│   └── ipm-conf.yml                     # Central application configuration
 ├── database/
-│   └── migrations/                  # Versioned SQL migration scripts
+│   └── migrations/                      # Versioned SQL schema migration scripts
 ├── go-engine/
 │   ├── go.mod
-│   └── ping.go                      # Command-line concurrent ping engine
+│   └── ping.go                          # Standalone high-speed CLI ping utility
 ├── go-services/
-│   ├── common/                      # Shared Go helpers
-│   ├── discovery/                   # Discovery HTTP service
-│   ├── dhcp/                        # DHCP collector HTTP service
+│   ├── common/                          # Shared Go network and CIDR utilities
+│   ├── discovery/                       # Subnet Auto-Discovery Microservice (:8081)
+│   ├── dhcp/                            # DHCP Collector Microservice (:8082)
 │   └── go.mod
 ├── vertx-app/
-│   ├── pom.xml
-│   ├── src/main/java/
-│   │   └── com/motadata/ipam/
-│   │       ├── config/               # YAML configuration loading
-│   │       ├── db/                   # PostgreSQL pool and schema initialization
-│   │       ├── model/                # Domain models
-│   │       ├── router/               # HTTP/API route handlers
-│   │       ├── scheduler/            # Background jobs and timers
-│   │       ├── security/             # JWT, password, and permission handling
-│   │       └── service/              # Application business logic
+│   ├── pom.xml                          # Maven build configuration
+│   ├── src/main/java/com/motadata/ipam/
+│   │   ├── MainVerticle.java            # Startup deployer & verticle orchestrator
+│   │   ├── config/                      # YAML config parser (AppConfig)
+│   │   ├── db/                          # PgPool provider & schema initializer
+│   │   ├── model/                       # Domain models (SubnetDetails, IpRequest, etc.)
+│   │   ├── router/                      # HTTP Routers (Auth, Subnet, Alert, Report, etc.)
+│   │   ├── scheduler/                   # Vert.x background periodic timers & cron jobs
+│   │   ├── security/                    # JWT Auth provider & PermissionHandler
+│   │   ├── service/                     # Reactive business services
+│   │   └── verticle/                    # Event Loop & Worker Verticles:
+│   │       ├── HttpServerVerticle.java  # Non-blocking web/REST verticle
+│   │       ├── NetworkWorkerVerticle.java # Network probing & scanning worker
+│   │       └── ReportWorkerVerticle.java  # PDF & Jasper report worker
 │   ├── src/main/resources/
-│   │   ├── db/init_ipam_postgres.sql # Initial schema and seed data
-│   │   ├── log4j2.xml
-│   │   └── webroot/                  # Frontend assets and pages
-│   └── src/test/                     # Java unit and integration tests
-├── pom.xml                           # Maven parent project
-└── README.md
+│   │   ├── db/init_ipam_postgres.sql    # PostgreSQL schema & seed dataset
+│   │   ├── log4j2.xml                   # Logging configuration
+│   │   └── webroot/                     # Frontend UI, JS controllers & CSS
+│   └── src/test/                        # Unit and integration test suite
+├── pom.xml                              # Root Maven project POM
+└── README.md                            # Comprehensive project documentation
 ```
 
-Generated files under `target/` and runtime exports/uploads should not be treated as source files.
+---
 
-## Technology Stack
+## Prerequisites
 
-| Area | Technology |
-|---|---|
-| Backend | Java 21, Vert.x 5.0.0, Vert.x Web |
-| Database | PostgreSQL, Vert.x reactive PostgreSQL client |
-| Database setup | Flyway dependency plus startup schema initialization/migrations |
-| Authentication | Vert.x JWT Auth with HS256 |
-| Passwords | BCrypt |
-| Frontend | HTML, CSS, JavaScript, jQuery, Kendo UI |
-| Reports | DynamicJasper and OpenPDF |
-| Network helpers | Go 1.20 (`go-services`), Go 1.18 (`go-engine`) |
-| Build and tests | Maven, JUnit 5, Mockito |
+Ensure the following tools are installed on your system:
 
-## Requirements
+- **JDK 21** or later (`openjdk-21-jdk`)
+- **Maven 3.8.0** or later
+- **PostgreSQL 12+**
+- **Go 1.20+** (for Go microservices)
 
-Install:
-
-- JDK 21
-- Maven 3.8 or newer
-- PostgreSQL
-- Go (the service module targets Go 1.20; the ping engine targets Go 1.18)
-
-Verify the tools:
-
+Verify tool installations:
 ```bash
 java -version
 mvn -version
@@ -120,233 +235,189 @@ psql --version
 go version
 ```
 
+---
+
 ## Configuration
 
-The application reads `config/ipm-conf.yml`. When running from `vertx-app`, it also checks the parent configuration path. If the file cannot be loaded, built-in defaults are used.
-
-Important settings:
+The application reads configuration from `config/ipm-conf.yml`:
 
 ```yaml
 server-port: 8080
 server-host: localhost
+min-memory: 1024
+max-memory: 2048
+
+# PostgreSQL Database Configuration
 db-host: localhost
 db-port: 5432
 db-name: ipam_db
 db-user: postgres
-db-password: change-this-password
+db-password: password
+
+# Network Discovery & Scan Tuning
 max-ping-check-timeout: 10
 max-ping-check-retry-count: 2
 max-concurrent-ping: 500
 process-request-timeout: 1200
 ```
 
-Create the PostgreSQL database before starting the application:
+---
+
+## Database Setup & Migrations
+
+1. **Create the PostgreSQL Database**:
+   ```bash
+   createdb -h localhost -p 5432 -U postgres ipam_db
+   ```
+
+2. **Automatic Initialization**:
+   Upon startup, [`DatabaseInit.java`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/db/DatabaseInit.java) automatically executes [`init_ipam_postgres.sql`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/resources/db/init_ipam_postgres.sql) and applies incremental migrations (such as adding `device_type`, `duration`, and `preferred_subnet` columns to `ip_requests`).
+
+---
+
+## Build & Run Instructions
+
+### 1. Build and Run the Vert.x Application
+
+From the root repository directory:
 
 ```bash
-createdb -h localhost -U postgres ipam_db
-```
+# Clean, compile, and package the executable fat JAR
+mvn clean package -DskipTests
 
-On first startup, `vertx-app/src/main/resources/db/init_ipam_postgres.sql` is used to initialize the schema and seed data. Existing installations receive the compatibility changes implemented by `DatabaseInit`.
-
-Do not use the repository's development password in a shared or production environment. Database credentials should be supplied through deployment-specific configuration, and the JWT signing key should be externalized before production deployment.
-
-## Run the Vert.x Application
-
-From the repository root:
-
-```bash
-mvn clean package
+# Run the fat JAR
 java -jar vertx-app/target/vertx-ipam-4.0.0-fat.jar
 ```
 
-Alternatively, run the module during development:
-
+Or run directly with Maven:
 ```bash
 cd vertx-app
-mvn clean package
 mvn exec:java
 ```
 
-The web application is served at:
-
+The web application will be accessible at:
 ```text
 http://localhost:8080
 ```
 
-The login page is `/` or `/login.html`. Static assets and the home page are served from `vertx-app/src/main/resources/webroot`.
+**Default Credentials**:
+- **Username**: `admin`
+- **Password**: `admin`
 
-## Authentication and Permissions
+---
 
-`JwtAuthHandler` runs before the API routers. It accepts a token from the following locations, in order:
-
-1. `accessToken` request header
-2. `Authorization: Bearer <token>` header
-3. `token` cookie
-
-The login and static asset paths are public. Valid JWT claims are attached to the Vert.x routing context. Route-level permission checks use authorities such as:
-
-```text
-ROLE_ADMIN
-PERM_ALERTS_READ
-PERM_ALERTS_WRITE
-PERM_SETTINGS_READ
-PERM_SETTINGS_WRITE
-```
-
-Tokens currently use HS256 and are issued for 30 days. The application also keeps session and authority-cookie fallbacks for browser compatibility. Invalid or missing tokens are allowed through the authentication handler so that the existing UI can render; protected routes enforce access with `PermissionHandler` and return HTTP 403 when permission is absent.
-
-## HTTP API Areas
-
-The Vert.x routers expose endpoints for:
-
-| Router | Main areas |
-|---|---|
-| `AuthRouter` | Login, logout, home page, global search, permission validation |
-| `SubnetRouter` | Subnets, supernets, gateways, categories, IP details, scans, discovery, rogue detection, IP requests, imports, exports, summaries |
-| `DhcpRouter` | DHCP credentials, credential checks, utilization, DHCP scans |
-| `SettingsRouter` | Users, roles, global settings, branding, mail, alerts, custom columns, discovery, database maintenance |
-| `EventRouter` | Events and event summaries |
-| `AlertRouter` | Alert retrieval |
-| `ReportRouter` | Report schedules, mail recipients, PDF/CSV report exports |
-
-Representative endpoints include:
-
-```text
-POST /loginUser.html
-GET  /subnet/
-GET  /subnetIp/
-GET  /dhcp/
-GET  /event/
-GET  /alerts/
-GET  /rogueDetection/
-GET  /ipRequests/
-GET  /api/v1/reports/subnets/pdf
-```
-
-Most application endpoints use the existing legacy URL naming and trailing-slash conventions.
-
-## Go Services
-
-The Go services are standalone HTTP processes and read their port from the `PORT` environment variable.
-
-### Discovery service
-
-Default port: `8081`
+### 2. Run the Go Discovery Microservice (Optional)
 
 ```bash
 cd go-services
-go test ./...
 go run ./discovery
 ```
+*Listens on `http://localhost:8081`.*
 
-Endpoints:
-
-```text
-GET  /health
-POST /api/v1/scan/subnet
-```
-
-Example request:
-
-```bash
-curl -X POST http://localhost:8081/api/v1/scan/subnet \
-  -H 'Content-Type: application/json' \
-  -d '{"subnetCidr":"192.168.1.0/24","timeoutMs":1000,"concurrency":500}'
-```
-
-The response contains the expanded hosts, UP/DOWN status, optional reverse-DNS names, round-trip time, and scan duration. The implementation probes TCP ports 80 and 443.
-
-### DHCP collector service
-
-Default port: `8082`
+### 3. Run the Go DHCP Collector Microservice (Optional)
 
 ```bash
 cd go-services
 go run ./dhcp
 ```
+*Listens on `http://localhost:8082`.*
 
-Endpoints:
+---
 
-```text
-GET  /health
-POST /api/v1/dhcp/scan
-```
+## REST API Reference
 
-Example request:
+### Authentication & Authorization
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/loginUser.html` | Authenticates user credentials, sets session and JWT cookies | Public |
+| `GET` | `/logoutUser.html` | Invalidates session and clears tokens | Public |
+| `GET` | `/validatePermission/` | Returns current user role, authorities, and permissions | Token Required |
+| `GET` | `/globalSearch/` | Searches subnets, IPs, and events across the system | Token Required |
+
+### Subnets & IP Management
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/subnet/` | Returns all subnets with CIDR, IP counts, and gateway info |
+| `POST` | `/subnet/` | Creates a new subnet definition |
+| `PUT` | `/subnet/` | Updates subnet details |
+| `DELETE` | `/subnet/:id` | Deletes a subnet and cleans associated IP records |
+| `GET` | `/subnetIp/` | Lists IP addresses for a subnet with pagination & filtering |
+| `POST` | `/subnetIp/scan` | Dispatches asynchronous subnet ICMP scan to `NetworkWorkerVerticle` |
+| `POST` | `/subnetIp/addRange` | Batch inserts a range of IP addresses |
+| `POST` | `/subnetIp/updateRange` | Batch updates status (`USED`, `AVAILABLE`, `RESERVED`, `TRANSIENT`) |
+| `POST` | `/subnetIp/deleteRange` | Batch deletes a range of IP addresses |
+| `POST` | `/subnetIp/importCsv` | Imports IP definitions from uploaded CSV |
+| `GET` | `/subnetIp/exportCsv` | Exports subnet IP records to CSV |
+| `GET` | `/subnetIp/exportPdf` | Exports subnet IP records to PDF |
+
+### IP Request & Approval Workflow
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/ipRequests/` | Returns all IP requests with status, device type, and duration |
+| `POST` | `/ipRequests/` | Submits a new IP request from self-service portal |
+| `POST` | `/ipRequests/approved` | Approves request, allocates selected IPs as `USED`, updates stats |
+| `POST` | `/ipRequests/rejected` | Rejects request with admin remark |
+
+### Alerts, Events & Reports
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/alerts/` | Returns active alert stream records |
+| `GET` | `/event/` | Returns event audit logs and timeline records |
+| `GET` | `/reports/schedulers` | Lists configured report schedules |
+| `POST` | `/reports/schedulers` | Creates/updates report schedule cron definition |
+| `GET` | `/exportsubnetIpByReportTimeline/` | Generates on-demand timeline report (PDF / CSV) |
+
+---
+
+## Go Microservices
+
+### Discovery Microservice (`:8081`)
+- **`GET /health`**: Healthcheck endpoint.
+- **`POST /api/v1/scan/subnet`**: Scans a CIDR block with configurable concurrency and timeout.
+  ```json
+  {
+    "subnetCidr": "192.168.1.0/24",
+    "timeoutMs": 1000,
+    "concurrency": 250
+  }
+  ```
+
+### DHCP Collector Microservice (`:8082`)
+- **`GET /health`**: Healthcheck endpoint.
+- **`POST /api/v1/dhcp/scan`**: Collects DHCP lease tables and scope utilization.
+  ```json
+  {
+    "hostAddress": "192.168.1.10",
+    "type": "windows",
+    "userName": "admin",
+    "password": "secretPassword",
+    "port": 5985
+  }
+  ```
+
+---
+
+## Testing & Verification
+
+Run the comprehensive unit and integration test suite:
 
 ```bash
-curl -X POST http://localhost:8082/api/v1/dhcp/scan \
-  -H 'Content-Type: application/json' \
-  -d '{"hostAddress":"192.168.1.10","type":"windows","userName":"user","password":"password","port":5985}'
-```
-
-The service accepts `windows` or `cisco` as the server type and returns DHCP scope utilization data.
-
-### Ping engine
-
-`go-engine/ping.go` is a command-line utility. It expects a JSON configuration file path containing `ip-addresses` and optional ping settings such as `max-ping-check-timeout`, `max-ping-check-retry-count`, and `max-concurrent-ping`.
-
-```bash
-cd go-engine
-go build -o ping-engine .
-./ping-engine /path/to/ping-config.txt
-```
-
-It prints a JSON object containing `up` and `down` IP lists.
-
-## Background Scheduling
-
-`JobScheduler` starts with the Vert.x application and currently maintains:
-
-- A 10-second subnet scan queue check timer
-- An hourly alert cleanup timer
-- Dynamic recurring jobs for subnet scans, DHCP scans, and report generation
-
-Cron expressions in the supported `0 0/<minutes> * * * ?` form are converted to minute intervals. Other expressions currently fall back to a daily interval. Scheduled jobs can be triggered or deleted through the scheduler service integration.
-
-## Testing and Development
-
-Run the Java tests:
-
-```bash
+# Run all unit and integration tests
 mvn test
+
+# Run specific test classes
+mvn test -Dtest=ModelTest,AppConfigTest,SchedulerTest,SecurityTest,MainVerticleTest
 ```
 
-Run the Go service tests:
+Test coverage includes:
+- **`MainVerticleTest`**: Verticle deployment, HTTP routing pipeline, login redirects, and permission handlers.
+- **`SecurityTest`**: JWT token generation, claims extraction, and BCrypt verification.
+- **`SchedulerTest`**: Vert.x timer lifecycle, job scheduling, and cron parsing.
+- **`ModelTest`**: JSON serialization and model binding for IPAM domain entities.
+- **`AppConfigTest`**: YAML configuration loading and default fallbacks.
 
-```bash
-cd go-services
-go test ./...
-```
-
-Build all Java artifacts:
-
-```bash
-mvn clean package
-```
-
-The Maven package creates:
-
-```text
-vertx-app/target/vertx-ipam-4.0.0.jar
-vertx-app/target/vertx-ipam-4.0.0-fat.jar
-```
-
-## Git Workflow
-
-```bash
-git checkout -b feature/<feature-name>
-git add <file-or-folder>
-git commit -m "feat: describe the change"
-git push origin feature/<feature-name>
-```
-
-Use conventional prefixes such as `feat:`, `fix:`, `refactor:`, `test:`, and `chore:`.
-
-## Current Status
-
-The core Vert.x web application, PostgreSQL integration, authentication, permissions, user management, subnet/IP management, DHCP management, alerts, events, reports, discovery, rogue detection, and IP request surfaces are present in the current source tree. Some network collection and scheduled-job classes still contain placeholder or simulated execution logic and should be treated as integration points for production collectors.
+---
 
 ## License
 
-This project is intended for internal development and migration purposes. Licensing and deployment terms should be defined by the project owner.
+This project is developed for enterprise IPAM infrastructure. All rights reserved.
