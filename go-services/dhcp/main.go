@@ -65,13 +65,16 @@ func main() {
 		}
 	}()
 
-//Creates a channel for OS signals.
+    //Creates a channel for OS signals.
 	stop := make(chan os.Signal, 1)
+
+	//Shutting down IPAM DHCP Microservice gracefully...
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	log.Println("Shutting down IPAM DHCP Microservice gracefully...")
 }
 
+// Returns the health status of the DHCP collector microservice.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -81,18 +84,21 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+//Only POST is allowed.
 func scanDhcpHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+    //Read request JSON
 	var req DHCPScanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
 
+    //The DHCP server address is mandatory.
 	if req.HostAddress == "" {
 		http.Error(w, "hostAddress parameter is required", http.StatusBadRequest)
 		return

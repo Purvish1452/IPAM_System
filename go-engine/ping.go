@@ -24,6 +24,7 @@ var upIps []string
 
 var downIps []string
 
+// Pings the given IP address and classifies it as up or down.
 func pingIP(ipAddress string, wg *sync.WaitGroup) {
 
 	defer wg.Done()
@@ -50,6 +51,7 @@ func pingIP(ipAddress string, wg *sync.WaitGroup) {
 	}
 }
 
+// Reads the configuration, concurrently pings IP addresses, and outputs the results as JSON.
 func main() {
 
 	args := os.Args[1:]

@@ -3,26 +3,25 @@ package com.motadata.ipam;
 import com.motadata.ipam.config.AppConfig;
 import com.motadata.ipam.db.DatabaseInit;
 import com.motadata.ipam.db.PgClientProvider;
-import com.motadata.ipam.router.*;
 import com.motadata.ipam.scheduler.JobScheduler;
-import com.motadata.ipam.security.JwtAuthHandler;
 import com.motadata.ipam.security.JwtAuthProvider;
-import com.motadata.ipam.service.*;
+import com.motadata.ipam.verticle.HttpServerVerticle;
+import com.motadata.ipam.verticle.NetworkWorkerVerticle;
+import com.motadata.ipam.verticle.ReportWorkerVerticle;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.ext.web.Router;
-import io.vertx.ext.web.handler.BodyHandler;
-import io.vertx.ext.web.handler.SessionHandler;
-import io.vertx.ext.web.handler.StaticHandler;
-import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.sqlclient.Pool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Entry point Verticle for the Vert.x IPAM Web Application.
- * Architecture: Handler -> Service -> PgPool -> PostgreSQL
+ * Main Deployer & Orchestrator Verticle for the Vert.x IPAM Application.
+ * Architecture:
+ *   - Event Loop Layer: HttpServerVerticle (Standard Verticle)
+ *   - Worker Pool Layer: NetworkWorkerVerticle (30 threads), ReportWorkerVerticle (5 threads)
+ *   - Messaging: Vert.x EventBus
  */
 public class MainVerticle extends AbstractVerticle {
 
@@ -46,8 +45,7 @@ public class MainVerticle extends AbstractVerticle {
 
     @Override
     public void start(Promise<Void> startPromise) {
-
-        LOGGER.info("Starting Vert.x IPAM MainVerticle (PostgreSQL Reactive Engine)...");
+        LOGGER.info("Starting Vert.x IPAM Main Deployer (Reactive EventBus Engine)...");
 
         AppConfig.load(vertx).onComplete(configAr -> {
             if (configAr.failed()) {
@@ -75,58 +73,46 @@ public class MainVerticle extends AbstractVerticle {
                 jobScheduler = new JobScheduler(vertx);
                 jobScheduler.start();
 
-                // Initialize Direct Reactive Services (No DAO layer)
-                UserService userService = new UserService(db, jwtAuthProvider);
-                SubnetService subnetService = new SubnetService(db);
-                DhcpService dhcpService = new DhcpService(vertx, db);
-                AlertService alertService = new AlertService(db);
-                EventService eventService = new EventService(db);
-                SettingsService settingsService = new SettingsService(db);
-                DiscoveryService discoveryService = new DiscoveryService(vertx, db);
-                ReportService reportService = new ReportService(vertx, db);
-                SubnetIPActionService subnetIPActionService = new SubnetIPActionService(vertx, db, discoveryService, alertService);
+                // 1. Deploy Network Discovery Worker Verticle (Worker Pool: 30 Threads)
+                DeploymentOptions networkWorkerOpts = new DeploymentOptions()
+                        .setThreadingModel(io.vertx.core.ThreadingModel.WORKER)
+                        .setWorkerPoolName("ipam-network-worker-pool")
+                        .setWorkerPoolSize(30)
+                        .setInstances(2);
 
-                // Configure Vert.x Web Router
-                Router router = Router.router(vertx);
+                Future<String> deployNetworkWorker = vertx.deployVerticle(() -> new NetworkWorkerVerticle(db), networkWorkerOpts);
 
-                // Body & Session handlers mounted first
-                router.route().handler(BodyHandler.create());
-                router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
-                router.route().handler(new JwtAuthHandler(jwtAuthProvider));
+                // 2. Deploy Report Worker Verticle (Worker Pool: 5 Threads, Capped for Heap Safety)
+                DeploymentOptions reportWorkerOpts = new DeploymentOptions()
+                        .setThreadingModel(io.vertx.core.ThreadingModel.WORKER)
+                        .setWorkerPoolName("ipam-report-worker-pool")
+                        .setWorkerPoolSize(5)
+                        .setInstances(1);
 
-                // Mount REST API Routers
-                new AuthRouter(userService).attachRoutes(router);
-                new SubnetRouter(subnetService, userService, subnetIPActionService, discoveryService).attachRoutes(router);
-                new DhcpRouter(dhcpService).attachRoutes(router);
-                new SettingsRouter(userService, settingsService, alertService, discoveryService).attachRoutes(router);
-                new EventRouter(eventService, reportService).attachRoutes(router);
-                new AlertRouter(alertService).attachRoutes(router);
-                new ReportRouter(reportService).attachRoutes(router);
+                Future<String> deployReportWorker = vertx.deployVerticle(() -> new ReportWorkerVerticle(db), reportWorkerOpts);
 
-                // Serve static web assets from webroot (disable caching for development/live updates)
-                router.route("/*").handler(StaticHandler.create("webroot")
-                        .setCachingEnabled(false)
-                        .setMaxAgeSeconds(0));
+                // 3. Deploy HTTP Server Verticle on the Event Loop
+                DeploymentOptions httpOptions = new DeploymentOptions()
+                        .setConfig(config());
 
-                // Start HTTP Server
-                int port = config().getInteger("server-port", config.getServerPort());
-                vertx.createHttpServer(new HttpServerOptions().setPort(port))
-                        .requestHandler(router)
-                        .listen()
-                        .onComplete(httpAr -> {
-                            if (httpAr.succeeded()) {
-                                LOGGER.info("===============================================================");
-                                LOGGER.info(" Vert.x IPAM Server running on http://localhost:{}", port);
-                                LOGGER.info(" Architecture: Handler -> Service -> PgPool -> PostgreSQL");
-                                LOGGER.info(" Vert.x Version: 5.0.0");
-                                LOGGER.info("===============================================================");
-                                startPromise.complete();
-                            } else {
-                                LOGGER.error("Failed to start Vert.x HTTP server on port {}: {}", port, httpAr.cause().getMessage());
-                                startPromise.fail(httpAr.cause());
-                            }
-                        });
+                Future<String> deployHttpServer = vertx.deployVerticle(() -> new HttpServerVerticle(db, config, jwtAuthProvider), httpOptions);
 
+                // Wait for all verticles to deploy successfully
+                Future.all(deployNetworkWorker, deployReportWorker, deployHttpServer).onComplete(deployAr -> {
+                    if (deployAr.succeeded()) {
+                        LOGGER.info("===============================================================");
+                        LOGGER.info(" Vert.x IPAM System Fully Initialized & Deployed");
+                        LOGGER.info(" [1] Event Loop Layer: HttpServerVerticle");
+                        LOGGER.info(" [2] Network Worker Pool: 30 Threads (NetworkWorkerVerticle)");
+                        LOGGER.info(" [3] Report Worker Pool: 5 Threads (ReportWorkerVerticle)");
+                        LOGGER.info(" [4] Messaging Backbone: Vert.x EventBus");
+                        LOGGER.info("===============================================================");
+                        startPromise.complete();
+                    } else {
+                        LOGGER.error("Failed to deploy all verticles: {}", deployAr.cause().getMessage(), deployAr.cause());
+                        startPromise.fail(deployAr.cause());
+                    }
+                });
             });
         });
     }

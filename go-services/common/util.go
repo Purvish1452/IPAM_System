@@ -5,7 +5,7 @@ import (
 	"net"
 )
 
-// ExpandCIDR returns all IP addresses belonging to a CIDR range (excluding network and broadcast for /24 or smaller).
+// ExpandCIDR to returns all individual IP addresses belonging to a CIDR range (excluding network and broadcast for /24 or smaller).
 func ExpandCIDR(cidr string) ([]string, error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {

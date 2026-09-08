@@ -57,6 +57,7 @@ func main() {
 		WriteTimeout: 60 * time.Second,
 	}
 
+    // Starts the discovery HTTP service and handles graceful shutdown.
 	go func() {
 		log.Printf("IPAM Discovery Golang Microservice listening on port %s...", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -70,6 +71,7 @@ func main() {
 	log.Println("Shutting down IPAM Discovery Microservice gracefully...")
 }
 
+// Returns the health status of the discovery microservice.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -79,6 +81,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+//Receives the API request and creates the final response
 func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -133,6 +136,7 @@ func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+//Performs concurrent scanning using worker goroutines
 func scanIPs(ips []string, timeoutMs int, concurrency int) []HostResult {
 	ipChan := make(chan string, len(ips))
 	for _, ip := range ips {
@@ -165,6 +169,7 @@ func scanIPs(ips []string, timeoutMs int, concurrency int) []HostResult {
 	return results
 }
 
+//Checks an individual IP and resolves its hostname
 func pingAndResolve(ip string, timeoutMs int) HostResult {
 	start := time.Now()
 	timeout := time.Duration(timeoutMs) * time.Millisecond
