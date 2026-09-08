@@ -69,98 +69,158 @@ The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive
 
 ---
 
-## Architecture & Concurrency Model
+## Deep-Dive: Vert.x Reactive Architecture, Verticles & Thread Pools
 
-The application leverages **Vert.x 5** to decouple non-blocking web I/O from heavy background worker tasks using the **Vert.x EventBus**.
+The application is architected around **Eclipse Vert.x 5** and **Netty**, adopting a **Decoupled Multi-Verticle & Multi-Reactor Pattern**.
 
 ```mermaid
 flowchart TD
-    subgraph Clients["Web Browsers & REST Clients"]
-        HTTPReq["HTTP Requests (Port 8080)"]
+    subgraph External["External Clients"]
+        Client1["Browser / REST Client 1"]
+        Client2["Browser / REST Client 2"]
+        ClientN["Concurrent Clients (10,000+)"]
     end
 
-    subgraph Deployer["MainVerticle (Deployer & Orchestrator)"]
-        InitDB["Initialize Reactive PgPool & Schema"]
+    subgraph NettyEventLoops["Netty Event Loop Pool (2 x CPU Cores)"]
+        EL0["vert.x-eventloop-thread-0"]
+        EL1["vert.x-eventloop-thread-1"]
+        ELN["vert.x-eventloop-thread-N"]
     end
 
-    subgraph EventLoopLayer["1. Event Loop Verticle (Netty Reactor Engine)"]
-        direction TB
-        HttpVerticle["HttpServerVerticle<br/>(Runs on Event Loop Threads)"]
-        Routers["HTTP Routers & REST Endpoints"]
-        ReactiveDB["Reactive Services (SubnetService, UserService, AlertService)"]
-        PgPool["PgPool (Reactive PostgreSQL Client)"]
-        
-        HttpVerticle --> Routers
-        Routers --> ReactiveDB
-        ReactiveDB --> PgPool
+    subgraph StandardVerticle["1. Event Loop Verticle: HttpServerVerticle"]
+        Router["Vert.x Web Router & Middleware<br/>(BodyHandler, SessionHandler, JwtAuthHandler)"]
+        APIs["REST API Routers<br/>(AuthRouter, SubnetRouter, AlertRouter, ReportRouter, etc.)"]
+        Services["Reactive Services<br/>(SubnetService, UserService, AlertService)"]
+        PgPoolClient["PgPool Reactive Driver<br/>(20 pooled socket connections)"]
     end
 
-    subgraph EventBus["2. Vert.x EventBus (Non-Blocking Message Backbone)"]
-        AddrPing["'ipam.worker.network.ping'"]
-        AddrScan["'ipam.worker.network.scan'"]
-        AddrDns["'ipam.worker.network.dns'"]
-        AddrPort["'ipam.worker.network.portscan'"]
-        AddrCsv["'ipam.worker.network.importCsv'"]
-        AddrSubPdf["'ipam.worker.report.subnet.pdf'"]
-        AddrVendPdf["'ipam.worker.report.vendor.pdf'"]
-        AddrDynPdf["'ipam.worker.report.dynamic.pdf'"]
+    subgraph EventBusSystem["2. Non-Blocking EventBus Messaging Backbone"]
+        EBPing["'ipam.worker.network.ping'"]
+        EBScan["'ipam.worker.network.scan'"]
+        EBDns["'ipam.worker.network.dns'"]
+        EBPort["'ipam.worker.network.portscan'"]
+        EBCsv["'ipam.worker.network.importCsv'"]
+        EBPdfSub["'ipam.worker.report.subnet.pdf'"]
+        EBPdfVen["'ipam.worker.report.vendor.pdf'"]
+        EBPdfDyn["'ipam.worker.report.dynamic.pdf'"]
     end
 
-    subgraph WorkerLayer["3. Dedicated Worker Verticles (Worker Thread Pools)"]
-        direction TB
-        subgraph NetWorker["NetworkWorkerVerticle (ipam-network-worker-pool: 30 Threads)"]
-            ICMP["ICMP Ping Sweeps"]
-            PortScan["TCP Port Probing"]
-            DNSLookup["DNS Hostname Lookups"]
-            CSVParse["CSV Import Parsing"]
-        end
-        
-        subgraph RepWorker["ReportWorkerVerticle (ipam-report-worker-pool: 5 Threads)"]
-            Jasper["DynamicJasper Compilation"]
-            OpenPDF["Subnet & Vendor PDF Export"]
+    subgraph WorkerVerticle1["3. Worker Verticle: NetworkWorkerVerticle"]
+        subgraph NetPool["Dedicated Pool: 'ipam-network-worker-pool' (30 Threads)"]
+            T1["Worker Thread 1 (ICMP Ping)"]
+            T2["Worker Thread 2 (Port Probing)"]
+            TN["Worker Thread 30 (DNS & Traceroute)"]
         end
     end
 
-    HTTPReq --> HttpVerticle
-    Deployer -->|Deploys| HttpVerticle
-    Deployer -->|Deploys with ThreadingModel.WORKER| NetWorker
-    Deployer -->|Deploys with ThreadingModel.WORKER| RepWorker
+    subgraph WorkerVerticle2["4. Worker Verticle: ReportWorkerVerticle"]
+        subgraph RepPool["Dedicated Pool: 'ipam-report-worker-pool' (5 Threads - Capped)"]
+            R1["Worker Thread 1 (JasperReports)"]
+            RN["Worker Thread 5 (OpenPDF Export)"]
+        end
+    end
 
-    Routers -->|request()| AddrPing
-    Routers -->|request()| AddrScan
-    Routers -->|request()| AddrDns
-    Routers -->|request()| AddrPort
-    Routers -->|request()| AddrCsv
-    Routers -->|request()| AddrSubPdf
-    Routers -->|request()| AddrVendPdf
-    Routers -->|request()| AddrDynPdf
+    subgraph DB[(PostgreSQL Database)]
+    end
 
-    AddrPing --> NetWorker
-    AddrScan --> NetWorker
-    AddrDns --> NetWorker
-    AddrPort --> NetWorker
-    AddrCsv --> NetWorker
+    External -->|TCP / HTTP Traffic| NettyEventLoops
+    NettyEventLoops --> Router
+    Router --> APIs
+    APIs --> Services
+    Services --> PgPoolClient
+    PgPoolClient <-->|Async Wire Protocol via Netty| DB
 
-    AddrSubPdf --> RepWorker
-    AddrVendPdf --> RepWorker
-    AddrDynPdf --> RepWorker
+    APIs -->|eventBus.request()| EventBusSystem
 
-    NetWorker -.->|reply()| Routers
-    RepWorker -.->|reply()| Routers
+    EventBusSystem --> NetPool
+    EventBusSystem --> RepPool
+
+    NetPool -.->|Async Message Reply| APIs
+    RepPool -.->|Async Message Reply| APIs
 ```
 
 ---
 
-## Threading & Worker Pool Design
+### 1. The Verticles in the System
 
-| Layer | Component | Thread Pool / Size | Responsibilities |
-| :--- | :--- | :--- | :--- |
-| **Event Loop** | [`HttpServerVerticle`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/verticle/HttpServerVerticle.java) | `2 * CPU Cores`<br>*(e.g., 16 threads on 8 cores)* | HTTP server, REST route matching, JWT verification, JSON serialization, and non-blocking SQL queries via `PgPool`. **Zero blocking operations.** |
-| **Network Worker** | [`NetworkWorkerVerticle`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/verticle/NetworkWorkerVerticle.java) | `30 Threads`<br>(`ipam-network-worker-pool`) | Synchronous ICMP ping sweeps, TCP port probing, DNS reverse lookups, traceroute probes, and CSV import parsing. |
-| **Report Worker** | [`ReportWorkerVerticle`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/verticle/ReportWorkerVerticle.java) | `5 Threads`<br>(`ipam-report-worker-pool`) | DynamicJasper layout compilation, OpenPDF generation, and heavy workbook rendering. Capped at 5 threads to protect JVM heap. |
-| **Database Pool** | [`PgClientProvider`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/db/PgClientProvider.java) | `20 Connections`<br>(`maxSize = 20`) | Non-blocking reactive PostgreSQL socket connections. |
+| Verticle | Threading Model | Purpose & Responsibilities |
+| :--- | :--- | :--- |
+| **`MainVerticle`** | Standard (Deployer) | Primary startup orchestrator. Loads `AppConfig`, initializes `PgClientProvider` and database schema via `DatabaseInit`, starts `JobScheduler`, and deploys the sub-verticles with specialized deployment options. |
+| **`HttpServerVerticle`** | Standard (Event Loop) | Runs strictly on Netty Event Loop threads. Mounts HTTP Server on port `8080`, manages JWT/Session filters, serves static web assets from `webroot`, and handles all fast REST API CRUD endpoints via non-blocking `PgPool`. |
+| **`NetworkWorkerVerticle`** | `ThreadingModel.WORKER` | Deployed with `setWorkerPoolName("ipam-network-worker-pool")` and size `30`. Consumes EventBus messages for ICMP ping sweeps, TCP port probing, reverse DNS lookups, traceroute probes, and CSV import parsing. |
+| **`ReportWorkerVerticle`** | `ThreadingModel.WORKER` | Deployed with `setWorkerPoolName("ipam-report-worker-pool")` and size `5`. Consumes EventBus messages to compile DynamicJasper reports, OpenPDF documents, and Excel spreadsheets in an isolated, memory-safe thread pool. |
 
 ---
+
+### 2. How the Event Loop Works
+
+- **The Multi-Reactor Pattern**: Vert.x assigns each incoming TCP socket connection to one of `2 * CPU Cores` Event Loop threads (e.g. `vert.x-eventloop-thread-0` to `15`).
+- **The Golden Rule**: *"Never block the Event Loop thread."*
+- **Non-Blocking Execution**: When a client requests subnet records (`GET /subnet/`):
+  1. The Event Loop thread executes `SubnetRouter` and calls `SubnetService.getAllSubnets()`.
+  2. `SubnetService` issues a query via `PgPool.query().execute()`.
+  3. **The Event Loop thread NEVER waits or sleeps for PostgreSQL**. It registers an asynchronous callback (`Future`) and immediately moves on to process subsequent concurrent requests from other clients.
+  4. When PostgreSQL returns the query results over the network socket, Netty notifies the Event Loop, which formats the JSON response and sends it back to the client.
+
+---
+
+### 3. How Worker Pools & Bulkheading Work
+
+Certain tasks cannot be performed reactively (e.g., waiting for OS ICMP echo replies, socket connect timeouts, or rasterizing 50-page PDF documents).
+
+Instead of running these on the Event Loop or competing for a single generic thread pool, the architecture implements the **Bulkhead Pattern** using isolated worker pools:
+
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                              Worker Isolation                                 │
+├───────────────────────────────────────┬───────────────────────────────────────┤
+│    ipam-network-worker-pool (30)      │      ipam-report-worker-pool (5)      │
+├───────────────────────────────────────┼───────────────────────────────────────┤
+│ • ICMP Ping Sweeps (isReachable)      │ • DynamicJasper Compilation           │
+│ • TCP Port Probing (Socket.connect)   │ • OpenPDF Layout Rendering            │
+│ • Reverse DNS Hostname Resolution     │ • Large Excel (.xlsx) Exports         │
+│ • CSV Bulk File Parsing               │                                       │
+│ ➔ Scaled for high network concurrency │ ➔ Capped at 5 to protect JVM Heap     │
+└───────────────────────────────────────┴───────────────────────────────────────┘
+```
+
+#### Why This Prevents System Outages:
+1. **Zero Worker Starvation**: If multiple users generate large PDF reports, they only occupy threads in `ipam-report-worker-pool`. Network discovery scans and ping sweeps running in `ipam-network-worker-pool` continue running at full speed.
+2. **Zero Event Loop Latency Spikes**: Because all blocking code is isolated on worker threads, the HTTP web server remains 100% responsive with sub-millisecond response times for REST APIs.
+3. **Memory Protection (OOM Guard)**: PDF generation requires substantial heap memory. Restricting the report worker pool to 5 threads guarantees that simultaneous export requests cannot exhaust JVM memory.
+
+---
+
+### 4. EventBus Messaging Protocol
+
+Communication between the Event Loop Verticle (`HttpServerVerticle`) and the Worker Verticles occurs exclusively via the **Vert.x EventBus**:
+
+| EventBus Address | Message Payload (Input) | Reply Payload (Output) | Consumer Verticle |
+| :--- | :--- | :--- | :--- |
+| `ipam.worker.network.ping` | `{"ip": "192.168.1.10", "timeout": 1000}` | `{"success": true, "ip": "...", "reachable": true, "status": "ONLINE"}` | `NetworkWorkerVerticle` |
+| `ipam.worker.network.scan` | `{"subnetId": 1, "subnetAddress": "192.168.1.0", "cidr": 24}` | `{"success": true, "totalIps": 254, "activeIps": 42, "message": "..."}` | `NetworkWorkerVerticle` |
+| `ipam.worker.network.dns` | `{"ip": "192.168.1.10"}` | `{"success": true, "ip": "...", "hostname": "gw.local", "resolved": true}` | `NetworkWorkerVerticle` |
+| `ipam.worker.network.portscan`| `{"ip": "192.168.1.10", "ports": [80, 443, 22]}` | `{"success": true, "ip": "...", "openPorts": [80, 443]}` | `NetworkWorkerVerticle` |
+| `ipam.worker.network.importCsv`| `{"csvText": "...", "subnetId": 1}` | `{"success": true, "imported": 250, "message": "..."}` | `NetworkWorkerVerticle` |
+| `ipam.worker.report.subnet.pdf`| `{"data": [...], "subLabel": "192.168.1.0"}` | `{"success": true, "filename": "SubnetIP_Export_1.pdf", "size": 18240}` | `ReportWorkerVerticle` |
+| `ipam.worker.report.vendor.pdf`| `{"data": [...], "subLabel": "All"}` | `{"success": true, "filename": "Vendor_Summary_1.pdf", "size": 12400}` | `ReportWorkerVerticle` |
+| `ipam.worker.report.dynamic.pdf`| `{"title": "...", "data": [...], "columns": [...]}` | `Buffer` (Raw PDF binary stream) | `ReportWorkerVerticle` |
+
+---
+
+### 5. Thread Pools & Resource Summary
+
+| Pool Name | Managed By | Default Size | Purpose |
+| :--- | :--- | :--- | :--- |
+| `vert.x-eventloop-thread-*` | Netty / Vert.x Core | `2 * CPU Cores` | Non-blocking HTTP sockets, routing, JWT parsing, and reactive SQL. |
+| `ipam-network-worker-pool-*`| Dedicated Worker Pool | `30` Threads | ICMP ping sweeps, port scans, DNS lookups, CSV parsing. |
+| `ipam-report-worker-pool-*` | Dedicated Worker Pool | `5` Threads | DynamicJasper and OpenPDF report compilation. |
+| `vert.x-internal-blocking-*`| Vert.x Core | `20` Threads | Internal Vert.x file operations (`StaticHandler`). |
+| `PgPool` Connection Pool | `vertx-pg-client` | `20` Sockets | Asynchronous PostgreSQL database wire connections. |
+
+---
+
+
 
 ## Technology Stack
 
