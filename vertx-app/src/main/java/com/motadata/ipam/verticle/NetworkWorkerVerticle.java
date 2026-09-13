@@ -158,7 +158,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
             }
         });
 
-        // 3. DNS Lookup Consumer
+        // 3. DNS Lookup Consumer with go-plugins
         vertx.eventBus().<JsonObject>consumer(ADDR_DNS, message -> {
             try {
                 String ip = message.body().getString("ip");
