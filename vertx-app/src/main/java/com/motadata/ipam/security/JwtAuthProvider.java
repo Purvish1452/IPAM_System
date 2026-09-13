@@ -47,11 +47,7 @@ public class JwtAuthProvider {
         return generateToken(user, extractAuthorities(user));
     }
 
-    /**
-     * Generates a JWT token embedding the provided authorities list into the token claims.
-     * Use this overload when PBAC permissions have already been fetched from the database
-     * so they are included in the JWT and do not depend on the authorities cookie.
-     */
+    // Generates a JWT token embedding pre-fetched user authorities into token claims.
     public String generateToken(User user, List<String> authoritiesList) {
         JsonArray authoritiesJson = new JsonArray();
         for (String auth : authoritiesList) {

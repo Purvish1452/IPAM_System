@@ -31,12 +31,14 @@ public class HttpServerVerticle extends AbstractVerticle {
     private final AppConfig config;
     private final JwtAuthProvider jwtAuthProvider;
 
+    // Constructs HttpServerVerticle with database pool, application config, and JWT provider.
     public HttpServerVerticle(Pool db, AppConfig config, JwtAuthProvider jwtAuthProvider) {
         this.db = db;
         this.config = config;
         this.jwtAuthProvider = jwtAuthProvider;
     }
 
+    // Initializes services, configures routes, and starts the reactive HTTP server on the Event Loop.
     @Override
     public void start(Promise<Void> startPromise) {
         LOGGER.info("Starting HttpServerVerticle on Event Loop Thread: {}", Thread.currentThread().getName());
@@ -77,13 +79,13 @@ public class HttpServerVerticle extends AbstractVerticle {
         // Determine port
         int port = config().getInteger("server-port", config != null ? config.getServerPort() : 8080);
 
-        vertx.createHttpServer(new HttpServerOptions().setPort(port))
+        vertx.createHttpServer(new HttpServerOptions().setHost("0.0.0.0").setPort(port))
                 .requestHandler(router)
-                .listen()
+                .listen(port, "0.0.0.0")
                 .onComplete(httpAr -> {
                     if (httpAr.succeeded()) {
                         LOGGER.info("===============================================================");
-                        LOGGER.info(" HttpServerVerticle running on http://localhost:{}", port);
+                        LOGGER.info(" HttpServerVerticle running on http://0.0.0.0:{}", port);
                         LOGGER.info(" Mode: Non-blocking Event Loop [Netty]");
                         LOGGER.info("===============================================================");
                         startPromise.complete();

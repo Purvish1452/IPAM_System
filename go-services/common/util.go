@@ -5,7 +5,7 @@ import (
 	"net"
 )
 
-// ExpandCIDR to returns all individual IP addresses belonging to a CIDR range (excluding network and broadcast for /24 or smaller).
+// Expands a CIDR range into a list of host IP addresses.
 func ExpandCIDR(cidr string) ([]string, error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -24,7 +24,7 @@ func ExpandCIDR(cidr string) ([]string, error) {
 	return ips, nil
 }
 
-//This function increases an IP address by 1.
+// Increments the given IP address by 1.
 func incIP(ip net.IP) {
 	for j := len(ip) - 1; j >= 0; j-- {
 		ip[j]++

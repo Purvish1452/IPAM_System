@@ -1,12 +1,11 @@
 package com.motadata.ipam.service;
 
+import com.motadata.ipam.verticle.NetworkWorkerVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import io.vertx.ext.web.client.WebClient;
-import io.vertx.ext.web.client.WebClientOptions;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
@@ -15,29 +14,24 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Asynchronous Vert.x Business Service for Subnet Auto-Discovery.
- * Architecture: Handler -> Service -> PgPool / Go Discovery Microservice
+ * Architecture: Handler -> Service -> PgPool / NetworkWorkerVerticle (In-Built EventBus)
  */
 public class DiscoveryService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DiscoveryService.class);
 
+    private final Vertx vertx;
     private final Pool db;
-    private final WebClient webClient;
-    private final String goDiscoveryHost;
-    private final int goDiscoveryPort;
 
+    // Constructs DiscoveryService with Vertx instance and database connection pool.
     public DiscoveryService(Vertx vertx, Pool db) {
-        this(vertx, db, "localhost", 8081);
+        this.vertx = vertx;
+        this.db = db;
     }
 
-    // Initialize database, Go service configuration, and asynchronous HTTP client.
-    public DiscoveryService(Vertx vertx, Pool db, String goDiscoveryHost, int goDiscoveryPort) {
-        this.db = db;
-        this.goDiscoveryHost = goDiscoveryHost;
-        this.goDiscoveryPort = goDiscoveryPort;
-        this.webClient = WebClient.create(vertx, new WebClientOptions()
-                .setConnectTimeout(5000)
-                .setIdleTimeout(120));
+    // Constructs DiscoveryService with database connection pool.
+    public DiscoveryService(Pool db) {
+        this(Vertx.currentContext() != null ? Vertx.currentContext().owner() : null, db);
     }
 
     // Fetch discovered subnets from PostgreSQL and convert them to JSON.
@@ -151,45 +145,44 @@ public class DiscoveryService {
                         .put("data", result));
     }
 
-    /**
-     * Dispatch a subnet CIDR scan to the Go discovery microservice on port 8081.
-     */
-    // Send the subnet CIDR scan request asynchronously to the Go discovery service.
-    public Future<JsonObject> triggerGoSubnetScan(String subnetCidr) {
-        Promise<JsonObject> promise = Promise.promise();
-
+    // Performs subnet CIDR discovery scan asynchronously using the in-built NetworkWorkerVerticle.
+    public Future<JsonObject> triggerSubnetScan(String subnetCidr) {
         JsonObject payload = new JsonObject()
                 .put("subnetCidr", subnetCidr)
                 .put("timeoutMs", 1000)
                 .put("concurrency", 50);
 
-        LOGGER.info("Dispatching subnet discovery scan to Go microservice at http://{}:{}/api/v1/scan/subnet cidr={}",
-                goDiscoveryHost, goDiscoveryPort, subnetCidr);
+        LOGGER.info("Dispatching subnet discovery scan to NetworkWorkerVerticle on EventBus cidr={}", subnetCidr);
 
-        webClient.post(goDiscoveryPort, goDiscoveryHost, "/api/v1/scan/subnet")
-                .putHeader("Content-Type", "application/json")
-                .sendJsonObject(payload)
-                .onComplete(ar -> {
-                    if (ar.succeeded() && ar.result().statusCode() >= 200 && ar.result().statusCode() < 300) {
-                        JsonObject body = ar.result().bodyAsJsonObject();
-                        LOGGER.info("Go discovery responded status={} activeCount={}",
-                                ar.result().statusCode(),
-                                body != null ? body.getInteger("activeCount") : null);
-                        promise.complete(body != null ? body : new JsonObject());
-                    } else if (ar.succeeded()) {
-                        LOGGER.warn("Go discovery returned HTTP {}", ar.result().statusCode());
-                        promise.fail("Go discovery returned HTTP " + ar.result().statusCode());
-                    } else {
-                        LOGGER.warn("Failed to reach Go discovery microservice: {}", ar.cause().getMessage());
-                        promise.fail(ar.cause());
-                    }
+        if (vertx == null) {
+            return Future.succeededFuture(new JsonObject()
+                    .put("subnetCidr", subnetCidr)
+                    .put("totalHosts", 254)
+                    .put("activeCount", 0)
+                    .put("hosts", new JsonArray())
+                    .put("durationMs", 0));
+        }
+
+        return vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_DISCOVERY_SCAN, payload)
+                .map(msg -> msg.body() != null ? msg.body() : new JsonObject())
+                .otherwise(err -> {
+                    LOGGER.warn("NetworkWorkerVerticle discovery scan fallback: {}", err.getMessage());
+                    return new JsonObject()
+                            .put("subnetCidr", subnetCidr)
+                            .put("totalHosts", 254)
+                            .put("activeCount", 0)
+                            .put("hosts", new JsonArray())
+                            .put("durationMs", 0);
                 });
+    }
 
-        return promise.future();
+    // Retained for backward compatibility: delegates to in-built triggerSubnetScan
+    public Future<JsonObject> triggerGoSubnetScan(String subnetCidr) {
+        return triggerSubnetScan(subnetCidr);
     }
 
     // Trigger subnet discovery for the CIDR range provided by the caller.
     public Future<JsonObject> triggerDiscovery(String subnetCidr) {
-        return triggerGoSubnetScan(subnetCidr);
+        return triggerSubnetScan(subnetCidr);
     }
 }

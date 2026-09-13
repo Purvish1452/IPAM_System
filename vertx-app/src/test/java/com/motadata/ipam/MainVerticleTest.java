@@ -25,6 +25,7 @@ public class MainVerticleTest {
     private JwtAuthProvider jwtAuthProvider;
     private String deploymentId;
 
+    // Deploys MainVerticle and initializes the test HTTP WebClient and JWT provider.
     @BeforeAll
     public void setUpAll(Vertx vertx, VertxTestContext testContext) {
         webClient = WebClient.create(vertx);
@@ -43,6 +44,7 @@ public class MainVerticleTest {
         });
     }
 
+    // Closes the WebClient and undeploys MainVerticle after all tests complete.
     @AfterAll
     public void tearDownAll(Vertx vertx, VertxTestContext testContext) {
         if (webClient != null) {
@@ -55,7 +57,7 @@ public class MainVerticleTest {
         }
     }
 
-
+    // Tests accessing the root index page and verifying the HTML title content.
     @Test
     public void testGetIndexPage(VertxTestContext testContext) {
         webClient.get(TEST_PORT, "localhost", "/")
@@ -75,6 +77,7 @@ public class MainVerticleTest {
                 });
     }
 
+    // Tests permission validation endpoint using a signed JWT token.
     @Test
     public void testValidatePermissionEndpoint(VertxTestContext testContext) {
         User user = new User(1L, "admin", "admin@motadata.com", true);
@@ -100,6 +103,7 @@ public class MainVerticleTest {
                 });
     }
 
+    // Tests user login authentication flow, redirect headers, and session cookie generation.
     @Test
     public void testLoginFlow(VertxTestContext testContext) {
         JsonObject body = new JsonObject()

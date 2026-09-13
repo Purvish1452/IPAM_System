@@ -21,6 +21,7 @@ public class AuthRouter {
 
     private final UserService userService;
 
+    // Constructs AuthRouter with the provided UserService instance.
     public AuthRouter(UserService userService) {
         this.userService = userService;
     }
@@ -106,9 +107,15 @@ public class AuthRouter {
 
     // Clears authentication cookies and redirects to the login page.
     private void handleLogout(RoutingContext ctx) {
+        ctx.response().addCookie(Cookie.cookie("token", "").setPath("/").setMaxAge(0));
+        ctx.response().addCookie(Cookie.cookie("userName", "").setPath("/").setMaxAge(0));
+        ctx.response().addCookie(Cookie.cookie("authorities", "").setPath("/").setMaxAge(0));
         ctx.response().removeCookie("token");
         ctx.response().removeCookie("userName");
         ctx.response().removeCookie("authorities");
+        if (ctx.session() != null) {
+            ctx.session().destroy();
+        }
         ctx.response().setStatusCode(302).putHeader("Location", "/").end();
     }
 

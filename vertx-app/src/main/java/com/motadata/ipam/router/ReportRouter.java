@@ -22,6 +22,7 @@ public class ReportRouter {
 
     private final ReportService reportService;
 
+    // Constructs ReportRouter with the provided ReportService instance.
     public ReportRouter(ReportService reportService) {
         this.reportService = reportService;
     }
@@ -146,6 +147,7 @@ public class ReportRouter {
         });
     }
 
+    // Generates and downloads the subnet CSV report.
     private void handleSubnetCsvReport(RoutingContext ctx) {
         String subnetIdStr = ctx.request().getParam("subnetId");
         String status = ctx.request().getParam("status");
@@ -164,6 +166,7 @@ public class ReportRouter {
         });
     }
 
+    // Parses comma-separated subnet ID string into a list of Long values.
     private List<Long> parseSubnetIds(String value) {
         List<Long> list = new ArrayList<>();
         if (value != null && !value.trim().isEmpty() && !"undefined".equalsIgnoreCase(value.trim()) && !"null".equalsIgnoreCase(value.trim())) {

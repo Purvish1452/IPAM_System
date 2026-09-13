@@ -13,6 +13,7 @@ public class DhcpRouter {
 
     private final DhcpService dhcpService;
 
+    // Constructs DhcpRouter with the provided DhcpService instance.
     public DhcpRouter(DhcpService dhcpService) {
         this.dhcpService = dhcpService;
     }
@@ -144,6 +145,7 @@ public class DhcpRouter {
         });
     }
 
+    // Sends a formatted JSON error response with the specified status code.
     private void sendError(RoutingContext ctx, int statusCode, String message) {
         ctx.response().setStatusCode(statusCode)
                 .putHeader("Content-Type", "application/json;charset=UTF-8")

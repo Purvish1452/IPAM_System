@@ -17,12 +17,14 @@ public class SchedulerTest {
 
     private JobScheduler jobScheduler;
 
+    // Sets up and starts JobScheduler before each test.
     @BeforeEach
     public void setUp(Vertx vertx) {
         jobScheduler = new JobScheduler(vertx);
         jobScheduler.start();
     }
 
+    // Stops JobScheduler after each test.
     @AfterEach
     public void tearDown() {
         if (jobScheduler != null) {
@@ -30,12 +32,14 @@ public class SchedulerTest {
         }
     }
 
+    // Tests that JobScheduler starts correctly and initializes default periodic timers.
     @Test
     public void testJobSchedulerInitialization() {
         assertTrue(jobScheduler.isStarted());
         assertEquals(2, jobScheduler.getPeriodicTimerCount());
     }
 
+    // Tests scheduling a SubnetScanJob using a cron expression.
     @Test
     public void testScheduleSubnetScanCronJob() {
         Map<String, Object> jobData = new HashMap<>();
@@ -46,6 +50,7 @@ public class SchedulerTest {
         assertTrue(scheduled, "SubnetScanJob should be successfully scheduled");
     }
 
+    // Tests triggering an ad-hoc execution of a scheduled SubnetScanJob.
     @Test
     public void testTriggerSubnetScanJob() {
         Map<String, Object> jobData = new HashMap<>();
@@ -56,6 +61,7 @@ public class SchedulerTest {
         assertTrue(triggered, "TestTriggerSubnetScanJob should be triggered");
     }
 
+    // Tests scheduling a DhcpScanJob with custom job data parameters.
     @Test
     public void testScheduleDhcpScanJob() {
         Map<String, Object> jobData = new HashMap<>();
@@ -66,6 +72,7 @@ public class SchedulerTest {
         assertTrue(scheduled, "DhcpScanJob should be successfully scheduled");
     }
 
+    // Tests deleting a scheduled job from the JobScheduler.
     @Test
     public void testDeleteJob() {
         jobScheduler.scheduleCronJob("TestDeleteJob", "TEST_GROUP", AlertCleanupJob.class, "0 0 0 * * ?", null);

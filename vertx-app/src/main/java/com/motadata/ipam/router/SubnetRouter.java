@@ -32,6 +32,7 @@ public class SubnetRouter {
     private final SubnetIPActionService ipActionService;
     private final DiscoveryService discoveryService;
 
+    // Constructs SubnetRouter with required services for subnet operations.
     public SubnetRouter(SubnetService subnetService, UserService userService, SubnetIPActionService ipActionService, DiscoveryService discoveryService) {
         this.subnetService = subnetService;
         this.userService = userService;
@@ -39,7 +40,7 @@ public class SubnetRouter {
         this.discoveryService = discoveryService;
     }
 
-
+    // Registers all subnet, gateway, category, supernet, analytics, and IP management routes.
     public void attachRoutes(Router router) {
         router.get("/validatePermission/").handler(this::handleValidatePermission);
 
@@ -116,6 +117,7 @@ public class SubnetRouter {
         router.get("/importSubnetStatus/").handler(this::handleImportStatus);
         router.get("/statusScanGateway/").handler(this::handleScanStatus);
         router.post("/scanGateway/:id").handler(this::handleScanGateway);
+        router.get("/scanGateway/:id").handler(this::handleScanGateway);
         router.get("/discoveredSubnet/").handler(this::handleGetDiscoveredSubnets);
         router.get("/discoveredSubnet/:id").handler(this::handleGetDiscoveredSubnets);
         router.delete("/discoveredSubnet/:id").handler(this::handleDeleteDiscoveredSubnet);
@@ -148,6 +150,7 @@ public class SubnetRouter {
         router.get("/customColumn/download/").handler(this::handleDownloadSampleCSV);
     }
 
+    // Handles user permission validation for subnet operations.
     private void handleValidatePermission(RoutingContext ctx) {
         io.vertx.core.http.Cookie userCookie = ctx.request().getCookie("userName");
         String userName = userCookie != null ? userCookie.getValue() : null;
@@ -164,6 +167,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves all configured subnets.
     private void handleGetAllSubnets(RoutingContext ctx) {
         subnetService.getAllSubnets().onComplete(ar -> {
             if (ar.succeeded()) {
@@ -178,6 +182,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves a single subnet by its ID.
     private void handleGetSubnetById(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -193,6 +198,7 @@ public class SubnetRouter {
         });
     }
 
+    // Saves or updates a subnet record.
     private void handleSaveSubnet(RoutingContext ctx) {
         JsonObject body = null;
         try {
@@ -222,6 +228,7 @@ public class SubnetRouter {
         });
     }
 
+    // Deletes a subnet by ID.
     private void handleDeleteSubnet(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -235,6 +242,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves subnets grouped by category.
     private void handleGetSubnetByCategory(RoutingContext ctx) {
         subnetService.getSubnetByCategory().onComplete(ar -> {
             JsonObject result = new JsonObject()
@@ -244,6 +252,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves supernets grouped by category.
     private void handleGetSupernetByCategory(RoutingContext ctx) {
         subnetService.getSupernetByCategory().onComplete(ar -> {
             JsonObject result = new JsonObject()
@@ -253,6 +262,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves paginated IP details for a subnet.
     private void handleGetIpDetails(RoutingContext ctx) {
         String subnetIdStr = ctx.request().getParam("subnetId");
         String pageStr = ctx.request().getParam("page");
@@ -270,6 +280,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves all IP details for the specified subnet ID.
     private void handleGetIpDetailsBySubnetId(RoutingContext ctx) {
         String pathParam = ctx.pathParam("id");
         Long subnetId = 1L;
@@ -287,7 +298,7 @@ public class SubnetRouter {
         });
     }
 
-
+    // Retrieves all configured network gateways.
     private void handleGetGateways(RoutingContext ctx) {
         subnetService.getGateways().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -295,6 +306,7 @@ public class SubnetRouter {
         });
     }
 
+    // Saves or updates a network gateway.
     private void handleSaveGateway(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -305,6 +317,7 @@ public class SubnetRouter {
         });
     }
 
+    // Deletes a network gateway by ID.
     private void handleDeleteGateway(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -315,6 +328,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves all subnet categories.
     private void handleGetCategories(RoutingContext ctx) {
         subnetService.getCategories().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -322,6 +336,7 @@ public class SubnetRouter {
         });
     }
 
+    // Saves or updates a subnet category.
     private void handleSaveCategory(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -332,6 +347,7 @@ public class SubnetRouter {
         });
     }
 
+    // Deletes a subnet category by ID.
     private void handleDeleteCategory(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -342,6 +358,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves all configured supernets.
     private void handleGetSupernets(RoutingContext ctx) {
         subnetService.getSupernets().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -349,6 +366,7 @@ public class SubnetRouter {
         });
     }
 
+    // Saves or updates a supernet.
     private void handleSaveSupernet(RoutingContext ctx) {
         JsonObject body = null;
         try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
@@ -359,6 +377,7 @@ public class SubnetRouter {
         });
     }
 
+    // Deletes a supernet by ID.
     private void handleDeleteSupernet(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -369,6 +388,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves rogue IP detection records.
     private void handleGetRogueDetection(RoutingContext ctx) {
         subnetService.getRogueDetection().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -376,19 +396,101 @@ public class SubnetRouter {
         });
     }
 
+    // Saves rogue action or updates authenticity status.
     private void handleRogueAction(RoutingContext ctx) {
         subnetService.saveRogueAction(new JsonObject()).onComplete(ar -> {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
         });
     }
 
+    // Extracts username from query params, session, cookie, or JWT user principal.
+    private String extractUserName(RoutingContext ctx) {
+        String userParam = ctx.request().getParam("userName");
+        if (userParam != null && !userParam.trim().isEmpty()) {
+            return userParam.trim();
+        }
+        String sessionUser = ctx.session() != null ? ctx.session().get("userName") : null;
+        if (sessionUser != null && !sessionUser.trim().isEmpty()) {
+            return sessionUser.trim();
+        }
+        io.vertx.core.http.Cookie userCookie = ctx.request().getCookie("userName");
+        if (userCookie != null && userCookie.getValue() != null && !userCookie.getValue().trim().isEmpty()) {
+            return userCookie.getValue().trim();
+        }
+        io.vertx.ext.auth.User user = ctx.user() != null ? ctx.user() : ctx.get("user");
+        if (user != null && user.principal() != null) {
+            JsonObject principal = user.principal();
+            if (principal.containsKey("user_name")) {
+                return principal.getString("user_name");
+            }
+            if (principal.containsKey("User") && principal.getJsonObject("User").containsKey("username")) {
+                return principal.getJsonObject("User").getString("username");
+            }
+        }
+        return null;
+    }
+
+    // Checks if the user is an admin based on principal, session, or authorities cookie.
+    private boolean isUserAdmin(RoutingContext ctx, String userName) {
+        if (userName == null || "admin".equalsIgnoreCase(userName)) {
+            return true;
+        }
+
+        io.vertx.ext.auth.User user = ctx.user() != null ? ctx.user() : ctx.get("user");
+        if (user != null && user.principal() != null) {
+            JsonObject principal = user.principal();
+            Object auths = principal.getValue("authorities");
+            if (auths instanceof JsonArray && ((JsonArray) auths).contains("ROLE_ADMIN")) {
+                return true;
+            }
+        }
+
+        io.vertx.core.http.Cookie cookie = ctx.request().getCookie("authorities");
+        if (cookie != null && cookie.getValue() != null) {
+            try {
+                String decoded = java.net.URLDecoder.decode(cookie.getValue(), java.nio.charset.StandardCharsets.UTF_8);
+                if (decoded.contains("ROLE_ADMIN")) {
+                    return true;
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (ctx.session() != null) {
+            String sessionAuth = ctx.session().get("authorities");
+            if (sessionAuth != null && sessionAuth.contains("ROLE_ADMIN")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Retrieves user IP requests (all requests for admin, user's own requests for standard users).
     private void handleGetIpRequests(RoutingContext ctx) {
-        subnetService.getIpRequests().onComplete(ar -> {
-            JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        String userName = extractUserName(ctx);
+        if (userName == null || userName.isBlank()) {
+            userName = "admin";
+        }
+
+        final String finalUser = userName;
+        userService.validatePermission(finalUser).onComplete(permAr -> {
+            boolean userIsAdmin = false;
+            if (permAr.succeeded() && permAr.result() != null) {
+                String role = permAr.result().getString("currentUserRole");
+                if ("ROLE_ADMIN".equalsIgnoreCase(role) || "Admin".equalsIgnoreCase(role)) {
+                    userIsAdmin = true;
+                }
+            } else if ("admin".equalsIgnoreCase(finalUser)) {
+                userIsAdmin = true;
+            }
+            subnetService.getIpRequests(finalUser, userIsAdmin).onComplete(ar -> {
+                JsonObject result = new JsonObject().put("data", ar.succeeded() ? ar.result() : new JsonArray()).put("success", true);
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            });
         });
     }
 
+    // Retrieves an IP request by ID.
     private void handleGetIpRequestById(RoutingContext ctx) {
         String idParam = ctx.pathParam("id");
         Long requestId;
@@ -401,35 +503,54 @@ public class SubnetRouter {
             return;
         }
 
-        subnetService.getIpRequests().onComplete(ar -> {
-            if (ar.failed()) {
-                ctx.response().setStatusCode(500)
-                        .putHeader("Content-Type", "application/json;charset=UTF-8")
-                        .end(new JsonObject().put("success", false).put("message", "Unable to load IP request").encode());
-                return;
-            }
+        String userName = extractUserName(ctx);
+        if (userName == null || userName.isBlank()) {
+            userName = "admin";
+        }
 
-            JsonObject data = null;
-            for (int i = 0; i < ar.result().size(); i++) {
-                JsonObject request = ar.result().getJsonObject(i);
-                if (requestId.equals(request.getLong("id"))) {
-                    data = request;
-                    break;
+        final String finalUser = userName;
+        userService.validatePermission(finalUser).onComplete(permAr -> {
+            boolean userIsAdmin = false;
+            if (permAr.succeeded() && permAr.result() != null) {
+                String role = permAr.result().getString("currentUserRole");
+                if ("ROLE_ADMIN".equalsIgnoreCase(role) || "Admin".equalsIgnoreCase(role)) {
+                    userIsAdmin = true;
                 }
+            } else if ("admin".equalsIgnoreCase(finalUser)) {
+                userIsAdmin = true;
             }
 
-            if (data == null) {
-                ctx.response().setStatusCode(404)
-                        .putHeader("Content-Type", "application/json;charset=UTF-8")
-                        .end(new JsonObject().put("success", false).put("message", "IP request not found").encode());
-                return;
-            }
+            subnetService.getIpRequests(finalUser, userIsAdmin).onComplete(ar -> {
+                if (ar.failed()) {
+                    ctx.response().setStatusCode(500)
+                            .putHeader("Content-Type", "application/json;charset=UTF-8")
+                            .end(new JsonObject().put("success", false).put("message", "Unable to load IP request").encode());
+                    return;
+                }
 
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8")
-                    .end(new JsonObject().put("data", data).put("success", true).encode());
+                JsonObject data = null;
+                for (int i = 0; i < ar.result().size(); i++) {
+                    JsonObject request = ar.result().getJsonObject(i);
+                    if (requestId.equals(request.getLong("id"))) {
+                        data = request;
+                        break;
+                    }
+                }
+
+                if (data == null) {
+                    ctx.response().setStatusCode(404)
+                            .putHeader("Content-Type", "application/json;charset=UTF-8")
+                            .end(new JsonObject().put("success", false).put("message", "IP request not found").encode());
+                    return;
+                }
+
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8")
+                        .end(new JsonObject().put("data", data).put("success", true).encode());
+            });
         });
     }
 
+    // Creates or submits a new IP allocation request.
     private void handleSaveIpRequest(RoutingContext ctx) {
         JsonObject body;
         try {
@@ -467,12 +588,14 @@ public class SubnetRouter {
         });
     }
 
+    // Sends a JSON error response with the given status code and message.
     private void sendJsonError(RoutingContext ctx, int statusCode, String message) {
         ctx.response().setStatusCode(statusCode)
                 .putHeader("Content-Type", "application/json;charset=UTF-8")
                 .end(new JsonObject().put("success", false).put("message", message).encode());
     }
 
+    // Handles approval or rejection of an IP allocation request.
     private void handleIpRequestAction(RoutingContext ctx) {
         JsonObject body;
         try {
@@ -530,6 +653,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves overall IP address usage summary metrics.
     private void handleGetIpSummary(RoutingContext ctx) {
         subnetService.getIpSummary().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -537,6 +661,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves ICMP ping reachability summary metrics.
     private void handleGetPingIpSummary(RoutingContext ctx) {
         subnetService.getPingIpSummary().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -544,6 +669,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves rogue subnet IP summary metrics.
     private void handleGetRogueSubnetIp(RoutingContext ctx) {
         subnetService.getRogueSubnetIp().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -551,6 +677,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves DNS resolution status summary metrics.
     private void handleGetDnsStatusSummary(RoutingContext ctx) {
         subnetService.getDnsStatusSummary().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -558,6 +685,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves hardware vendor distribution summary.
     private void handleGetVendorSummary(RoutingContext ctx) {
         subnetService.getVendorSummary().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -565,6 +693,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves top 10 most utilized subnets.
     private void handleGetTop10Subnet(RoutingContext ctx) {
         subnetService.getTop10Subnet().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -572,6 +701,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves top 10 most utilized categories.
     private void handleGetTop10Category(RoutingContext ctx) {
         subnetService.getTop10Category().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -579,6 +709,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves recently discovered network devices.
     private void handleGetRecentDiscovery(RoutingContext ctx) {
         subnetService.getRecentDiscovery().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -586,6 +717,7 @@ public class SubnetRouter {
         });
     }
 
+    // Retrieves list of IP conflict records.
     private void handleGetConflictedIp(RoutingContext ctx) {
         subnetService.getConflictedIp().onComplete(ar -> {
             JsonObject result = new JsonObject().put("data", ar.result()).put("success", true);
@@ -593,6 +725,7 @@ public class SubnetRouter {
         });
     }
 
+    // Polls the current subnet scanning progress status.
     private void handleScanStatus(RoutingContext ctx) {
         // Delegates to SubnetIPActionService for live scan state
         ipActionService.getScanStatus().onComplete(ar -> {
@@ -602,11 +735,13 @@ public class SubnetRouter {
         });
     }
 
+    // Polls CSV import task status.
     private void handleImportStatus(RoutingContext ctx) {
         JsonObject result = new JsonObject().put("success", true).put("status", "COMPLETED").put("progress", 100);
         ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
     }
 
+    // Retrieves discovered subnet entities by ID or in full list.
     private void handleGetDiscoveredSubnets(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         if (idStr != null) {
@@ -624,6 +759,7 @@ public class SubnetRouter {
         }
     }
 
+    // Deletes a discovered subnet by ID.
     private void handleDeleteDiscoveredSubnet(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long id = 1L;
@@ -639,6 +775,7 @@ public class SubnetRouter {
     // NEW HANDLERS: Scan, Add Multiple IP, Select IP Range, Import, Export
     // ===========================================================================
 
+    // Triggers background scanning for a given subnet.
     private void handleScanSubnet(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long subnetId = 1L;
@@ -652,6 +789,7 @@ public class SubnetRouter {
         });
     }
 
+    // Triggers network scanning for a specified gateway.
     private void handleScanGateway(RoutingContext ctx) {
         String idStr = ctx.pathParam("id");
         Long gatewayId = 1L;
@@ -671,6 +809,7 @@ public class SubnetRouter {
         });
     }
 
+    // Adds a batch range of IP addresses to a subnet.
     private void handleAddMultipleIPRange(RoutingContext ctx) {
         String startIp = ctx.request().getFormAttribute("startIp");
         String endIp = ctx.request().getFormAttribute("endIp");
@@ -704,6 +843,7 @@ public class SubnetRouter {
         });
     }
 
+    // Updates IP status across a specified range of IP addresses.
     private void handleUpdateIPRange(RoutingContext ctx) {
         String startIp = ctx.request().getFormAttribute("startIp");
         String endIp = ctx.request().getFormAttribute("endIp");
@@ -734,6 +874,7 @@ public class SubnetRouter {
         });
     }
 
+    // Deletes a specified range of IP addresses from a subnet.
     private void handleDeleteIPRange(RoutingContext ctx) {
         String startIp = ctx.request().getFormAttribute("startIp");
         String endIp = ctx.request().getFormAttribute("endIp");
@@ -762,6 +903,7 @@ public class SubnetRouter {
         });
     }
 
+    // Handles multipart CSV file upload and imports IP address records.
     private void handleImportSubnetIPCSV(RoutingContext ctx) {
         String subnetIdStr = ctx.request().getFormAttribute("subnetId");
         Long subnetId = 1L;
@@ -798,6 +940,7 @@ public class SubnetRouter {
         });
     }
 
+    // Exports subnet IP records to a PDF report file.
     private void handleExportPDF(RoutingContext ctx) {
         String params = ctx.pathParam("params");
         Long subnetId = 1L;
@@ -826,6 +969,7 @@ public class SubnetRouter {
         });
     }
 
+    // Exports subnet IP records to a CSV file.
     private void handleExportCSV(RoutingContext ctx) {
         String params = ctx.pathParam("params");
         Long subnetId = 1L;
@@ -854,6 +998,7 @@ public class SubnetRouter {
         });
     }
 
+    // Serves and downloads an exported PDF report file.
     private void handleDownloadPDF(RoutingContext ctx) {
         String filename = ctx.pathParam("filename");
         if (filename == null || filename.contains("..")) {
@@ -875,6 +1020,7 @@ public class SubnetRouter {
         });
     }
 
+    // Serves and downloads an exported CSV report file.
     private void handleDownloadCSV(RoutingContext ctx) {
         String filename = ctx.pathParam("filename");
         if (filename == null || filename.contains("..")) {
@@ -896,6 +1042,7 @@ public class SubnetRouter {
         });
     }
 
+    // Generates and downloads a sample CSV template for IP import.
     private void handleDownloadSampleCSV(RoutingContext ctx) {
         String subnetIdStr = ctx.request().getParam("subnetId");
         Long subnetId = 1L;

@@ -2,6 +2,11 @@ var appManager =
 {
     init: function ()
     {
+        var uCookie = appManager.getCookie("userName");
+        if (uCookie) {
+            $("#userName").val(decodeURIComponent(uCookie).trim());
+        }
+
         topManager.init();
 
         flux.init();

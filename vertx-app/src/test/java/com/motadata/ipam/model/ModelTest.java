@@ -9,6 +9,7 @@ public class ModelTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // Tests JSON serialization and deserialization of the User and UserRole domain models.
     @Test
     public void testUserJsonSerialization() throws Exception {
         User user = new User(1L, "admin", "admin@motadata.com", true);
@@ -26,6 +27,7 @@ public class ModelTest {
         assertEquals("ROLE_ADMIN", deserialized.getUserRoleId().getRole());
     }
 
+    // Tests JSON serialization and deserialization of SubnetDetails entity.
     @Test
     public void testSubnetDetailsJsonSerialization() throws Exception {
         SubnetDetails subnet = new SubnetDetails(10L, "192.168.1.0", "255.255.255.0");
@@ -39,6 +41,7 @@ public class ModelTest {
         assertEquals("255.255.255.0", deserialized.getSubnetMask());
     }
 
+    // Tests JSON serialization of the generic Response API envelope.
     @Test
     public void testResponseWrapperSerialization() throws Exception {
         Response response = new Response(new User(1L, "admin", "admin@motadata.com", true), true, "Success");
@@ -49,6 +52,7 @@ public class ModelTest {
         assertTrue(json.contains("\"currentUserRole\":\"ROLE_ADMIN\""));
     }
 
+    // Tests JSON serialization and deserialization of the IpRequest entity.
     @Test
     public void testIpRequestJsonSerialization() throws Exception {
         IpRequest req = new IpRequest();

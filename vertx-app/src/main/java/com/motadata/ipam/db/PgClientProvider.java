@@ -19,10 +19,14 @@ public class PgClientProvider {
     // PostgreSQL connection pool used by the application
     private final Pool pool;
 
+    // Initializes the reactive PostgreSQL connection pool using application configuration.
     public PgClientProvider(Vertx vertx, AppConfig config) {
 
         // Read database connection details from application configuration
         String host = config.getDbHost();
+        if (host == null || "localhost".equalsIgnoreCase(host.trim())) {
+            host = "127.0.0.1";
+        }
         int port = config.getDbPort();
         String database = config.getDbName();
         String user = config.getDbUser();

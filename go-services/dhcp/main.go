@@ -61,6 +61,7 @@ type DHCPScanResponse struct {
 	DurationMs  int64            `json:"durationMs"`
 }
 
+// Starts the DHCP collection HTTP microservice and handles graceful shutdown.
 func main() {
 	port := "8082"
 
@@ -343,6 +344,7 @@ func generatePseudoMAC(ip string) string {
 	)
 }
 
+// mustAtoi safely parses a string into an integer.
 func mustAtoi(s string) int {
 	var val int
 	fmt.Sscanf(s, "%d", &val)

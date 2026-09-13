@@ -39,6 +39,7 @@ type ScanResponse struct {
 	DurationMs int64        `json:"durationMs"`
 }
 
+// Starts the discovery HTTP microservice and handles graceful shutdown.
 func main() {
 	port := "8081"
 

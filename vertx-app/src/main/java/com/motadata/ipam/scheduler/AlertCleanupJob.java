@@ -11,6 +11,7 @@ public class AlertCleanupJob implements VertxScheduledJob {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AlertCleanupJob.class);
 
+    // Executes the cleanup job to purge resolved alerts and historical logs.
     @Override
     public void execute(JsonObject data) {
         LOGGER.info("Executing background AlertCleanupJob...");

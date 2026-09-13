@@ -16,6 +16,7 @@ public class AlertRouter {
 
     private final AlertService alertService;
 
+    // Constructs AlertRouter with the provided AlertService instance.
     public AlertRouter(AlertService alertService) {
         this.alertService = alertService;
     }

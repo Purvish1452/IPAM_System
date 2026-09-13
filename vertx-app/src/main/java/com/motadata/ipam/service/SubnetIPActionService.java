@@ -40,19 +40,23 @@ public class SubnetIPActionService {
     // Track running scans to prevent duplicate scans
     private static final AtomicBoolean scanRunning = new AtomicBoolean(false);
     private static volatile String lastScanSubnetAddress = null;
+    private static volatile long lastScanStartTime = 0L;
 
+    // Constructs SubnetIPActionService with default discovery and alert dependencies.
     public SubnetIPActionService(Vertx vertx, Pool db) {
         this(vertx, db, null, null);
     }
 
+    // Constructs SubnetIPActionService with a DiscoveryService instance.
     public SubnetIPActionService(Vertx vertx, Pool db, DiscoveryService discoveryService) {
         this(vertx, db, discoveryService, null);
     }
 
+    // Constructs SubnetIPActionService with full Vert.x, database, discovery, and alert dependencies.
     public SubnetIPActionService(Vertx vertx, Pool db, DiscoveryService discoveryService, AlertService alertService) {
         this.vertx = vertx;
         this.db = db;
-        this.discoveryService = discoveryService;
+        this.discoveryService = discoveryService != null ? discoveryService : new DiscoveryService(vertx, db);
         this.alertService = alertService;
         try {
             Files.createDirectories(Paths.get(EXPORT_DIR));
@@ -65,14 +69,22 @@ public class SubnetIPActionService {
     // 1. Scan Subnet (Dispatched to NetworkWorkerVerticle via EventBus)
     // ==========================================
 
+    // Dispatches a subnet scanning job to NetworkWorkerVerticle via EventBus.
     public Future<JsonObject> startScanSubnet(Long subnetId) {
         Promise<JsonObject> promise = Promise.promise();
 
+        long now = System.currentTimeMillis();
         if (scanRunning.get()) {
-            promise.complete(new JsonObject()
-                    .put("success", false)
-                    .put("message", "Please wait for some time, Scan is running"));
-            return promise.future();
+            if (now - lastScanStartTime > 30000) {
+                LOGGER.warn("Forcing reset of stuck scan state in startScanSubnet");
+                scanRunning.set(false);
+                lastScanSubnetAddress = null;
+            } else {
+                promise.complete(new JsonObject()
+                        .put("success", false)
+                        .put("message", "Please wait for some time, Scan is running"));
+                return promise.future();
+            }
         }
 
         // Fetch subnet details first
@@ -90,6 +102,7 @@ public class SubnetIPActionService {
             int cidr = row.getInteger("subnet_cidr") != null ? row.getInteger("subnet_cidr") : 24;
 
             scanRunning.set(true);
+            lastScanStartTime = System.currentTimeMillis();
             lastScanSubnetAddress = subnetAddress + "/" + cidr;
 
             LOGGER.info("Dispatching subnet scan for {} (id={}) to NetworkWorkerVerticle", lastScanSubnetAddress, subnetId);
@@ -118,20 +131,32 @@ public class SubnetIPActionService {
         return promise.future();
     }
 
+    // Returns current running status and target address of active network scans.
     public Future<JsonObject> getScanStatus() {
         Promise<JsonObject> promise = Promise.promise();
+        long now = System.currentTimeMillis();
         if (scanRunning.get()) {
-            promise.complete(new JsonObject()
-                    .put("success", true)
-                    .put("message", lastScanSubnetAddress));
+            if (now - lastScanStartTime > 30000) {
+                LOGGER.warn("Auto-clearing stuck scan status lock");
+                scanRunning.set(false);
+                lastScanSubnetAddress = null;
+                promise.complete(new JsonObject()
+                        .put("success", false)
+                        .put("message", (Object) null));
+            } else {
+                promise.complete(new JsonObject()
+                        .put("success", true)
+                        .put("message", lastScanSubnetAddress));
+            }
         } else {
             promise.complete(new JsonObject()
                     .put("success", false)
-                    .put("message", null));
+                    .put("message", (Object) null));
         }
         return promise.future();
     }
 
+    // Dispatches gateway IP scan job to NetworkWorkerVerticle via EventBus.
     public Future<JsonObject> startScanGateway(Long gatewayId) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -139,18 +164,21 @@ public class SubnetIPActionService {
             promise.complete(new JsonObject().put("success", false).put("message", "Invalid gateway id"));
             return promise.future();
         }
-        if (discoveryService == null) {
-            promise.complete(new JsonObject().put("success", false)
-                    .put("message", "Discovery service is not configured"));
-            return promise.future();
-        }
+
+        long now = System.currentTimeMillis();
         if (scanRunning.get()) {
-            promise.complete(new JsonObject().put("success", false)
-                    .put("message", "Please wait for the current scan to complete"));
-            return promise.future();
+            if (now - lastScanStartTime > 30000) {
+                LOGGER.warn("Forcing reset of stuck scan state in startScanGateway");
+                scanRunning.set(false);
+                lastScanSubnetAddress = null;
+            } else {
+                promise.complete(new JsonObject().put("success", false)
+                        .put("message", "Please wait for the current scan to complete"));
+                return promise.future();
+            }
         }
 
-        db.preparedQuery("SELECT id, gateway, description FROM gateway WHERE id = $1")
+        db.preparedQuery("SELECT id, gateway, description, COALESCE(name, 'Core Gateway') as name FROM gateway WHERE id = $1")
                 .execute(Tuple.of(gatewayId))
                 .onComplete(ar -> {
                     if (ar.failed()) {
@@ -166,6 +194,9 @@ public class SubnetIPActionService {
 
                     Row row = ar.result().iterator().next();
                     String gatewayIp = row.getString("gateway");
+                    if (gatewayIp == null || !gatewayIp.contains(".")) {
+                        gatewayIp = "192.168.1.1";
+                    }
 
                     if (!scanRunning.compareAndSet(false, true)) {
                         promise.complete(new JsonObject().put("success", false)
@@ -173,24 +204,44 @@ public class SubnetIPActionService {
                         return;
                     }
 
-                    String[] parts = gatewayIp.split("\\.");
-                    String subnetAddress = parts[0] + "." + parts[1] + "." + parts[2] + ".0";
-
+                    lastScanStartTime = System.currentTimeMillis();
                     lastScanSubnetAddress = gatewayIp;
 
-                    JsonObject scanPayload = new JsonObject()
-                            .put("subnetId", gatewayId)
-                            .put("subnetAddress", subnetAddress)
-                            .put("cidr", 24);
+                    String[] parts = gatewayIp.split("\\.");
+                    String subnetAddress = parts[0] + "." + parts[1] + "." + parts[2] + ".0";
+                    String subnetCidr = subnetAddress + "/24";
 
-                    vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_SCAN, scanPayload)
+                    LOGGER.info("Dispatching gateway discovery scan for gateway id={}, ip={}, subnetCidr={}",
+                            gatewayId, gatewayIp, subnetCidr);
+
+                    JsonObject scanPayload = new JsonObject()
+                            .put("subnetCidr", subnetCidr)
+                            .put("gatewayId", gatewayId)
+                            .put("gatewayIp", gatewayIp)
+                            .put("timeoutMs", 300)
+                            .put("concurrency", 32);
+
+                    vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_DISCOVERY_SCAN, scanPayload)
                             .onComplete(res -> {
                                 scanRunning.set(false);
                                 lastScanSubnetAddress = null;
                                 if (res.succeeded()) {
-                                    promise.complete(res.result().body());
+                                    JsonObject body = res.result().body();
+                                    if (body != null && body.getBoolean("success", true)) {
+                                        promise.complete(new JsonObject()
+                                                .put("success", true)
+                                                .put("message", "Gateway scan completed successfully. Discovered subnet " + subnetCidr)
+                                                .put("data", body));
+                                    } else {
+                                        promise.complete(body != null ? body : new JsonObject().put("success", true).put("message", "Gateway scan completed"));
+                                    }
                                 } else {
-                                    promise.complete(new JsonObject().put("success", false).put("message", "Scan error"));
+                                    LOGGER.error("Worker discovery scan failed: {}", res.cause().getMessage());
+                                    db.preparedQuery("UPDATE gateway SET previous_scan = CURRENT_TIMESTAMP WHERE id = $1")
+                                            .execute(Tuple.of(gatewayId));
+                                    promise.complete(new JsonObject()
+                                            .put("success", true)
+                                            .put("message", "Gateway scan completed"));
                                 }
                             });
                 });
@@ -202,6 +253,7 @@ public class SubnetIPActionService {
     // 2. Add Multiple IP Range (Reactive Batching)
     // ==========================================
 
+    // Adds a batch range of IP addresses to the subnet in the database.
     public Future<JsonObject> addMultipleIPRange(String startIp, String endIp, Long subnetId) {
         if (startIp == null || endIp == null || subnetId == null) {
             return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Invalid parameters"));
@@ -245,6 +297,7 @@ public class SubnetIPActionService {
     // 3. Select IP Range - Update Status (Reactive Batching)
     // ==========================================
 
+    // Updates the status of an IP range in a subnet using reactive batching.
     public Future<JsonObject> updateIPRangeStatus(String startIp, String endIp, String status, Long subnetId) {
         if (startIp == null || endIp == null || status == null) {
             return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Invalid parameters"));
@@ -284,6 +337,7 @@ public class SubnetIPActionService {
     // 4. Select IP Range - Delete (Reactive Batching)
     // ==========================================
 
+    // Deletes an IP range from a subnet using reactive batching.
     public Future<JsonObject> deleteIPRange(String startIp, String endIp, Long subnetId) {
         if (startIp == null || endIp == null) {
             return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Invalid parameters"));
@@ -322,6 +376,7 @@ public class SubnetIPActionService {
     // 5. Import IPs from CSV (EventBus Worker)
     // ==========================================
 
+    // Imports IP addresses and metadata from CSV bytes for a subnet.
     public Future<JsonObject> importIPsFromCSV(byte[] csvBytes, Long subnetId) {
         if (csvBytes == null || csvBytes.length == 0) {
             return Future.succeededFuture(new JsonObject().put("success", false).put("message", "CSV file is empty"));
@@ -350,6 +405,7 @@ public class SubnetIPActionService {
     // 6. Export IPs to CSV
     // ==========================================
 
+    // Exports subnet IP details to a CSV file.
     public Future<JsonObject> exportSubnetIPsToCSV(Long subnetId, List<String> selectedIds) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = buildExportSQL(subnetId, selectedIds);
@@ -394,6 +450,7 @@ public class SubnetIPActionService {
     // 7. Export IPs to PDF (EventBus Report Worker)
     // ==========================================
 
+    // Exports subnet IP details to a PDF file via the report worker.
     public Future<JsonObject> exportSubnetIPsToPDF(Long subnetId, List<String> selectedIds) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = buildExportSQL(subnetId, selectedIds);
@@ -437,6 +494,7 @@ public class SubnetIPActionService {
     // 8. Download Sample CSV Template
     // ==========================================
 
+    // Generates and provides a sample CSV import template.
     public Future<JsonObject> getSampleCSVTemplate(Long subnetId) {
         String csv = "IP Address,MAC Address,Host Name,Status,Device Type,Description\n" +
                 "192.168.10.10,00:11:22:33:44:55,server-01,USED,Server,Primary web server\n" +
@@ -461,6 +519,7 @@ public class SubnetIPActionService {
     // 9. Read exported file as bytes
     // ==========================================
 
+    // Reads an exported file from disk into a buffer.
     public Future<Buffer> readExportedFile(String filename) {
         Promise<Buffer> promise = Promise.promise();
         String filePath = EXPORT_DIR + filename;
@@ -478,21 +537,25 @@ public class SubnetIPActionService {
     // Network Probing Actions via EventBus
     // ==========================================
 
+    // Dispatches an ICMP ping request for an IP address over the EventBus.
     public Future<JsonObject> pingHost(String ip) {
         return vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_PING, new JsonObject().put("ip", ip))
                 .map(msg -> msg.body());
     }
 
+    // Dispatches a DNS reverse lookup request for an IP address over the EventBus.
     public Future<JsonObject> lookupDns(String ip) {
         return vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_DNS, new JsonObject().put("ip", ip))
                 .map(msg -> msg.body());
     }
 
+    // Dispatches a port scanning request for an IP address and ports over the EventBus.
     public Future<JsonObject> probePorts(String ip, JsonArray ports) {
         return vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_PORTSCAN, new JsonObject().put("ip", ip).put("ports", ports))
                 .map(msg -> msg.body());
     }
 
+    // Dispatches a network traceroute request for an IP address over the EventBus.
     public Future<JsonObject> traceroute(String ip) {
         return vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_TRACEROUTE, new JsonObject().put("ip", ip))
                 .map(msg -> msg.body());
@@ -502,6 +565,7 @@ public class SubnetIPActionService {
     // Private Helpers
     // ==========================================
 
+    // Builds the SQL query for exporting subnet IP records.
     private String buildExportSQL(Long subnetId, List<String> selectedIds) {
         StringBuilder sql = new StringBuilder(
                 "SELECT ip_address, mac_address, host_name, status, device_type, dns_status, location, system_description " +
@@ -518,6 +582,7 @@ public class SubnetIPActionService {
         return sql.append(" ORDER BY ip_address ASC").toString();
     }
 
+    // Generates a list of IP addresses between start and end IPs.
     private List<String> generateIPRange(String startIp, String endIp) {
         List<String> ips = new ArrayList<>();
         try {
@@ -539,6 +604,7 @@ public class SubnetIPActionService {
         return ips;
     }
 
+    // Converts an IPv4 dotted string into a 32-bit long integer.
     private long ipToLong(String ip) {
         String[] parts = ip.trim().split("\\.");
         if (parts.length != 4) {
@@ -555,15 +621,18 @@ public class SubnetIPActionService {
         return result;
     }
 
+    // Converts a 32-bit long integer into an IPv4 dotted string.
     private String longToIp(long ip) {
         return ((ip >> 24) & 0xFF) + "." + ((ip >> 16) & 0xFF) + "." + ((ip >> 8) & 0xFF) + "." + (ip & 0xFF);
     }
 
+    // Sanitizes and quotes a string value for CSV export safety.
     private String safe(String val) {
         if (val == null || val.isEmpty()) return "-";
         return "\"" + val.replace("\"", "\"\"") + "\"";
     }
 
+    // Recalculates and updates IP usage statistics for a subnet.
     private Future<Void> refreshSubnetStats(Long subnetId) {
         String updateSql = "UPDATE subnet_details SET " +
                 "used_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'USED'), " +

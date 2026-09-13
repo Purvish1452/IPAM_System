@@ -14,6 +14,7 @@ import (
 	"testing"
 )
 
+// Tests the discovery service health check endpoint.
 func TestHealthEndpoint(t *testing.T) {
 	req, err := http.NewRequest("GET", "/health", nil)
 	if err != nil {
@@ -38,6 +39,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+// Tests the subnet scan endpoint with a local CIDR range.
 func TestScanSubnetEndpoint(t *testing.T) {
 	payload := ScanRequest{
 		SubnetCIDR:  "127.0.0.1/30",

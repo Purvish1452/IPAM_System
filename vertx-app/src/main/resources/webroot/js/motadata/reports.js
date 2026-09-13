@@ -442,20 +442,20 @@ var report=
                         }
                     },
                     Fields: [
-                        {field: "ipAddress",width:"10%",title:"IP Address",template : "<a title='#: ipAddress #' data-uid='#: subnetId.id #' data-id='#: id#' data-link='ipAddress' data-value='#: ipAddress #' data-name='#:subnetId.subnetAddress#'>#: ipAddress #</a>"},
-                        {field: "status", width:"8%", title: "Status",template:"# var s = (typeof status !== 'undefined' && status) ? status.toUpperCase() : ''; if(s === 'AVAILABLE'){ #<i class='fa fa-circle normal-v'></i><span>Available</span># } else if(s === 'USED'){ #<i class='fa fa-circle warning-v'></i><span>Used</span># } else if(s === 'TRANSIENT'){ #<i class='fa fa-circle transient-v'></i><span>Transient</span># } else if(s === 'RESERVED'){ #<i class='fa fa-circle reserved-v'></i><span>Reserved</span># } else { #<span>#: status || '' #</span># } #"},
+                        {field: "ipAddress",width:"10%",title:"IP Address",template : "<a title='#: (typeof ipAddress !== \"undefined\" && ipAddress) ? ipAddress : \"\" #' data-uid='#: (typeof subnetId !== \"undefined\" && subnetId && subnetId.id) ? subnetId.id : \"\" #' data-id='#: (typeof id !== \"undefined\" && id) ? id : \"\"#' data-link='ipAddress' data-value='#: (typeof ipAddress !== \"undefined\" && ipAddress) ? ipAddress : \"\" #' data-name='#: (typeof subnetId !== \"undefined\" && subnetId && subnetId.subnetAddress) ? subnetId.subnetAddress : \"\"#'>#: (typeof ipAddress !== \"undefined\" && ipAddress) ? ipAddress : \"\" #</a>"},
+                        {field: "status", width:"8%", title: "Status",template:"# var s = (typeof status !== 'undefined' && status) ? status.toUpperCase() : ''; if(s === 'AVAILABLE'){ #<i class='fa fa-circle normal-v'></i><span>Available</span># } else if(s === 'USED'){ #<i class='fa fa-circle warning-v'></i><span>Used</span># } else if(s === 'TRANSIENT'){ #<i class='fa fa-circle transient-v'></i><span>Transient</span># } else if(s === 'RESERVED'){ #<i class='fa fa-circle reserved-v'></i><span>Reserved</span># } else { #<span>#: (typeof status !== 'undefined' && status) ? status : '' #</span># } #"},
                         {
                             field:"subnetName",
-                            template:"<span title='#:subnetName#'>#:subnetName#</span>",
+                            template:"<span title='#: (typeof subnetName !== \"undefined\" && subnetName) ? subnetName : \"\"#'>#: (typeof subnetName !== \"undefined\" && subnetName) ? subnetName : \"\"#</span>",
                             title:"Scope",
                             filterable:false
                         },
-                        {field: "macAddress", title: "Mac Address",template:'# if (macAddress) { # <span title="#:macAddress#">#: macAddress # </span># } else { #<span></span># } #'},
-                        {field: "deviceType", title: "Vendor",template:'# if (deviceType) { # <span title="#:deviceType#">#: deviceType # </span># } else { #<span></span># } #'},
-                        {field: "ipToDns", title: "IP To DNS",template:'# if (ipToDns) { # <span title="#:ipToDns#">#: ipToDns # </span># } else { #<span></span># } #'},
-                        {field: "dnsToIp", title: "DNS To IP",template:'# if (dnsToIp) { # <span title="#:dnsToIp#">#: dnsToIp # </span># } else { #<span></span># } #'},
-                        {field: "authenticity", title: "Authenticity",template:'# if (authenticity) { # <span title="#:authenticity#">#: authenticity # </span># } else { #<span></span># } #'},
-                        {field:"lastAliveTime",title:"Last Alive Time",width:'13%',template:'# if (lastAliveTime) { # <span title="#:lastAliveTime#">#: lastAliveTime # </span># } else { #<span></span># } #'}
+                        {field: "macAddress", title: "Mac Address",template:'# if (typeof macAddress !== "undefined" && macAddress) { # <span title="#:macAddress#">#: macAddress # </span># } else { #<span></span># } #'},
+                        {field: "deviceType", title: "Vendor",template:'# if (typeof deviceType !== "undefined" && deviceType) { # <span title="#:deviceType#">#: deviceType # </span># } else { #<span></span># } #'},
+                        {field: "ipToDns", title: "IP To DNS",template:'# if (typeof ipToDns !== "undefined" && ipToDns) { # <span title="#:ipToDns#">#: ipToDns # </span># } else { #<span></span># } #'},
+                        {field: "dnsToIp", title: "DNS To IP",template:'# if (typeof dnsToIp !== "undefined" && dnsToIp) { # <span title="#:dnsToIp#">#: dnsToIp # </span># } else { #<span></span># } #'},
+                        {field: "authenticity", title: "Authenticity",template:'# if (typeof authenticity !== "undefined" && authenticity) { # <span title="#:authenticity#">#: authenticity # </span># } else { #<span></span># } #'},
+                        {field:"lastAliveTime",title:"Last Alive Time",width:'13%',template:'# if (typeof lastAliveTime !== "undefined" && lastAliveTime) { # <span title="#:lastAliveTime#">#: lastAliveTime # </span># } else { #<span></span># } #'}
                     ],
                     sortable: true
                 };
@@ -551,9 +551,9 @@ var report=
                         }
                     },
                     Fields: [
-                        {field: "VendorName",width:"60%",title:"Vendor Name",template : "<span title='#: VendorName #' data-link='VendorName' data-value='#: VendorName #'>#: VendorName #</span>"},
-                        {field: "VendorCount", title: "Vendor Count",template:"<span title='#:VendorCount#'>#: VendorCount # </span>"},
-                        {field: "VendorPercentage", title: "Percentage",template:'# if (VendorPercentage) { # <span title="#:VendorPercentage#">#: VendorPercentage # </span># } else { #<span></span># } #'},
+                        {field: "VendorName",width:"60%",title:"Vendor Name",template : "<span title='#: (typeof VendorName !== \"undefined\" && VendorName) ? VendorName : \"\" #' data-link='VendorName' data-value='#: (typeof VendorName !== \"undefined\" && VendorName) ? VendorName : \"\" #'>#: (typeof VendorName !== \"undefined\" && VendorName) ? VendorName : \"\" #</span>"},
+                        {field: "VendorCount", title: "Vendor Count",template:"<span title='#: (typeof VendorCount !== \"undefined\" && VendorCount) ? VendorCount : 0 #'>#: (typeof VendorCount !== \"undefined\" && VendorCount) ? VendorCount : 0 # </span>"},
+                        {field: "VendorPercentage", title: "Percentage",template:'# if (typeof VendorPercentage !== "undefined" && VendorPercentage) { # <span title="#:VendorPercentage#">#: VendorPercentage # </span># } else { #<span>0%</span># } #'},
                     ],
                     sortable: true
                 };
@@ -579,6 +579,28 @@ var report=
             if(context.json.data != null && context.json.success == true)
             {
                 var result = context.json.data;
+                if (Array.isArray(result)) {
+                    result = result.map(function(item) {
+                        return {
+                            id: item.id || '',
+                            ipAddress: item.ipAddress || '',
+                            subnetId: item.subnetId || { id: '', subnetAddress: '' },
+                            status: item.status || '',
+                            macAddress: item.macAddress || '',
+                            deviceType: item.deviceType || '',
+                            subnetName: item.subnetName || '',
+                            authenticity: item.authenticity || '',
+                            ipToDns: item.ipToDns || '',
+                            dnsToIp: item.dnsToIp || '',
+                            lastAliveTime: item.lastAliveTime || '',
+                            lastScanTime: item.lastScanTime || '',
+                            dnsStatus: item.dnsStatus || '',
+                            VendorName: item.VendorName || '',
+                            VendorCount: item.VendorCount || 0,
+                            VendorPercentage: item.VendorPercentage || 0
+                        };
+                    });
+                }
 
                 context.container.success(result);
 
@@ -586,7 +608,7 @@ var report=
             }
             else
             {
-                context.container.success("");
+                context.container.success([]);
 
                 $(".k-grid-content").html(appConstant.NoDataSpan);
 

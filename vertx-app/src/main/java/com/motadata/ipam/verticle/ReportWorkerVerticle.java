@@ -46,6 +46,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
 
     private final Pool db;
 
+    // Constructs ReportWorkerVerticle and ensures export directories exist.
     public ReportWorkerVerticle(Pool db) {
         this.db = db;
         try {
@@ -55,6 +56,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
         }
     }
 
+    // Registers EventBus consumers for subnet PDF, vendor summary PDF, and DynamicJasper PDF rendering.
     @Override
     public void start(Promise<Void> startPromise) {
         LOGGER.info("Starting ReportWorkerVerticle on Worker Thread Pool: {}", Thread.currentThread().getName());
@@ -161,6 +163,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
         startPromise.complete();
     }
 
+    // Generates raw PDF bytes containing formatted subnet IP address tabular records.
     private byte[] generateSimplePdf(List<JsonObject> ipList, String subnetLabel) throws Exception {
         StringBuilder content = new StringBuilder();
         content.append("BT\n");
@@ -224,6 +227,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
         return pdf.toString().getBytes(StandardCharsets.ISO_8859_1);
     }
 
+    // Generates raw PDF bytes containing device vendor distribution summaries.
     private byte[] generateVendorSummaryPdf(JsonArray data, String subnetLabel) throws Exception {
         StringBuilder content = new StringBuilder();
         content.append("BT\n");
@@ -284,12 +288,14 @@ public class ReportWorkerVerticle extends AbstractVerticle {
         return pdf.toString().getBytes(StandardCharsets.ISO_8859_1);
     }
 
+    // Pads or truncates a string to a fixed length for text alignment.
     private static String pad(String s, int len) {
         if (s == null) s = "-";
         if (s.length() >= len) return s.substring(0, len);
         return String.format("%-" + len + "s", s);
     }
 
+    // Escapes special characters for PDF text streams.
     private static String sanitize(String s) {
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)");
     }

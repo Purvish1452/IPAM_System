@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(VertxExtension.class)
 public class SecurityTest {
 
+    // Tests BCrypt password encoding and hash verification.
     @Test
     public void testPasswordEncoder() {
         String raw = "admin";
@@ -29,6 +30,7 @@ public class SecurityTest {
         assertFalse(PasswordEncoder.matches("wrong_password", encoded));
     }
 
+    // Tests generating and validating JWT tokens with embedded user permissions.
     @Test
     public void testJwtAuthProvider(Vertx vertx, VertxTestContext testContext) {
         JwtAuthProvider jwtAuthProvider = new JwtAuthProvider(vertx);

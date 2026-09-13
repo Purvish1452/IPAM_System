@@ -22,7 +22,7 @@
     <script src="/js/SmartNotification.min.js"></script>
     <script src="/js/loader.js"></script>
 
-    <script src="/js/motadata/app.js?v=4.0.2"></script>
+    <script src="/js/motadata/app.js?v=4.0.5"></script>
     <script src="/js/motadata/navigation.js?v=4.0.2"></script>
     <script src="/js/motadata/popup-menu.js?v=4.0.2"></script>
     <script src="/js/motadata/flux.js?v=4.0.2"></script>
@@ -54,7 +54,7 @@
     <script src="/js/motadata/alerts.js?v=4.0.3"></script>
     <script src="/js/motadata/rogue-detection.js?v=4.0.2"></script>
     <script src="/js/motadata/discovery.js?v=4.0.2"></script>
-    <script src="/js/motadata/ip-requests.js?v=4.0.2"></script>
+    <script src="/js/motadata/ip-requests.js?v=4.0.5"></script>
     <script src="/js/motadata/custom-column.js?v=4.0.2"></script>
 </head>
 
@@ -103,7 +103,7 @@
     </header>
     <section id="header_panel" class="title-panel stickyScrollHeader"></section>
 
-    <input type="hidden" id="userName" value="admin">
+    <input type="hidden" id="userName" value="">
     <input type="hidden" id="url" value="">
 
     <!--container-panel-->
@@ -170,18 +170,33 @@
 <script>
     function getAuthoritiesFromCookie() {
         let authoritiesCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('authorities='));
-        if (!authoritiesCookie) return ['PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
-        const roleRegex = /PERM_[A-Z_]+(?:\s[A-Z_]+)?/g;
-        const roles = authoritiesCookie.match(roleRegex);
-        return roles ? roles : ['PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
+        if (!authoritiesCookie) return ['ROLE_USER', 'PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
+        try {
+            let decoded = decodeURIComponent(authoritiesCookie.split('=')[1] || '');
+            if (decoded.startsWith('[') && decoded.endsWith(']')) {
+                let parsed = JSON.parse(decoded);
+                if (Array.isArray(parsed)) return parsed;
+            }
+            const roleRegex = /(?:ROLE_|PERM_)[A-Z_]+(?:\s[A-Z_]+)?/g;
+            const roles = decoded.match(roleRegex);
+            return roles ? roles : ['ROLE_USER', 'PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
+        } catch (e) {
+            return ['ROLE_USER', 'PERM_ALERTS_READ', 'PERM_SETTINGS_READ', 'PERM_REPORTS_READ', 'PERM_EVENT_NOTIFICATIONS_READ', 'PERM_ROGUE_DETECTION_READ', 'PERM_IP_REQUESTS_READ', 'PERM_DASHBOARD_READ'];
+        }
     }
 
     function hasRole(role) {
+        const u = ($("#userName").val() || appManager.getCookie("userName") || "").toLowerCase();
+        if (u === 'admin') return true;
         const authorities = getAuthoritiesFromCookie();
-        return authorities.includes(role);
+        return Array.isArray(authorities) && (authorities.includes(role) || authorities.includes(role.replace(/^ROLE_/, '')));
     }
 
     $(document).ready(function() {
+        var userCookie = appManager.getCookie("userName");
+        if (userCookie) {
+            $("#userName").val(decodeURIComponent(userCookie).trim());
+        }
         var root = $('body');
         appManager.init();
 

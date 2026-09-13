@@ -43,6 +43,7 @@ public class MainVerticle extends AbstractVerticle {
         });
     }
 
+    // Initializes configurations, database pool, scheduler, and deploys all application verticles.
     @Override
     public void start(Promise<Void> startPromise) {
         LOGGER.info("Starting Vert.x IPAM Main Deployer (Reactive EventBus Engine)...");
@@ -93,7 +94,8 @@ public class MainVerticle extends AbstractVerticle {
 
                 // 3. Deploy HTTP Server Verticle on the Event Loop
                 DeploymentOptions httpOptions = new DeploymentOptions()
-                        .setConfig(config());
+                        .setConfig(config())
+                        .setInstances(Runtime.getRuntime().availableProcessors()*2); //It use (2* core(16)=32) thread use all core.
 
                 Future<String> deployHttpServer = vertx.deployVerticle(() -> new HttpServerVerticle(db, config, jwtAuthProvider), httpOptions);
 
@@ -117,6 +119,7 @@ public class MainVerticle extends AbstractVerticle {
         });
     }
 
+    // Stops background scheduler jobs and closes the database connection pool on shutdown.
     @Override
     public void stop(Promise<Void> stopPromise) {
         if (jobScheduler != null) {

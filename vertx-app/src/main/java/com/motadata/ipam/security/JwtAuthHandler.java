@@ -16,6 +16,7 @@ public class JwtAuthHandler implements Handler<RoutingContext> {
 
     private final JwtAuthProvider jwtAuthProvider;
 
+    // Constructs JwtAuthHandler with the given JwtAuthProvider instance.
     public JwtAuthHandler(JwtAuthProvider jwtAuthProvider) {
         this.jwtAuthProvider = jwtAuthProvider;
     }

@@ -185,14 +185,25 @@ var ipRequests = {
             gridId.empty();
         } catch (err) {}
 
+        var currentUserName = (ipRequests.getUserName() || "").toLowerCase();
+        var isAdmin = ipRequests.hasRole('ROLE_ADMIN');
+
         appManager.executeGETRequest({
             url: "/ipRequests/",
-            params: {},
+            params: { userName: ipRequests.getUserName() },
             callback: function (response) {
                 var data = response.json.data || [];
                 if (!Array.isArray(data)) {
                     console.error("Invalid response format", data);
                     data = [];
+                }
+
+                if (!isAdmin && currentUserName && currentUserName !== 'admin') {
+                    data = data.filter(function (item) {
+                        var reqBy = (item.createdBy || item.requestedBy || "").toLowerCase().trim();
+                        var requestedBy = (item.requestedBy || item.createdBy || "").toLowerCase().trim();
+                        return reqBy === currentUserName || requestedBy === currentUserName;
+                    });
                 }
 
                 var processedData = data.map(function (item) {
@@ -1134,51 +1145,56 @@ var ipRequests = {
 
     getAuthoritiesFromCookie: function () {
         let authorities = [];
-        let authoritiesCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('authorities='));
-        if (authoritiesCookie) {
+        let raw = (typeof appManager !== 'undefined' && appManager.getCookie) ? appManager.getCookie('authorities') : null;
+        if (!raw) {
+            let c = document.cookie.split(';').find(cookie => cookie.trim().startsWith('authorities='));
+            if (c) raw = (c.split('=')[1] || '').trim();
+        }
+        if (raw) {
             try {
-                let decoded = decodeURIComponent(authoritiesCookie.split('=')[1] || '');
+                let decoded = decodeURIComponent(raw);
                 if (decoded.startsWith('[') && decoded.endsWith(']')) {
                     let parsed = JSON.parse(decoded);
                     if (Array.isArray(parsed)) authorities.push(...parsed);
                 } else {
-                    const matches = authoritiesCookie.match(/(?:ROLE_|PERM_)[A-Za-z0-9_]+/g);
+                    const matches = decoded.match(/(?:ROLE_|PERM_)[A-Za-z0-9_]+/g);
                     if (matches) authorities.push(...matches);
                 }
             } catch (e) {
-                const matches = authoritiesCookie.match(/(?:ROLE_|PERM_)[A-Za-z0-9_]+/g);
-                if (matches) authorities.push(...matches);
+                try {
+                    const matches = decodeURIComponent(raw).match(/(?:ROLE_|PERM_)[A-Za-z0-9_]+/g);
+                    if (matches) authorities.push(...matches);
+                } catch (e2) {}
             }
         }
-        if (typeof getAuthoritiesFromCookie === 'function') {
-            try {
-                let gAuth = getAuthoritiesFromCookie();
-                if (Array.isArray(gAuth)) authorities.push(...gAuth);
-            } catch (e) {}
-        }
-        if (ipRequests.getUserName() === 'admin') {
+        if (ipRequests.getUserName().toLowerCase() === 'admin') {
             authorities.push('ROLE_ADMIN', 'PERM_IP_REQUESTS_WRITE', 'PERM_IP_REQUESTS_READ');
         }
         return [...new Set(authorities)];
     },
 
     hasRole: function (role) {
-        if (ipRequests.getUserName() === 'admin') return true;
+        let u = ipRequests.getUserName().toLowerCase();
+        if (u === 'admin') return true;
         const authorities = ipRequests.getAuthoritiesFromCookie();
-        return Array.isArray(authorities) && authorities.includes(role);
+        return Array.isArray(authorities) && (authorities.includes(role) || authorities.includes(role.replace(/^ROLE_/, '')));
     },
 
     getUserName: function (name) {
         name = name || 'userName';
-        let cookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith(name + '='));
+        if (typeof appManager !== 'undefined' && appManager.getCookie) {
+            let val = appManager.getCookie(name);
+            if (val && val.trim()) return decodeURIComponent(val).trim();
+        }
+        let cookie = document.cookie.split(';').find(c => c.trim().startsWith(name + '='));
         if (cookie) {
             let val = decodeURIComponent(cookie.split('=')[1] || '').trim();
-            if (val) return val;
+            if (val && val.trim()) return val.trim();
         }
-        if ($("#userName").length && $("#userName").val()) {
+        if ($("#userName").length && $("#userName").val() && $("#userName").val().trim()) {
             return $("#userName").val().trim();
         }
-        return 'admin';
+        return '';
     },
 
     renderIpRequestsFromURL: function () {

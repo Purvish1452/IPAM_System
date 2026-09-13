@@ -14,6 +14,7 @@ public class DatabaseInit {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseInit.class);
 
+    // Verifies schema existence, applies migrations, or executes SQL initialization script.
     public static Future<Void> initSchema(Vertx vertx, Pool pool) {
         Promise<Void> promise = Promise.promise();
 

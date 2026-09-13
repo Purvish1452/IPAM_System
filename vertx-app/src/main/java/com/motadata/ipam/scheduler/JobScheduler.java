@@ -22,6 +22,7 @@ public class JobScheduler {
     private final Map<String, ScheduledDefinition> scheduledDefinitions = new HashMap<>();
     private boolean started;
 
+    // Constructs JobScheduler with the specified Vert.x instance.
     public JobScheduler(Vertx vertx) {
         this.vertx = vertx;
     }

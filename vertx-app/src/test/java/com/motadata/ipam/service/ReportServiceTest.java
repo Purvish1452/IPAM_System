@@ -20,6 +20,7 @@ public class ReportServiceTest {
     private PgClientProvider pgClientProvider;
     private ReportService reportService;
 
+    // Sets up Database schema and ReportService before each test.
     @BeforeEach
     public void setUp(Vertx vertx, VertxTestContext testContext) {
         AppConfig.load(vertx).onComplete(configAr -> {
@@ -38,6 +39,7 @@ public class ReportServiceTest {
         });
     }
 
+    // Cleans up the database pool connection after each test.
     @AfterEach
     public void tearDown() {
         if (pgClientProvider != null) {
@@ -45,6 +47,7 @@ public class ReportServiceTest {
         }
     }
 
+    // Tests generating Subnet PDF report bytes with valid PDF magic headers.
     @Test
     public void testGenerateSubnetPdfReport(VertxTestContext testContext) {
         reportService.generateSubnetPdfReport().onComplete(ar -> {
@@ -65,6 +68,7 @@ public class ReportServiceTest {
         });
     }
 
+    // Tests generating Alert PDF report bytes with valid PDF magic headers.
     @Test
     public void testGenerateAlertPdfReport(VertxTestContext testContext) {
         reportService.generateAlertPdfReport().onComplete(ar -> {
@@ -85,6 +89,7 @@ public class ReportServiceTest {
         });
     }
 
+    // Tests generating Event PDF report bytes with valid PDF magic headers.
     @Test
     public void testGenerateEventPdfReport(VertxTestContext testContext) {
         reportService.generateEventPdfReport().onComplete(ar -> {
@@ -105,6 +110,7 @@ public class ReportServiceTest {
         });
     }
 
+    // Tests generating DHCP PDF report bytes with valid PDF magic headers.
     @Test
     public void testGenerateDhcpPdfReport(VertxTestContext testContext) {
         reportService.generateDhcpPdfReport().onComplete(ar -> {

@@ -35,11 +35,13 @@ public class ReportService {
     private final Vertx vertx;
     private final Pool db;
 
+    // Constructs ReportService with Vert.x instance and database pool.
     public ReportService(Vertx vertx, Pool db) {
         this.vertx = vertx;
         this.db = db;
     }
 
+    // Retrieves all scheduled report configurations from the database.
     public Future<JsonArray> getReportSchedulers() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients FROM report ORDER BY id ASC";
@@ -63,6 +65,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Retrieves a specific scheduled report configuration by ID.
     public Future<JsonObject> getReportSchedulerById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         db.preparedQuery("SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients " +
@@ -85,6 +88,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Saves or updates a scheduled report definition in the database.
     public Future<JsonObject> saveReportScheduler(JsonObject json) {
         Promise<JsonObject> promise = Promise.promise();
         String name = json.getString("scheduleName", "Report Schedule");
@@ -106,6 +110,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Deletes a scheduled report entry by its ID.
     public Future<JsonObject> deleteReportScheduler(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM report WHERE id = $1";
@@ -119,6 +124,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Retrieves report tree options and subnets with filtering child categories.
     public Future<JsonArray> getSubnetByReport() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, subnet_name, subnet_address FROM subnet_details ORDER BY id ASC";
@@ -152,10 +158,12 @@ public class ReportService {
         return promise.future();
     }
 
+    // Retrieves report timeline data for a single subnet ID and status.
     public Future<JsonArray> getSubnetIpByReportTimeline(Long subnetId, String status) {
         return getSubnetIpByReportTimeline(subnetId != null ? List.of(subnetId) : List.of(), status);
     }
 
+    // Retrieves report timeline data for multiple subnet IDs with status filtering.
     public Future<JsonArray> getSubnetIpByReportTimeline(List<Long> subnetIds, String status) {
         Promise<JsonArray> promise = Promise.promise();
         String normalizedStatus = normalizeStatus(status);
@@ -224,8 +232,11 @@ public class ReportService {
                             ? row.getString("subnet_address") : sName;
                     String deviceType = row.getString("device_type") != null
                             ? row.getString("device_type") : "Unknown";
-                    String auth = row.getString("authenticity") != null
-                            ? row.getString("authenticity") : ("ROGUE".equals(ipStatus) ? "UNAUTHORIZED" : "TRUSTED");
+                    String dnsStat = row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK";
+                    String ipToDnsVal = dnsStat.contains("Forward") ? "Forward OK" : (dnsStat.contains("Reverse") ? "Forward Failed" : "-");
+                    String dnsToIpVal = dnsStat.contains("Reverse") ? "Reverse OK" : (dnsStat.contains("Forward") ? "Reverse Failed" : "-");
+                    String authenticity = row.getString("authenticity") != null ? row.getString("authenticity") : "TRUSTED";
+                    String timeFormatted = DATE_FORMAT.format(dt);
 
                     list.add(new JsonObject()
                             .put("id", row.getLong("id"))
@@ -238,9 +249,13 @@ public class ReportService {
                             .put("status", ipStatus)
                             .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "host-" + row.getLong("id"))
                             .put("deviceType", deviceType)
-                            .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "Resolved")
-                            .put("authenticity", auth)
-                            .put("lastSeen", DATE_FORMAT.format(dt)));
+                            .put("dnsStatus", dnsStat)
+                            .put("ipToDns", ipToDnsVal)
+                            .put("dnsToIp", dnsToIpVal)
+                            .put("authenticity", authenticity)
+                            .put("lastAliveTime", timeFormatted)
+                            .put("lastScanTime", timeFormatted)
+                            .put("lastSeen", timeFormatted));
                 }
                 promise.complete(list);
             } else {
@@ -252,6 +267,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Generates a grouped vendor device summary report for the given subnets.
     public Future<JsonArray> getVendorSummaryReport(List<Long> subnetIds) {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -302,10 +318,12 @@ public class ReportService {
         return promise.future();
     }
 
+    // Generates a subnet IP PDF report for a single subnet.
     public Future<String> generateSubnetIpPdfReport(Long subnetId, String status) {
         return generateSubnetIpPdfReport(subnetId != null ? List.of(subnetId) : List.of(), status);
     }
 
+    // Generates a subnet IP PDF report file via ReportWorkerVerticle and returns the filename.
     public Future<String> generateSubnetIpPdfReport(List<Long> subnetIds, String status) {
         Promise<String> promise = Promise.promise();
         String normalizedStatus = normalizeStatus(status);
@@ -352,6 +370,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Generates a PDF report summarizing all subnets using dynamic Jasper reports.
     public Future<byte[]> generateSubnetPdfReport() {
         Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, subnet_name, subnet_address, subnet_mask, description, created_by FROM subnet_details ORDER BY id ASC";
@@ -373,10 +392,12 @@ public class ReportService {
         return promise.future();
     }
 
+    // Generates a CSV report for a single subnet.
     public Future<byte[]> generateSubnetCsvReport(Long subnetId, String status) {
         return generateSubnetCsvReport(subnetId != null ? List.of(subnetId) : List.of(), status);
     }
 
+    // Generates a CSV report for multiple subnets with status filtering.
     public Future<byte[]> generateSubnetCsvReport(List<Long> subnetIds, String status) {
         String normalizedStatus = normalizeStatus(status);
         if ("VENDOR SUMMARY".equals(normalizedStatus)) {
@@ -411,6 +432,7 @@ public class ReportService {
         });
     }
 
+    // Generates an alert history PDF report using dynamic Jasper layout.
     public Future<byte[]> generateAlertPdfReport() {
         Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, message, alert_type, subnet_address, created_date FROM alert_stream ORDER BY id DESC LIMIT 100";
@@ -431,6 +453,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Generates an audit event log PDF report using dynamic Jasper layout.
     public Future<byte[]> generateEventPdfReport() {
         Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, event_type, event_context, created_date FROM event ORDER BY id DESC LIMIT 100";
@@ -450,6 +473,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Generates a DHCP server statistics PDF report using dynamic Jasper layout.
     public Future<byte[]> generateDhcpPdfReport() {
         Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, credential_name, host_address, type, created_by FROM dhcp_server ORDER BY id ASC";
@@ -471,6 +495,7 @@ public class ReportService {
         return promise.future();
     }
 
+    // Serializes arbitrary tabular dataset and columns definition to CSV bytes.
     public Future<byte[]> exportReportToCsv(String title, JsonArray data, JsonArray columns) {
         StringBuilder csv = new StringBuilder();
         for (int i = 0; i < columns.size(); i++) {
@@ -491,6 +516,7 @@ public class ReportService {
         return Future.succeededFuture(csv.toString().getBytes(StandardCharsets.UTF_8));
     }
 
+    // Dispatches dynamic Jasper PDF compilation request to ReportWorkerVerticle.
     private Future<byte[]> dispatchDynamicJasper(String title, JsonArray data, JsonArray columns) {
         JsonObject payload = new JsonObject()
                 .put("title", title)
@@ -501,11 +527,13 @@ public class ReportService {
                 .map(msg -> msg.body().getBytes());
     }
 
+    // Escapes special characters for safe inclusion in CSV fields.
     private static String csvValue(String value) {
         if (value == null || "null".equals(value)) return "";
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
+    // Normalizes status query parameter into a standard IPAM status string.
     private String normalizeStatus(String status) {
         if (status == null || status.trim().isEmpty()) {
             return "ALL";
@@ -528,6 +556,7 @@ public class ReportService {
         };
     }
 
+    // Defines column metadata for subnet reports.
     private JsonArray createSubnetReportColumns() {
         return new JsonArray()
                 .add(new JsonObject().put("property", "subnetAddress").put("title", "Subnet Address").put("width", 120))
@@ -536,6 +565,7 @@ public class ReportService {
                 .add(new JsonObject().put("property", "createdBy").put("title", "Created By").put("width", 90));
     }
 
+    // Defines column metadata for alert history reports.
     private JsonArray createAlertReportColumns() {
         return new JsonArray()
                 .add(new JsonObject().put("property", "message").put("title", "Alert Message").put("width", 180))
@@ -543,12 +573,14 @@ public class ReportService {
                 .add(new JsonObject().put("property", "subnet").put("title", "Subnet").put("width", 100));
     }
 
+    // Defines column metadata for event audit reports.
     private JsonArray createEventReportColumns() {
         return new JsonArray()
                 .add(new JsonObject().put("property", "eventType").put("title", "Event Type").put("width", 100))
                 .add(new JsonObject().put("property", "eventContext").put("title", "Details / Context").put("width", 200));
     }
 
+    // Defines column metadata for DHCP server reports.
     private JsonArray createDhcpReportColumns() {
         return new JsonArray()
                 .add(new JsonObject().put("property", "credentialName").put("title", "Credential Name").put("width", 100))

@@ -11,6 +11,7 @@ public class ReportSchedulerJob implements VertxScheduledJob {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReportSchedulerJob.class);
 
+    // Executes automated generation and dispatch of scheduled IPAM reports.
     @Override
     public void execute(JsonObject dataMap) {
         Long reportId = dataMap.getLong("reportId");

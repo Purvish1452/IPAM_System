@@ -11,7 +11,7 @@ min-memory : 1024
 max-memory : 2048
 
 #postgresql host
-db-host: localhost
+db-host: 127.0.0.1
 
 #postgresql port
 db-port: 5432

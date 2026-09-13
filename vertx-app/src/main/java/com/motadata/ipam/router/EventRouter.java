@@ -16,10 +16,12 @@ public class EventRouter {
     private final EventService eventService;
     private final ReportService reportService;
 
+    // Constructs EventRouter with an EventService instance.
     public EventRouter(EventService eventService) {
         this(eventService, null);
     }
 
+    // Constructs EventRouter with EventService and ReportService instances.
     public EventRouter(EventService eventService, ReportService reportService) {
         this.eventService = eventService;
         this.reportService = reportService;
@@ -109,6 +111,7 @@ public class EventRouter {
         eventService.getTopEvents().onComplete(ar -> sendResult(ctx, ar));
     }
 
+    // Helper method to serialize an AsyncResult containing a JsonArray response.
     private void sendResult(RoutingContext ctx, io.vertx.core.AsyncResult<JsonArray> ar) {
         if (ar.succeeded()) {
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8")

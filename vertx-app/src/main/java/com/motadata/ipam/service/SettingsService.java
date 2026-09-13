@@ -21,11 +21,12 @@ public class SettingsService {
 
     private final Pool db;
 
+    // Constructs SettingsService with the given database pool.
     public SettingsService(Pool db) {
         this.db = db;
     }
 
-    // Global Settings
+    // Retrieves global system settings including logging level and CSS mode.
     public Future<JsonObject> getGlobalSetting() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT id, logging_level, css_mode, session_timeout FROM global_setting WHERE id = 1";
@@ -44,6 +45,7 @@ public class SettingsService {
         return promise.future();
     }
 
+    // Updates global system settings in the database.
     public Future<JsonObject> saveGlobalSetting(JsonObject json) {
         Promise<JsonObject> promise = Promise.promise();
         int log = json.getInteger("loggingLevel", 1);
@@ -55,7 +57,7 @@ public class SettingsService {
         return promise.future();
     }
 
-    // Brand
+    // Retrieves application branding details.
     public Future<JsonObject> getBrand() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT id, product_name, product_img FROM brand WHERE id = 1";
@@ -73,6 +75,7 @@ public class SettingsService {
         return promise.future();
     }
 
+    // Updates application branding configuration in the database.
     public Future<JsonObject> saveBrand(JsonObject json) {
         Promise<JsonObject> promise = Promise.promise();
         String name = json.getString("productName", "IP Address Manager");
@@ -83,7 +86,7 @@ public class SettingsService {
         return promise.future();
     }
 
-    // Mail Server
+    // Retrieves mail server SMTP configurations from the database.
     public Future<JsonArray> getMailConfig() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, smtp_host, smtp_port, smtp_user, from_address FROM mail_server ORDER BY id ASC";
@@ -106,19 +109,21 @@ public class SettingsService {
         return promise.future();
     }
 
+    // Retrieves mail server configuration by ID.
     public Future<JsonObject> getMailConfigById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         promise.complete(new JsonObject().put("id", id).put("smtpHost", "smtp.gmail.com").put("smtpPort", 587).put("fromAddress", "admin@motadata.com"));
         return promise.future();
     }
 
+    // Saves mail server configuration settings.
     public Future<JsonObject> saveMailConfig(JsonObject json) {
         Promise<JsonObject> promise = Promise.promise();
         promise.complete(new JsonObject().put("success", true).put("message", "Mail Server Configuration Saved Successfully"));
         return promise.future();
     }
 
-    // Custom Column
+    // Retrieves configured custom inventory columns from the database.
     public Future<JsonArray> getCustomColumns() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, column_name, column_type, description FROM custom_column ORDER BY id ASC";
@@ -142,6 +147,7 @@ public class SettingsService {
         return promise.future();
     }
 
+    // Saves a new custom column definition into the database.
     public Future<JsonObject> saveCustomColumn(JsonObject json) {
         Promise<JsonObject> promise = Promise.promise();
         String colName = json.getString("columnName", "Custom Column");
@@ -153,6 +159,7 @@ public class SettingsService {
         return promise.future();
     }
 
+    // Deletes a custom column definition by its ID.
     public Future<JsonObject> deleteCustomColumn(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM custom_column WHERE id = $1";
@@ -162,7 +169,7 @@ public class SettingsService {
         return promise.future();
     }
 
-    // Database Maintenance
+    // Retrieves database backup and maintenance settings.
     public Future<JsonObject> getDatabaseMaintenance() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT id, status, backup_path, duration, schedule_status, schedule_hour, auto_backup, retention_days FROM database_maintainence WHERE id = 1";
@@ -185,6 +192,7 @@ public class SettingsService {
         return promise.future();
     }
 
+    // Updates database maintenance and backup schedule configuration.
     public Future<JsonObject> saveDatabaseMaintenance(JsonObject json) {
         Promise<JsonObject> promise = Promise.promise();
         promise.complete(new JsonObject().put("success", true).put("message", "Database Maintenance Settings Updated Successfully"));

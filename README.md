@@ -183,6 +183,8 @@ Communication between the Event Loop Verticle (`HttpServerVerticle`) and the Wor
 | `ipam.worker.network.dns` | `{"ip": "192.168.1.10"}` | `{"success": true, "ip": "...", "hostname": "gw.local", "resolved": true}` | `NetworkWorkerVerticle` |
 | `ipam.worker.network.portscan`| `{"ip": "192.168.1.10", "ports": [80, 443, 22]}` | `{"success": true, "ip": "...", "openPorts": [80, 443]}` | `NetworkWorkerVerticle` |
 | `ipam.worker.network.importCsv`| `{"csvText": "...", "subnetId": 1}` | `{"success": true, "imported": 250, "message": "..."}` | `NetworkWorkerVerticle` |
+| `ipam.worker.network.discoveryScan`| `{"subnetCidr": "192.168.1.0/24", "timeoutMs": 1000}` | `{"subnetCidr": "...", "totalHosts": 254, "activeCount": 12, ...}` | `NetworkWorkerVerticle` |
+| `ipam.worker.network.dhcpScan`| `{"credentialId": 1, "hostAddress": "192.168.1.1", "type": "windows"}` | `{"status": "SUCCESS", "scopes": [...], "durationMs": ...}` | `NetworkWorkerVerticle` |
 | `ipam.worker.report.subnet.pdf`| `{"data": [...], "subLabel": "192.168.1.0"}` | `{"success": true, "filename": "SubnetIP_Export_1.pdf", "size": 18240}` | `ReportWorkerVerticle` |
 | `ipam.worker.report.vendor.pdf`| `{"data": [...], "subLabel": "All"}` | `{"success": true, "filename": "Vendor_Summary_1.pdf", "size": 12400}` | `ReportWorkerVerticle` |
 | `ipam.worker.report.dynamic.pdf`| `{"title": "...", "data": [...], "columns": [...]}` | `Buffer` (Raw PDF binary stream) | `ReportWorkerVerticle` |
@@ -336,32 +338,17 @@ cd vertx-app
 mvn exec:java
 ```
 
-The web application will be accessible at:
+The web application is accessible at:
 ```text
 http://localhost:8080
 ```
 
+**Single Port Unified Architecture**:
+All services (REST APIs, Web UI, Network Discovery Scans, ICMP sweeps, TCP Probing, DHCP collection, and PDF/CSV Reporting) execute natively within the Vert.x process on **Port 8080** via dedicated worker verticle thread pools (`ipam-network-worker-pool` and `ipam-report-worker-pool`). Separate microservice ports are eliminated.
+
 **Default Credentials**:
 - **Username**: `admin`
 - **Password**: `admin`
-
----
-
-### 2. Run the Go Discovery Microservice (Optional)
-
-```bash
-cd go-services
-go run ./discovery
-```
-*Listens on `http://localhost:8081`.*
-
-### 3. Run the Go DHCP Collector Microservice (Optional)
-
-```bash
-cd go-services
-go run ./dhcp
-```
-*Listens on `http://localhost:8082`.*
 
 ---
 
@@ -408,33 +395,19 @@ go run ./dhcp
 | `POST` | `/reports/schedulers` | Creates/updates report schedule cron definition |
 | `GET` | `/exportsubnetIpByReportTimeline/` | Generates on-demand timeline report (PDF / CSV) |
 
----
+## Unified In-Built Architecture (Single Port 8080)
 
-## Go Microservices
+All networking, discovery, DHCP processing, and reporting functionalities run directly inside Vert.x Worker Verticles on single port `8080`:
 
-### Discovery Microservice (`:8081`)
-- **`GET /health`**: Healthcheck endpoint.
-- **`POST /api/v1/scan/subnet`**: Scans a CIDR block with configurable concurrency and timeout.
-  ```json
-  {
-    "subnetCidr": "192.168.1.0/24",
-    "timeoutMs": 1000,
-    "concurrency": 250
-  }
-  ```
+### In-Built Network Worker (`ipam-network-worker-pool`)
+- **ICMP Ping & Sweep**: High-concurrency ping sweep engine.
+- **Subnet Auto-Discovery**: Automatic CIDR sweeps and gateway probing (`/scanGateway/:id`).
+- **DHCP Collector**: Collects DHCP lease tables and scope utilization.
+- **Port Probing & DNS**: Asynchronous multi-port scanning and reverse DNS resolution.
 
-### DHCP Collector Microservice (`:8082`)
-- **`GET /health`**: Healthcheck endpoint.
-- **`POST /api/v1/dhcp/scan`**: Collects DHCP lease tables and scope utilization.
-  ```json
-  {
-    "hostAddress": "192.168.1.10",
-    "type": "windows",
-    "userName": "admin",
-    "password": "secretPassword",
-    "port": 5985
-  }
-  ```
+### In-Built Report Worker (`ipam-report-worker-pool`)
+- **Dynamic PDF Rendering**: Isolated compilation using DynamicJasper & OpenPDF.
+- **CSV & Excel Streaming**: High-throughput file export streams (`/exportsubnetIpByReportTimeline/`, `/exportsubnetIpCsvByReportTimeline/`).
 
 ---
 

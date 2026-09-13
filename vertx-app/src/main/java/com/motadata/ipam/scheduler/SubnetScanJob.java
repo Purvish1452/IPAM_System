@@ -11,6 +11,7 @@ public class SubnetScanJob implements VertxScheduledJob {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SubnetScanJob.class);
 
+    // Executes background discovery and status polling across subnet IP addresses.
     @Override
     public void execute(JsonObject dataMap) {
         Long subnetId = dataMap.getLong("subnetId");

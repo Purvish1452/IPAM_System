@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// Tests the DHCP service health check endpoint.
 func TestDHCPHealthEndpoint(t *testing.T) {
 	req, err := http.NewRequest("GET", "/health", nil)
 	if err != nil {
@@ -32,6 +33,7 @@ func TestDHCPHealthEndpoint(t *testing.T) {
 	}
 }
 
+// Tests the DHCP scan endpoint for Windows DHCP servers.
 func TestDHCPScanEndpoint_Windows(t *testing.T) {
 	payload := DHCPScanRequest{
 		HostAddress: "192.168.10.1",
@@ -82,6 +84,7 @@ func TestDHCPScanEndpoint_Windows(t *testing.T) {
 	}
 }
 
+// Tests the DHCP scan endpoint for Cisco DHCP servers.
 func TestDHCPScanEndpoint_Cisco(t *testing.T) {
 	payload := DHCPScanRequest{
 		HostAddress: "10.1.0.1",
@@ -117,6 +120,7 @@ func TestDHCPScanEndpoint_Cisco(t *testing.T) {
 	}
 }
 
+// Tests the DHCP scan endpoint with user-supplied custom scope CIDRs.
 func TestDHCPScanEndpoint_CustomScopes(t *testing.T) {
 	payload := DHCPScanRequest{
 		HostAddress: "172.16.1.1",
@@ -146,6 +150,7 @@ func TestDHCPScanEndpoint_CustomScopes(t *testing.T) {
 	}
 }
 
+// Tests error handling for invalid or missing parameters in DHCP scan.
 func TestDHCPScanEndpoint_InvalidInputs(t *testing.T) {
 	// 1. Missing hostAddress
 	payload := DHCPScanRequest{HostAddress: ""}
@@ -166,6 +171,7 @@ func TestDHCPScanEndpoint_InvalidInputs(t *testing.T) {
 	}
 }
 
+// Tests helper functions for deriving scopes and pseudo-MAC generation.
 func TestHelperFunctions(t *testing.T) {
 	scopes := deriveDefaultScopes("192.168.10.5", "windows")
 	if len(scopes) != 2 {

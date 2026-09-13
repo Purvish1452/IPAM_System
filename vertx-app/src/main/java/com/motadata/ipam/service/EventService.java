@@ -24,6 +24,7 @@ public class EventService {
 
     private final Pool db;
 
+    // Constructs EventService with the specified database connection pool.
     public EventService(Pool db) {
         this.db = db;
     }
@@ -33,6 +34,7 @@ public class EventService {
         return getEvents(page, pageSize, null);
     }
 
+    // Retrieves event logs with pagination and timeline filtering.
     public Future<JsonObject> getEvents(Integer page, Integer pageSize, String exportTimeline) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -99,6 +101,7 @@ public class EventService {
         return promise.future();
     }
 
+    // Generates a CSV audit report byte array for the specified timeline.
     public Future<byte[]> generateEventCsvReport(String exportTimeline) {
         StringBuilder csv = new StringBuilder("ID,Event Type,Context,Description,User,Timestamp\n");
         String whereClause = "";
@@ -125,12 +128,13 @@ public class EventService {
         });
     }
 
+    // Escapes special characters for safe inclusion in CSV fields.
     private static String csvValue(String value) {
         if (value == null || "null".equals(value)) return "";
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
-
+    // Seeds initial event audit records into the database.
     private void seedInitialEvents() {
         String seedSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES " +
                 "('Information', 'Subnet Management', 'Subnet 192.168.10.0/24 created in IP Address Manager by admin', 'admin', CURRENT_TIMESTAMP - INTERVAL '15 minutes'), " +

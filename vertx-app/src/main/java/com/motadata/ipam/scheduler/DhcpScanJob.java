@@ -11,6 +11,7 @@ public class DhcpScanJob implements VertxScheduledJob {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DhcpScanJob.class);
 
+    // Executes background polling of DHCP server scopes and active leases.
     @Override
     public void execute(JsonObject dataMap) {
         Long dhcpCredentialId = dataMap.getLong("dhcpCredentialId");

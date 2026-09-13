@@ -24,6 +24,7 @@ public class ServiceTest {
     private AlertService alertService;
     private EventService eventService;
 
+    // Sets up Database connection, schema, and reactive services before each test.
     @BeforeEach
     public void setUp(Vertx vertx, VertxTestContext testContext) {
         AppConfig.load(vertx).onComplete(testContext.succeeding(config -> {
@@ -43,6 +44,7 @@ public class ServiceTest {
         }));
     }
 
+    // Closes the database pool connection after each test.
     @AfterEach
     public void tearDown() {
         if (pgClientProvider != null) {
@@ -50,6 +52,7 @@ public class ServiceTest {
         }
     }
 
+    // Tests user authentication against the UserService.
     @Test
     public void testUserAuthentication(VertxTestContext testContext) {
         userService.authenticate("admin", "admin123").onComplete(testContext.succeeding(result -> {
@@ -63,6 +66,7 @@ public class ServiceTest {
         }));
     }
 
+    // Tests querying paginated alerts via AlertService.
     @Test
     public void testAlertService(VertxTestContext testContext) {
         alertService.getAlerts(null, 1, 20).onComplete(testContext.succeeding(result -> {
@@ -75,6 +79,7 @@ public class ServiceTest {
         }));
     }
 
+    // Tests querying events and generating event CSV reports via EventService.
     @Test
     public void testEventService(VertxTestContext testContext) {
         eventService.getEvents(1, 20, "0").onComplete(testContext.succeeding(result -> {
@@ -94,6 +99,7 @@ public class ServiceTest {
         }));
     }
 
+    // Tests querying all subnets via SubnetService.
     @Test
     public void testSubnetService(VertxTestContext testContext) {
         subnetService.getAllSubnets().onComplete(testContext.succeeding(subnets -> {

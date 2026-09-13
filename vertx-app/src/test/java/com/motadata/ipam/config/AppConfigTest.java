@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(VertxExtension.class)
 public class AppConfigTest {
 
+    // Tests loading application configuration from JSON or fallback defaults.
     @Test
     public void testLoadAppConfig(Vertx vertx, VertxTestContext testContext) {
         AppConfig.load(vertx).onComplete(testContext.succeeding(config -> {

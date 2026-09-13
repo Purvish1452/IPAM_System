@@ -29,14 +29,13 @@ public class UserService {
     private final Pool db;
     private final JwtAuthProvider jwtAuthProvider;
 
+    // Constructs a new UserService with the database connection pool and JWT provider.
     public UserService(Pool db, JwtAuthProvider jwtAuthProvider) {
         this.db = db;
         this.jwtAuthProvider = jwtAuthProvider;
     }
 
-    /**
-     * Authenticates a user against PostgreSQL database using BCrypt / plain fallback.
-     */
+    // Authenticates a user against the database and returns a signed JWT token.
     public Future<JsonObject> authenticate(String userName, String password) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -111,7 +110,7 @@ public class UserService {
                 String token = jwtAuthProvider.generateToken(user);
 
                 JsonObject response = new JsonObject()
-                        .put("success", true)
+                                .put("success", true)
                         .put("token", token)
                         .put("userName", "admin")
                         .put("username", "admin")
@@ -154,9 +153,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Validates PBAC permissions and returns the active user role.
-     */
+    // Validates PBAC permissions and returns the active user role.
     public Future<JsonObject> validatePermission(String userName) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -193,9 +190,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Fetches all users from PostgreSQL.
-     */
+    // Fetches all registered users from the database.
     public Future<JsonArray> getAllUsers() {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -233,9 +228,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Fetches a specific user by ID.
-     */
+    // Fetches a specific user record by its ID.
     public Future<JsonObject> getUserById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -267,9 +260,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Creates or updates a user in PostgreSQL.
-     */
+    // Creates or updates a user record with encoded password in the database.
     public Future<JsonObject> saveUser(JsonObject userJson) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -298,9 +289,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Deletes a user from PostgreSQL.
-     */
+    // Deletes a user by ID from the database.
     public Future<JsonObject> deleteUser(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -312,9 +301,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Fetches all user roles from PostgreSQL.
-     */
+    // Fetches all user roles from the database.
     public Future<JsonArray> getAllRoles() {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -341,9 +328,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Fetches a role by ID.
-     */
+    // Fetches a specific role by its ID.
     public Future<JsonObject> getRoleById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -368,9 +353,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Saves or updates a role in PostgreSQL.
-     */
+    // Saves or updates a user role record in the database.
     public Future<JsonObject> saveRole(JsonObject roleJson) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -393,9 +376,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Deletes a role from PostgreSQL.
-     */
+    // Deletes a user role by ID from the database.
     public Future<JsonObject> deleteRole(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -407,9 +388,7 @@ public class UserService {
         return promise.future();
     }
 
-    /**
-     * Fetches PBAC feature list.
-     */
+    // Fetches the list of all PBAC features.
     public Future<JsonArray> getRoleFeatures() {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -439,6 +418,7 @@ public class UserService {
         return promise.future();
     }
 
+    // Fetches feature-level read and write permission authorities for a role ID.
     private Future<List<String>> fetchRoleFeatureAuthorities(Long roleId) {
         Promise<List<String>> promise = Promise.promise();
 

@@ -26,6 +26,7 @@ public class AlertService {
 
     private final Pool db;
 
+    // Constructs AlertService with the specified database connection pool.
     public AlertService(Pool db) {
         this.db = db;
     }
@@ -101,10 +102,12 @@ public class AlertService {
         return promise.future();
     }
 
+    // Retrieves filtered and paginated alerts without search term.
     public Future<JsonObject> getAlerts(String alertFilter, Integer page, Integer pageSize) {
         return getAlerts(alertFilter, null, page, pageSize);
     }
 
+    // Fetches alert database rows and shapes the JSON response payload.
     private void fetchAlertData(String sql, Tuple params, long total, Promise<JsonObject> promise) {
         db.preparedQuery(sql).execute(params).onComplete(dataAr -> {
             if (dataAr.succeeded()) {
@@ -183,6 +186,7 @@ public class AlertService {
         return promise.future();
     }
 
+    // Creates an active alert record with default status true.
     public Future<JsonObject> createAlert(Long subnetId, String alertType, String message, String subnet) {
         return createAlert(subnetId, alertType, message, subnet, true);
     }
@@ -277,12 +281,14 @@ public class AlertService {
         return promise.future();
     }
 
+    // Checks and raises a security alert when a rogue MAC address is detected.
     public Future<Void> checkAndGenerateRogueAlert(Long subnetId, String subnetAddress, String ipAddress, String macAddress) {
         String sub = subnetAddress != null ? subnetAddress : "General";
         String msg = "Rogue Device " + macAddress + " detected on IP " + ipAddress + " in subnet " + sub;
         return createAlert(subnetId, "MAJOR", msg, sub, true).mapEmpty();
     }
 
+    // Checks and raises a critical alert when an IP address conflict is detected.
     public Future<Void> checkAndGenerateIpConflictAlert(Long subnetId, String subnetAddress, String ipAddress, String mac1, String mac2) {
         String sub = subnetAddress != null ? subnetAddress : "General";
         String msg = "IP conflict detected on " + ipAddress + " between MAC " + mac1 + " and " + mac2;

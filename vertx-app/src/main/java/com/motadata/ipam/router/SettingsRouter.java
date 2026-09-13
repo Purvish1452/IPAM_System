@@ -21,6 +21,7 @@ public class SettingsRouter {
     private final AlertService alertService;
     private final DiscoveryService discoveryService;
 
+    // Constructs SettingsRouter with required services for administration and settings.
     public SettingsRouter(UserService userService, SettingsService settingsService, AlertService alertService, DiscoveryService discoveryService) {
         this.userService = userService;
         this.settingsService = settingsService;
@@ -354,10 +355,18 @@ public class SettingsRouter {
         });
     }
 
-    // Saves a discovery profile.
+    // Saves a discovery profile and triggers subnet discovery.
     private void handleSaveDiscovery(RoutingContext ctx) {
-        discoveryService.saveDiscoveryProfile(new JsonObject()).onComplete(ar -> {
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        JsonObject body = null;
+        try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
+        if (body == null) body = new JsonObject();
+        if (!body.containsKey("subnetRange") || body.getString("subnetRange") == null || body.getString("subnetRange").isBlank()) {
+            body.put("subnetRange", "192.168.1.0/24");
+        }
+
+        discoveryService.saveDiscoveryProfile(body).onComplete(ar -> {
+            JsonObject result = ar.succeeded() ? ar.result() : new JsonObject().put("success", false).put("message", ar.cause() != null ? ar.cause().getMessage() : "Discovery failed");
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
         });
     }
 
@@ -371,8 +380,16 @@ public class SettingsRouter {
 
     // Saves discovery scheduler configuration.
     private void handleSaveDiscoveryScheduler(RoutingContext ctx) {
-        discoveryService.saveDiscoveryProfile(new JsonObject()).onComplete(ar -> {
-            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(ar.result().encode());
+        JsonObject body = null;
+        try { body = ctx.body().asJsonObject(); } catch (Exception ignored) {}
+        if (body == null) body = new JsonObject();
+        if (!body.containsKey("subnetRange") || body.getString("subnetRange") == null || body.getString("subnetRange").isBlank()) {
+            body.put("subnetRange", "192.168.1.0/24");
+        }
+
+        discoveryService.saveDiscoveryProfile(body).onComplete(ar -> {
+            JsonObject result = ar.succeeded() ? ar.result() : new JsonObject().put("success", false).put("message", ar.cause() != null ? ar.cause().getMessage() : "Discovery scheduler failed");
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
         });
     }
 

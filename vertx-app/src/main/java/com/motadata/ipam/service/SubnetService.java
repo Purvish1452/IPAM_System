@@ -26,6 +26,7 @@ public class SubnetService {
 
     private final Pool db;
 
+    // Constructs a new SubnetService with the provided database connection pool.
     public SubnetService(Pool db) {
         this.db = db;
     }
@@ -34,6 +35,7 @@ public class SubnetService {
     // 1. Subnet Management
     // ==========================================
 
+    // Retrieves all subnets with calculated IP utilization metrics and category details.
     public Future<JsonArray> getAllSubnets() {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -91,6 +93,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves a specific subnet by its ID with utilization details.
     public Future<JsonObject> getSubnetById(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -146,6 +149,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Saves a new subnet and seeds its default gateway IP.
     public Future<JsonObject> saveSubnet(String subnetAddress, String subnetMask, Long categoryId, String description) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -172,6 +176,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Deletes a subnet by its ID from the database.
     public Future<JsonObject> deleteSubnet(Long id) {
         Promise<JsonObject> promise = Promise.promise();
 
@@ -187,6 +192,7 @@ public class SubnetService {
     // 2. Subnet IP Details
     // ==========================================
 
+    // Retrieves paginated IP address details for a given subnet.
     public Future<JsonArray> getIpDetails(Long subnetId, Integer page, Integer pageSize) {
         Promise<JsonArray> promise = Promise.promise();
 
@@ -251,6 +257,7 @@ public class SubnetService {
     // 3. Gateways, Categories & Supernets
     // ==========================================
 
+    // Retrieves all network gateways with their status and previous scan timestamps.
     public Future<JsonArray> getGateways() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, gateway, COALESCE(name, description, 'Core Gateway Router') as name_val, " +
@@ -285,6 +292,7 @@ public class SubnetService {
 
 
 
+    // Inserts a new network gateway record into the database.
     public Future<JsonObject> saveGateway(JsonObject gJson) {
         Promise<JsonObject> promise = Promise.promise();
         String gateway = gJson.getString("gateway", "192.168.1.1");
@@ -296,6 +304,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Deletes a network gateway record by its ID.
     public Future<JsonObject> deleteGateway(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM gateway WHERE id = $1";
@@ -305,6 +314,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves all subnet categories from the database.
     public Future<JsonArray> getCategories() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, category_name, description FROM category ORDER BY id ASC";
@@ -327,6 +337,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Inserts a new subnet category record into the database.
     public Future<JsonObject> saveCategory(JsonObject cJson) {
         Promise<JsonObject> promise = Promise.promise();
         String catName = cJson.getString("categoryName", "Custom Category");
@@ -338,6 +349,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Deletes a subnet category record by its ID.
     public Future<JsonObject> deleteCategory(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM category WHERE id = $1";
@@ -347,6 +359,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves all supernets with their CIDR, mask, and location details.
     public Future<JsonArray> getSupernets() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, supernet_address, supernet_mask, supernet_cidr, description, location FROM supernet_details ORDER BY id ASC";
@@ -370,6 +383,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Inserts a new supernet record into the database.
     public Future<JsonObject> saveSupernet(JsonObject sJson) {
         Promise<JsonObject> promise = Promise.promise();
         String sAddr = sJson.getString("supernetAddress", "10.0.0.0");
@@ -381,6 +395,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Deletes a supernet record by its ID.
     public Future<JsonObject> deleteSupernet(Long id) {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM supernet_details WHERE id = $1";
@@ -394,6 +409,7 @@ public class SubnetService {
     // 4. Rogue Detection & IP Requests
     // ==========================================
 
+    // Retrieves rogue IP and MAC detection events.
     public Future<JsonArray> getRogueDetection() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, mac_address, ip_address, discovered_at, nic_type, authenticity, host_name FROM rogue_detection_details ORDER BY id ASC";
@@ -422,22 +438,46 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Persists an action taken on a rogue detection event.
     public Future<JsonObject> saveRogueAction(JsonObject rJson) {
         Promise<JsonObject> promise = Promise.promise();
         promise.complete(new JsonObject().put("success", true).put("message", "Rogue Detection action saved successfully"));
         return promise.future();
     }
 
+    // Retrieves all IP allocation requests with their parsed IPs and timestamps.
     public Future<JsonArray> getIpRequests() {
+        return getIpRequests(null, true);
+    }
+
+    // Retrieves IP allocation requests filtered by user if not admin.
+    public Future<JsonArray> getIpRequests(String userName, boolean isAdmin) {
         Promise<JsonArray> promise = Promise.promise();
-        String sql = "SELECT ir.id, ir.created_by, ir.requested_by, ir.number_of_ips, ir.subnet_id, " +
-                "COALESCE(ir.subnet_address, sd.subnet_address, '192.168.10.0/24') AS subnet_address, " +
-                "ir.device_type, ir.duration, ir.status, ir.purpose, ir.remark, ir.preferred_subnet, ir.ips, " +
-                "ir.created_date, ir.last_modified_by, ir.last_modified_date " +
-                "FROM ip_requests ir " +
-                "LEFT JOIN subnet_details sd ON (ir.subnet_id = CAST(sd.id AS VARCHAR)) " +
-                "ORDER BY ir.id DESC";
-        db.query(sql).execute().onComplete(ar -> {
+        String sql;
+        Tuple tuple;
+        if (isAdmin || userName == null || userName.isBlank() || "admin".equalsIgnoreCase(userName)) {
+            sql = "SELECT ir.id, ir.created_by, ir.requested_by, ir.number_of_ips, ir.subnet_id, " +
+                    "COALESCE(ir.subnet_address, sd.subnet_address, '192.168.10.0/24') AS subnet_address, " +
+                    "ir.device_type, ir.duration, ir.status, ir.purpose, ir.remark, ir.preferred_subnet, ir.ips, " +
+                    "ir.created_date, ir.last_modified_by, ir.last_modified_date " +
+                    "FROM ip_requests ir " +
+                    "LEFT JOIN subnet_details sd ON (ir.subnet_id = CAST(sd.id AS VARCHAR)) " +
+                    "ORDER BY ir.id DESC";
+            tuple = null;
+        } else {
+            sql = "SELECT ir.id, ir.created_by, ir.requested_by, ir.number_of_ips, ir.subnet_id, " +
+                    "COALESCE(ir.subnet_address, sd.subnet_address, '192.168.10.0/24') AS subnet_address, " +
+                    "ir.device_type, ir.duration, ir.status, ir.purpose, ir.remark, ir.preferred_subnet, ir.ips, " +
+                    "ir.created_date, ir.last_modified_by, ir.last_modified_date " +
+                    "FROM ip_requests ir " +
+                    "LEFT JOIN subnet_details sd ON (ir.subnet_id = CAST(sd.id AS VARCHAR)) " +
+                    "WHERE LOWER(TRIM(ir.created_by)) = LOWER($1) OR LOWER(TRIM(ir.requested_by)) = LOWER($1) " +
+                    "ORDER BY ir.id DESC";
+            tuple = Tuple.of(userName.trim());
+        }
+
+        var queryFuture = (tuple != null) ? db.preparedQuery(sql).execute(tuple) : db.query(sql).execute();
+        queryFuture.onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
@@ -500,20 +540,13 @@ public class SubnetService {
                 promise.complete(result);
             } else {
                 LOGGER.error("Failed to query IP requests: {}", ar.cause().getMessage());
-                promise.complete(new JsonArray().add(new JsonObject()
-                        .put("id", 1L).put("createdBy", "purvish").put("requestedBy", "purvish").put("numberOfIps", 2)
-                        .put("subnetId", "1").put("subnetAddress", "192.168.10.0/24").put("deviceType", "Server")
-                        .put("duration", "Permanent").put("status", "PENDING").put("purpose", "Development Server Cluster")
-                        .put("remark", "Need 2 static IPs for new microservices deployment").put("preferredSubnet", true)
-                        .put("ips", new JsonArray().add("192.168.10.51").add("192.168.10.52"))
-                        .put("lastModifiedBy", "N/A")
-                        .put("lastModifiedDate", new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0))
-                        .put("createdDate", new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0))));
+                promise.complete(new JsonArray());
             }
         });
         return promise.future();
     }
 
+    // Converts a LocalDateTime into a numeric JSON date array format.
     private JsonArray toDateArray(java.time.LocalDateTime ldt) {
         if (ldt == null) {
             return new JsonArray().add(2026).add(9).add(4).add(12).add(0).add(0);
@@ -527,6 +560,7 @@ public class SubnetService {
                 .add(ldt.getSecond());
     }
 
+    // Submits a new IP allocation request and records an audit event.
     public Future<JsonObject> saveIpRequest(JsonObject req) {
         Promise<JsonObject> promise = Promise.promise();
         String creator = asString(req.getValue("createdBy"), asString(req.getValue("userName"), "admin"));
@@ -604,16 +638,19 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Safely extracts a non-empty string or returns a default fallback.
     private String asString(Object value, String defaultValue) {
         String result = value == null ? null : String.valueOf(value).trim();
         return result == null || result.isEmpty() ? defaultValue : result;
     }
 
+    // Safely extracts a trimmed non-empty string or returns null.
     private String asNullableString(Object value) {
         String result = value == null ? null : String.valueOf(value).trim();
         return result == null || result.isEmpty() ? null : result;
     }
 
+    // Safely parses an object into a Long or returns null.
     private Long asLong(Object value) {
         if (value instanceof Number) {
             return ((Number) value).longValue();
@@ -626,6 +663,7 @@ public class SubnetService {
         return null;
     }
 
+    // Approves or rejects an IP request and allocates IP addresses accordingly.
     public Future<JsonObject> updateIpRequestStatus(JsonObject req, String status) {
         Promise<JsonObject> promise = Promise.promise();
         Long requestId = asLong(req.getValue("id"));
@@ -742,7 +780,7 @@ public class SubnetService {
                                             "system_description = CASE WHEN system_description IS NULL OR system_description = '-' THEN $1 ELSE system_description END, " +
                                             "device_type = CASE WHEN device_type IS NULL OR device_type = '-' THEN $2 ELSE device_type END " +
                                             "WHERE ip_address = $3")
-                                    .execute(Tuple.of(purpose, deviceType, ipAddr)).mapEmpty()
+                                     .execute(Tuple.of(purpose, deviceType, ipAddr)).mapEmpty()
                     );
                 }
             }
@@ -788,6 +826,7 @@ public class SubnetService {
     // 5. Dashboard Analytics & Summary
     // ==========================================
 
+    // Computes total, used, available, and transient IP metrics across all subnets.
     public Future<JsonObject> getIpSummary() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT SUM(total_ip) as total, SUM(used_ip) as used, SUM(available_ip) as available, SUM(transient_ip) as transient FROM subnet_details";
@@ -821,6 +860,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Computes summary counts of reachable and unreachable IP addresses.
     public Future<JsonObject> getPingIpSummary() {
         Promise<JsonObject> promise = Promise.promise();
         promise.complete(new JsonObject()
@@ -831,6 +871,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Computes summary counts of rogue and trusted IP addresses across subnets.
     public Future<JsonObject> getRogueSubnetIp() {
         Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT count(*) as cnt FROM rogue_detection_details WHERE authenticity = 'UNAUTHORIZED'";
@@ -850,6 +891,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves summary statistics of DNS resolution statuses.
     public Future<JsonArray> getDnsStatusSummary() {
         Promise<JsonArray> promise = Promise.promise();
         promise.complete(new JsonArray()
@@ -859,6 +901,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves device vendor distribution counts.
     public Future<JsonArray> getVendorSummary() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT vendor_name, count FROM vendor ORDER BY count DESC";
@@ -883,6 +926,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves the top 10 subnets based on IP utilization.
     public Future<JsonArray> getTop10Subnet() {
         Promise<JsonArray> promise = Promise.promise();
         getAllSubnets().onComplete(ar -> {
@@ -895,6 +939,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves the top 10 categories ranked by total IP utilization.
     public Future<JsonArray> getTop10Category() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT c.id, c.category_name, " +
@@ -928,6 +973,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves recently discovered network devices.
     public Future<JsonArray> getRecentDiscovery() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, mac_address, ip_address, discovered_at FROM rogue_detection_details ORDER BY id DESC LIMIT 10";
@@ -955,6 +1001,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Retrieves IP addresses with conflicting MAC or network assignments.
     public Future<JsonArray> getConflictedIp() {
         Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, ip_address, mac_address, subnet_id FROM subnet_ip_details WHERE status = 'Conflict' LIMIT 10";
@@ -995,6 +1042,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Groups subnets by category along with aggregate utilization metrics.
     public Future<JsonArray> getSubnetByCategory() {
         Promise<JsonArray> promise = Promise.promise();
         getAllSubnets().onComplete(ar -> {
@@ -1043,6 +1091,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Groups supernets by category along with aggregate utilization metrics.
     public Future<JsonArray> getSupernetByCategory() {
         Promise<JsonArray> promise = Promise.promise();
         getSupernets().onComplete(ar -> {
@@ -1074,6 +1123,7 @@ public class SubnetService {
         return promise.future();
     }
 
+    // Returns default fallback subnet records when the database query fails.
     private JsonArray getFallbackSubnets() {
         return new JsonArray()
                 .add(new JsonObject()

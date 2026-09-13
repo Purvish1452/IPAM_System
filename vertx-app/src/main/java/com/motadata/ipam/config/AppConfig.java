@@ -21,6 +21,7 @@ public class AppConfig {
 
     private final JsonObject config;
 
+    // Constructs AppConfig with the provided JsonObject configuration.
     public AppConfig(JsonObject config) {
         this.config = config != null ? config : new JsonObject();
     }
@@ -28,6 +29,7 @@ public class AppConfig {
     /**
      * Loads the ipm-conf.yml configuration asynchronously using Vert.x ConfigRetriever.
      */
+    // Loads the application configuration asynchronously from the YAML file or defaults.
     public static Future<AppConfig> load(Vertx vertx) {
         Promise<AppConfig> promise = Promise.promise();
 
@@ -57,6 +59,7 @@ public class AppConfig {
         return promise.future();
     }
 
+    // Locates the path to the YAML configuration file.
     private static String findConfigFilePath() {
         String[] possiblePaths = new String[]{
                 "config/ipm-conf.yml",
@@ -71,11 +74,12 @@ public class AppConfig {
         return "config/ipm-conf.yml";
     }
 
+    // Creates the fallback default configuration JsonObject.
     private static JsonObject createDefaultConfig() {
         return new JsonObject()
                 .put("server-port", 8080)
                 .put("server-host", "localhost")
-                .put("db-host", "localhost")
+                .put("db-host", "127.0.0.1")
                 .put("db-port", 5432)
                 .put("db-name", "ipam_db")
                 .put("db-user", "postgres")
@@ -86,50 +90,62 @@ public class AppConfig {
                 .put("process-request-timeout", 1200);
     }
 
+    // Returns the configured HTTP server port.
     public int getServerPort() {
         return config.getInteger("server-port", 8080);
     }
 
+    // Returns the configured HTTP server host.
     public String getServerHost() {
         return config.getString("server-host", "localhost");
     }
 
+    // Returns the configured PostgreSQL database host.
     public String getDbHost() {
         return config.getString("db-host", "localhost");
     }
 
+    // Returns the configured PostgreSQL database port.
     public int getDbPort() {
         return config.getInteger("db-port", 5432);
     }
 
+    // Returns the configured PostgreSQL database name.
     public String getDbName() {
         return config.getString("db-name", "ipam_db");
     }
 
+    // Returns the configured PostgreSQL database username.
     public String getDbUser() {
         return config.getString("db-user", "postgres");
     }
 
+    // Returns the configured PostgreSQL database password.
     public String getDbPassword() {
         return config.getString("db-password", "password");
     }
 
+    // Returns the maximum ping timeout in seconds.
     public int getMaxPingTimeout() {
         return config.getInteger("max-ping-check-timeout", 10);
     }
 
+    // Returns the maximum ping retry count.
     public int getMaxPingRetryCount() {
         return config.getInteger("max-ping-check-retry-count", 2);
     }
 
+    // Returns the maximum number of concurrent ping requests.
     public int getMaxConcurrentPing() {
         return config.getInteger("max-concurrent-ping", 500);
     }
 
+    // Returns the process request timeout in seconds.
     public int getProcessRequestTimeout() {
         return config.getInteger("process-request-timeout", 1200);
     }
 
+    // Returns the underlying JsonObject configuration.
     public JsonObject getJsonObject() {
         return config;
     }
