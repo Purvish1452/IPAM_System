@@ -31,7 +31,8 @@ public class ReportServiceTest {
 
                 DatabaseInit.initSchema(vertx, db).onComplete(initAr -> {
                     reportService = new ReportService(vertx, db);
-                    testContext.completeNow();
+                    vertx.deployVerticle(new com.motadata.ipam.verticle.ReportWorkerVerticle(db), new io.vertx.core.DeploymentOptions().setThreadingModel(io.vertx.core.ThreadingModel.WORKER))
+                            .onComplete(depAr -> testContext.completeNow());
                 });
             } else {
                 testContext.failNow(configAr.cause());

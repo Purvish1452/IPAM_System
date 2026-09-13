@@ -10,19 +10,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
 import java.io.StringReader;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Dedicated Worker Verticle for Network Discovery and Probing.
- * Runs on the Worker Thread Pool (network-worker-pool).
- * Completely decouples blocking network socket calls from the HTTP Event Loop.
+ * Runs on the Worker Thread Pool (ipam-network-worker-pool).
+ * Delegates high-performance concurrent CIDR sweeps, discovery, and DHCP inspection
+ * to native Go Plugins via JSON IPC (stdin/stdout).
  */
 public class NetworkWorkerVerticle extends AbstractVerticle {
 
@@ -49,7 +49,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
     public void start(Promise<Void> startPromise) {
         LOGGER.info("Starting NetworkWorkerVerticle on Worker Thread Pool: {}", Thread.currentThread().getName());
 
-        // 1. Single IP Ping Consumer
+        // 1. Single IP Ping Consumer (via Go Plugin)
         vertx.eventBus().<JsonObject>consumer(ADDR_PING, message -> {
             try {
                 JsonObject body = message.body();
@@ -61,7 +61,21 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     return;
                 }
 
-                boolean reachable = InetAddress.getByName(ip.trim()).isReachable(timeout);
+                String cidr = ip.trim() + "/32";
+                JsonObject req = new JsonObject()
+                        .put("subnetCidr", cidr)
+                        .put("timeoutMs", timeout)
+                        .put("concurrency", 1);
+
+                JsonObject goResult = executeGoPlugin("discovery", req, 10);
+                boolean reachable = false;
+                if (goResult != null && goResult.getJsonArray("hosts") != null) {
+                    JsonArray hosts = goResult.getJsonArray("hosts");
+                    if (!hosts.isEmpty()) {
+                        reachable = "UP".equalsIgnoreCase(hosts.getJsonObject(0).getString("status"));
+                    }
+                }
+
                 message.reply(new JsonObject()
                         .put("success", true)
                         .put("ip", ip)
@@ -69,12 +83,12 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                         .put("status", reachable ? "ONLINE" : "OFFLINE")
                 );
             } catch (Exception e) {
-                LOGGER.error("Error executing ping: {}", e.getMessage());
+                LOGGER.error("Error executing ping via Go plugin: {}", e.getMessage());
                 message.fail(500, e.getMessage());
             }
         });
 
-        // 2. Subnet IP Scan Consumer
+        // 2. Subnet IP Scan Consumer (via Go Discovery Plugin)
         vertx.eventBus().<JsonObject>consumer(ADDR_SCAN, message -> {
             try {
                 JsonObject body = message.body();
@@ -87,50 +101,57 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     return;
                 }
 
-                LOGGER.info("Worker scanning subnet {}/{} (id={})", subnetAddress, cidr, subnetId);
-                List<String> ips = generateIPList(subnetAddress, cidr);
+                String fullCidr = subnetAddress.trim() + "/" + cidr;
+                LOGGER.info("Executing Go Discovery Plugin for subnet {} (id={})", fullCidr, subnetId);
 
-                ExecutorService pool = Executors.newFixedThreadPool(16);
-                AtomicInteger reachableCount = new AtomicInteger(0);
-                try {
-                    List<CompletableFuture<Void>> tasks = new ArrayList<>();
-                    for (String ip : ips) {
-                        tasks.add(CompletableFuture.runAsync(() -> {
-                            try {
-                                boolean reachable = InetAddress.getByName(ip).isReachable(300);
-                                String status = reachable ? "USED" : "AVAILABLE";
-                                if (reachable) reachableCount.incrementAndGet();
+                JsonObject goReq = new JsonObject()
+                        .put("subnetCidr", fullCidr)
+                        .put("timeoutMs", 1000)
+                        .put("concurrency", 250);
 
-                                String sql = "INSERT INTO subnet_ip_details (ip_address, subnet_id, status, last_scan_time) " +
-                                        "VALUES ($1, $2, $3, CURRENT_TIMESTAMP) " +
-                                        "ON CONFLICT (ip_address) DO UPDATE SET " +
-                                        "status = EXCLUDED.status, " +
-                                        "last_scan_time = CURRENT_TIMESTAMP";
-                                db.preparedQuery(sql).execute(Tuple.of(ip, subnetId, status));
-                            } catch (Exception ignored) {
-                            }
-                        }, pool));
-                    }
-                    CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).get(60, TimeUnit.SECONDS);
-                } finally {
-                    pool.shutdownNow();
+                JsonObject goResp = executeGoPlugin("discovery", goReq, 60);
+                if (goResp == null || !goResp.containsKey("hosts")) {
+                    message.fail(500, "Failed to execute Go discovery plugin or received invalid JSON");
+                    return;
+                }
+
+                JsonArray hosts = goResp.getJsonArray("hosts", new JsonArray());
+                int activeCount = 0;
+
+                for (int i = 0; i < hosts.size(); i++) {
+                    JsonObject host = hosts.getJsonObject(i);
+                    String ip = host.getString("ip");
+                    boolean isUp = "UP".equalsIgnoreCase(host.getString("status"));
+                    String status = isUp ? "USED" : "AVAILABLE";
+                    if (isUp) activeCount++;
+                    String hostname = host.getString("hostname", "host-" + ip.replace('.', '-'));
+
+                    String sql = "INSERT INTO subnet_ip_details (ip_address, subnet_id, status, host_name, last_scan_time) " +
+                            "VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) " +
+                            "ON CONFLICT (ip_address) DO UPDATE SET " +
+                            "status = EXCLUDED.status, " +
+                            "host_name = COALESCE(EXCLUDED.host_name, subnet_ip_details.host_name), " +
+                            "last_scan_time = CURRENT_TIMESTAMP";
+                    db.preparedQuery(sql).execute(Tuple.of(ip, subnetId, status, hostname));
                 }
 
                 // Update subnet stats
+                final int finalActive = activeCount;
                 String updateStats = "UPDATE subnet_details SET " +
                         "used_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'USED'), " +
                         "available_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE'), " +
                         "total_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1) " +
                         "WHERE id = $1";
-                db.preparedQuery(updateStats).execute(Tuple.of(subnetId));
-
-                message.reply(new JsonObject()
-                        .put("success", true)
-                        .put("subnetId", subnetId)
-                        .put("totalIps", ips.size())
-                        .put("activeIps", reachableCount.get())
-                        .put("message", "Subnet scan completed successfully. " + reachableCount.get() + " active host(s) found.")
-                );
+                db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).onComplete(stAr -> {
+                    message.reply(new JsonObject()
+                            .put("success", true)
+                            .put("subnetId", subnetId)
+                            .put("totalIps", hosts.size())
+                            .put("activeIps", finalActive)
+                            .put("durationMs", goResp.getLong("durationMs", 0L))
+                            .put("message", "Subnet scan completed via Go plugin. " + finalActive + " active host(s) found.")
+                    );
+                });
             } catch (Exception e) {
                 LOGGER.error("Subnet scan failed: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
@@ -145,9 +166,19 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     message.fail(400, "IP address is required");
                     return;
                 }
-                InetAddress addr = InetAddress.getByName(ip.trim());
-                String hostname = addr.getCanonicalHostName();
-                boolean resolved = !hostname.equals(ip.trim());
+
+                JsonObject req = new JsonObject().put("subnetCidr", ip.trim() + "/32").put("timeoutMs", 1000);
+                JsonObject goResult = executeGoPlugin("discovery", req, 10);
+                String hostname = ip.trim();
+                boolean resolved = false;
+
+                if (goResult != null && goResult.getJsonArray("hosts") != null) {
+                    JsonArray hosts = goResult.getJsonArray("hosts");
+                    if (!hosts.isEmpty() && hosts.getJsonObject(0).containsKey("hostname")) {
+                        hostname = hosts.getJsonObject(0).getString("hostname");
+                        resolved = true;
+                    }
+                }
 
                 message.reply(new JsonObject()
                         .put("success", true)
@@ -167,6 +198,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 String ip = body.getString("ip");
                 JsonArray portsToScan = body.getJsonArray("ports");
 
+                JsonArray openPorts = new JsonArray();
                 List<Integer> portList = new ArrayList<>();
                 if (portsToScan != null) {
                     for (int i = 0; i < portsToScan.size(); i++) portList.add(portsToScan.getInteger(i));
@@ -174,13 +206,11 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     portList = List.of(21, 22, 23, 25, 53, 80, 110, 143, 443, 3306, 3389, 5432, 8080);
                 }
 
-                JsonArray openPorts = new JsonArray();
                 for (int port : portList) {
-                    try (Socket socket = new Socket()) {
-                        socket.connect(new InetSocketAddress(ip, port), 250);
+                    try (java.net.Socket socket = new java.net.Socket()) {
+                        socket.connect(new java.net.InetSocketAddress(ip, port), 250);
                         openPorts.add(port);
-                    } catch (Exception ignored) {
-                    }
+                    } catch (Exception ignored) {}
                 }
 
                 message.reply(new JsonObject()
@@ -260,65 +290,43 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
             }
         });
 
-        // 7. Subnet Discovery Sweep Consumer (In-Built Discovery)
+        // 7. Subnet Discovery Sweep Consumer (via Go Discovery Plugin)
         vertx.eventBus().<JsonObject>consumer(ADDR_DISCOVERY_SCAN, message -> {
-            long startTime = System.currentTimeMillis();
             try {
                 JsonObject body = message.body() != null ? message.body() : new JsonObject();
                 String subnetCidr = body.getString("subnetCidr", "192.168.1.0/24");
                 Long gatewayId = body.getLong("gatewayId", 1L);
                 String gatewayIp = body.getString("gatewayIp", "192.168.1.1");
-                int timeoutMs = body.getInteger("timeoutMs", 300);
-                int concurrency = body.getInteger("concurrency", 32);
+                int timeoutMs = body.getInteger("timeoutMs", 1000);
+                int concurrency = body.getInteger("concurrency", 500);
 
                 String[] cidrParts = subnetCidr.split("/");
                 String networkAddress = cidrParts[0].trim();
                 int prefix = cidrParts.length > 1 ? Integer.parseInt(cidrParts[1].trim()) : 24;
 
-                List<String> rawIps = generateIPList(networkAddress, prefix);
-                final List<String> ips = rawIps.isEmpty() ? List.of(networkAddress) : rawIps;
+                LOGGER.info("Calling Go Discovery Plugin for CIDR: {}", subnetCidr);
 
-                ExecutorService pool = Executors.newFixedThreadPool(Math.min(concurrency, 32));
-                List<JsonObject> hostResults = new CopyOnWriteArrayList<>();
-                AtomicInteger activeCount = new AtomicInteger(0);
+                JsonObject goReq = new JsonObject()
+                        .put("subnetCidr", subnetCidr)
+                        .put("timeoutMs", timeoutMs)
+                        .put("concurrency", concurrency);
 
-                try {
-                    List<CompletableFuture<Void>> tasks = new ArrayList<>();
-                    for (String ip : ips) {
-                        tasks.add(CompletableFuture.runAsync(() -> {
-                            long pingStart = System.currentTimeMillis();
-                            try {
-                                boolean reachable = InetAddress.getByName(ip).isReachable(Math.min(timeoutMs, 300));
-                                long rtt = System.currentTimeMillis() - pingStart;
-                                JsonObject hostRes = new JsonObject()
-                                        .put("ip", ip)
-                                        .put("status", reachable ? "UP" : "DOWN")
-                                        .put("rttMs", rtt);
-                                if (reachable) {
-                                    activeCount.incrementAndGet();
-                                    try {
-                                        String hostName = InetAddress.getByName(ip).getCanonicalHostName();
-                                        if (!hostName.equals(ip)) {
-                                            hostRes.put("hostname", hostName);
-                                        }
-                                    } catch (Exception ignored) {}
-                                }
-                                hostResults.add(hostRes);
-                            } catch (Exception e) {
-                                hostResults.add(new JsonObject().put("ip", ip).put("status", "DOWN").put("rttMs", 0));
-                            }
-                        }, pool));
-                    }
-                    CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).get(15, TimeUnit.SECONDS);
-                } finally {
-                    pool.shutdownNow();
+                JsonObject goResp = executeGoPlugin("discovery", goReq, 60);
+                if (goResp == null) {
+                    message.fail(500, "Go discovery plugin execution failed");
+                    return;
                 }
+
+                int totalHosts = goResp.getInteger("totalHosts", 0);
+                int activeCount = goResp.getInteger("activeCount", 0);
+                JsonArray hostResults = goResp.getJsonArray("hosts", new JsonArray());
+                long durationMs = goResp.getLong("durationMs", 0L);
 
                 String subnetMask = getSubnetMaskFromPrefix(prefix);
                 String effectiveGw = (gatewayIp != null && !gatewayIp.isBlank()) ? gatewayIp :
                         (networkAddress.contains(".") ? networkAddress.substring(0, networkAddress.lastIndexOf('.') + 1) + "1" : "192.168.1.1");
 
-                // Clean existing discovered subnet record for this network & gateway to avoid duplicate accumulation
+                // Clean existing discovered subnet record for this network & gateway
                 String deleteOldSql = "DELETE FROM discovered_subnet WHERE (subnet_address = $1 OR subnet = $1) AND (gateway_id = $2 OR gateway = $3)";
                 db.preparedQuery(deleteOldSql).execute(Tuple.of(networkAddress, gatewayId, effectiveGw)).onComplete(delAr -> {
                     String insertSql = "INSERT INTO discovered_subnet (subnet, subnet_address, subnet_mask, gateway, gateway_id, discovered_time, status) " +
@@ -327,157 +335,149 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                         // Update gateway timestamp
                         String updateGwSql = "UPDATE gateway SET previous_scan = CURRENT_TIMESTAMP, status = 'Active' WHERE id = $1";
                         db.preparedQuery(updateGwSql).execute(Tuple.of(gatewayId)).onComplete(gwAr -> {
-                            long duration = System.currentTimeMillis() - startTime;
                             message.reply(new JsonObject()
                                     .put("success", true)
                                     .put("subnetCidr", subnetCidr)
-                                    .put("totalHosts", ips.size())
-                                    .put("activeCount", activeCount.get())
-                                    .put("hosts", new JsonArray(new ArrayList<>(hostResults)))
-                                    .put("durationMs", duration)
-                                    .put("message", "Gateway scan completed successfully. Discovered subnet " + networkAddress + "/" + prefix)
+                                    .put("totalHosts", totalHosts)
+                                    .put("activeCount", activeCount)
+                                    .put("hosts", hostResults)
+                                    .put("durationMs", durationMs)
+                                    .put("message", "Gateway scan completed via Go plugin. Discovered subnet " + networkAddress + "/" + prefix)
                             );
                         });
                     });
                 });
             } catch (Exception e) {
-                LOGGER.error("Discovery scan error: {}", e.getMessage(), e);
+                LOGGER.error("Discovery scan error via Go plugin: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
             }
         });
 
-        // 8. DHCP Scope Collection Consumer (In-Built DHCP Collector)
+        // 8. DHCP Scope Collection Consumer (via Go DHCP Plugin)
         vertx.eventBus().<JsonObject>consumer(ADDR_DHCP_SCAN, message -> {
-            long startTime = System.currentTimeMillis();
             try {
                 JsonObject body = message.body() != null ? message.body() : new JsonObject();
                 Long credentialId = body.getLong("credentialId");
                 String host = body.getString("hostAddress", "192.168.1.1");
                 String type = body.getString("type", "windows").toLowerCase();
 
-                int probePort = type.contains("cisco") ? 22 : (type.contains("windows") ? 5985 : 67);
-                boolean reachable = false;
-                try (Socket s = new Socket()) {
-                    s.connect(new InetSocketAddress(host, probePort), 1000);
-                    reachable = true;
-                } catch (Exception e) {
-                    try {
-                        reachable = InetAddress.getByName(host).isReachable(1000);
-                    } catch (Exception ignored) {}
+                LOGGER.info("Calling Go DHCP Plugin for host: {} ({})", host, type);
+
+                JsonObject goReq = new JsonObject()
+                        .put("hostAddress", host)
+                        .put("type", type);
+
+                JsonObject goResp = executeGoPlugin("dhcp", goReq, 30);
+                if (goResp == null) {
+                    message.fail(500, "Go DHCP plugin execution failed");
+                    return;
                 }
 
-                String baseSubnet = host.contains(".") ? host.substring(0, host.lastIndexOf('.') + 1) + "0" : "192.168.1.0";
-                String scopeCidr = baseSubnet + "/24";
-                List<String> scopeIps = generateIPList(baseSubnet, 24);
-                int totalIps = scopeIps.isEmpty() ? 254 : scopeIps.size();
+                JsonArray scopes = goResp.getJsonArray("scopes", new JsonArray());
+                long durationMs = goResp.getLong("durationMs", 0L);
 
-                int sampleLimit = Math.min(scopeIps.size(), 20);
-                AtomicInteger usedCount = new AtomicInteger(0);
-                JsonArray leases = new JsonArray();
+                // Persist DHCP stats if credential provided
+                if (credentialId != null && credentialId > 0 && !scopes.isEmpty()) {
+                    JsonObject firstScope = scopes.getJsonObject(0);
+                    String scopeName = firstScope.getString("subnetName", host + "-Scope");
+                    String startIp = firstScope.getString("startIp", host);
+                    String endIp = firstScope.getString("endIp", host);
+                    int totalIps = firstScope.getInteger("totalIps", 254);
+                    int usedIps = firstScope.getInteger("usedIps", 0);
+                    int freeIps = firstScope.getInteger("freeIps", totalIps);
+                    double utilization = firstScope.getDouble("utilization", 0.0);
 
-                ExecutorService pool = Executors.newFixedThreadPool(8);
-                try {
-                    List<CompletableFuture<Void>> tasks = new ArrayList<>();
-                    for (int i = 0; i < sampleLimit; i++) {
-                        String ip = scopeIps.get(i);
-                        tasks.add(CompletableFuture.runAsync(() -> {
-                            try {
-                                if (InetAddress.getByName(ip).isReachable(200)) {
-                                    usedCount.incrementAndGet();
-                                    String mac = "52:54:00:" + String.format("%02x:%02x:%02x",
-                                            (ip.hashCode() & 0xFF), ((ip.hashCode() >> 8) & 0xFF), ((ip.hashCode() >> 16) & 0xFF));
-                                    synchronized (leases) {
-                                        leases.add(new JsonObject()
-                                                .put("ipAddress", ip)
-                                                .put("macAddress", mac)
-                                                .put("hostName", "host-" + ip.replace('.', '-'))
-                                                .put("leaseExpiry", java.time.Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS).toString())
-                                                .put("status", "ACTIVE"));
-                                    }
-                                }
-                            } catch (Exception ignored) {}
-                        }, pool));
-                    }
-                    CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).get(15, TimeUnit.SECONDS);
-                } finally {
-                    pool.shutdownNow();
-                }
-
-                int finalUsed = usedCount.get() > 0 ? usedCount.get() : (int)(totalIps * 0.18);
-                int freeIps = Math.max(0, totalIps - finalUsed);
-                double utilization = totalIps > 0 ? (finalUsed * 100.0 / totalIps) : 0.0;
-
-                JsonObject scopeStats = new JsonObject()
-                        .put("scopeId", baseSubnet)
-                        .put("subnetName", scopeCidr)
-                        .put("startIp", scopeIps.isEmpty() ? baseSubnet : scopeIps.get(0))
-                        .put("endIp", scopeIps.isEmpty() ? baseSubnet : scopeIps.get(scopeIps.size() - 1))
-                        .put("subnetMask", "255.255.255.0")
-                        .put("totalIps", totalIps)
-                        .put("usedIps", finalUsed)
-                        .put("freeIps", freeIps)
-                        .put("utilization", Math.round(utilization * 10.0) / 10.0)
-                        .put("leases", leases);
-
-                JsonArray scopes = new JsonArray().add(scopeStats);
-
-                // Update database dhcp_utilization
-                if (credentialId != null && credentialId > 0) {
                     db.preparedQuery("DELETE FROM dhcp_utilization WHERE credential_id = $1")
                             .execute(Tuple.of(credentialId))
                             .compose(r -> db.preparedQuery(
                                     "INSERT INTO dhcp_utilization (scope_name, start_ip, end_ip, total_ip, used_ip, available_ip, used_ip_percentage, credential_id) " +
                                             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
-                                    .execute(Tuple.of(scopeCidr, scopeStats.getString("startIp"), scopeStats.getString("endIp"),
-                                            totalIps, finalUsed, freeIps, utilization, credentialId)));
+                                    .execute(Tuple.of(scopeName, startIp, endIp, totalIps, usedIps, freeIps, utilization, credentialId)));
                 }
 
-                long duration = System.currentTimeMillis() - startTime;
                 message.reply(new JsonObject()
                         .put("hostAddress", host)
                         .put("serverType", type)
-                        .put("status", "SUCCESS")
-                        .put("message", "Successfully collected DHCP scopes from " + host)
+                        .put("status", goResp.getString("status", "SUCCESS"))
+                        .put("message", goResp.getString("message", "DHCP scan completed"))
                         .put("scopes", scopes)
-                        .put("scanTime", java.time.Instant.now().toString())
-                        .put("durationMs", duration)
+                        .put("scanTime", goResp.getString("scanTime", java.time.Instant.now().toString()))
+                        .put("durationMs", durationMs)
                 );
             } catch (Exception e) {
-                LOGGER.error("DHCP scan error: {}", e.getMessage(), e);
+                LOGGER.error("DHCP scan error via Go plugin: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
             }
         });
 
-        LOGGER.info("NetworkWorkerVerticle consumers successfully initialized on EventBus.");
+        LOGGER.info("NetworkWorkerVerticle consumers successfully initialized with Go native plugins.");
         startPromise.complete();
     }
 
-    // Generates host IP addresses belonging to a given CIDR network block.
-    private List<String> generateIPList(String networkAddress, int cidr) {
-        List<String> ips = new ArrayList<>();
+    /**
+     * Executes the compiled Go native binary plugin passing JSON input via CLI arguments.
+     * Captures and returns the JSON output printed by the Go plugin to stdout.
+     */
+    private JsonObject executeGoPlugin(String pluginName, JsonObject inputJson, long timeoutSeconds) {
         try {
-            String[] parts = networkAddress.split("\\.");
-            int base = (Integer.parseInt(parts[0]) << 24) |
-                    (Integer.parseInt(parts[1]) << 16) |
-                    (Integer.parseInt(parts[2]) << 8) |
-                    Integer.parseInt(parts[3]);
+            File binary = findGoBinary(pluginName);
+            if (binary == null || !binary.exists()) {
+                LOGGER.error("Go binary for plugin '{}' not found!", pluginName);
+                return null;
+            }
 
-            int hostBits = 32 - cidr;
-            int totalHosts = (1 << hostBits);
-            int maxIps = Math.min(totalHosts - 2, 254);
+            ProcessBuilder pb = new ProcessBuilder(binary.getAbsolutePath(), "--json", inputJson.encode());
+            pb.redirectErrorStream(false);
+            Process process = pb.start();
 
-            for (int i = 1; i <= maxIps; i++) {
-                int current = base + i;
-                String ip = ((current >> 24) & 0xFF) + "." +
-                        ((current >> 16) & 0xFF) + "." +
-                        ((current >> 8) & 0xFF) + "." +
-                        (current & 0xFF);
-                ips.add(ip);
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                LOGGER.error("Go plugin '{}' timed out after {} seconds", pluginName, timeoutSeconds);
+                return null;
+            }
+
+            String outStr = output.toString().trim();
+            if (outStr.startsWith("{") && outStr.endsWith("}")) {
+                return new JsonObject(outStr);
+            } else {
+                LOGGER.warn("Go plugin '{}' returned non-JSON output: {}", pluginName, outStr);
+                return null;
             }
         } catch (Exception e) {
-            LOGGER.error("Error generating IP list for {}/{}: {}", networkAddress, cidr, e.getMessage());
+            LOGGER.error("Error executing Go plugin '{}': {}", pluginName, e.getMessage(), e);
+            return null;
         }
-        return ips;
+    }
+
+    /**
+     * Resolves the location of compiled Go binaries in the workspace.
+     */
+    private File findGoBinary(String name) {
+        String[] possiblePaths = new String[]{
+                "go-services/bin/" + name,
+                "../go-services/bin/" + name,
+                "/home/purvish/Documents/IPAM_Real _backup/go-services/bin/" + name,
+                "go-engine/" + name,
+                "../go-engine/" + name,
+                "/home/purvish/Documents/IPAM_Real _backup/go-engine/" + name
+        };
+
+        for (String path : possiblePaths) {
+            File f = new File(path);
+            if (f.exists() && f.canExecute()) {
+                return f;
+            }
+        }
+        return new File(possiblePaths[0]);
     }
 
     // Parses CSV formatted text into rows and columns handling quotes.
@@ -510,3 +510,4 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 (mask & 0xff);
     }
 }
+

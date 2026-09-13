@@ -435,7 +435,7 @@ public class ReportService {
     // Generates an alert history PDF report using dynamic Jasper layout.
     public Future<byte[]> generateAlertPdfReport() {
         Promise<byte[]> promise = Promise.promise();
-        String sql = "SELECT id, message, alert_type, subnet_address, created_date FROM alert_stream ORDER BY id DESC LIMIT 100";
+        String sql = "SELECT a.id, a.message, a.alert_type, s.subnet_address FROM alert_stream a LEFT JOIN subnet_details s ON s.id = a.subnet_id ORDER BY a.id DESC LIMIT 100";
         db.query(sql).execute().onComplete(ar -> {
             if (ar.failed()) {
                 promise.fail(ar.cause());
@@ -446,7 +446,7 @@ public class ReportService {
                 data.add(new JsonObject()
                         .put("message", row.getString("message"))
                         .put("alertType", row.getString("alert_type"))
-                        .put("subnet", row.getString("subnet_address")));
+                        .put("subnet", row.getString("subnet_address") != null ? row.getString("subnet_address") : "General"));
             }
             dispatchDynamicJasper("Alert History Report", data, createAlertReportColumns()).onComplete(promise);
         });
@@ -456,7 +456,7 @@ public class ReportService {
     // Generates an audit event log PDF report using dynamic Jasper layout.
     public Future<byte[]> generateEventPdfReport() {
         Promise<byte[]> promise = Promise.promise();
-        String sql = "SELECT id, event_type, event_context, created_date FROM event ORDER BY id DESC LIMIT 100";
+        String sql = "SELECT id, event_type, event_context, timestamp FROM event ORDER BY id DESC LIMIT 100";
         db.query(sql).execute().onComplete(ar -> {
             if (ar.failed()) {
                 promise.fail(ar.cause());
@@ -476,7 +476,7 @@ public class ReportService {
     // Generates a DHCP server statistics PDF report using dynamic Jasper layout.
     public Future<byte[]> generateDhcpPdfReport() {
         Promise<byte[]> promise = Promise.promise();
-        String sql = "SELECT id, credential_name, host_address, type, created_by FROM dhcp_server ORDER BY id ASC";
+        String sql = "SELECT id, credential_name, host_address, type, user_name FROM dhcp_credential_details ORDER BY id ASC";
         db.query(sql).execute().onComplete(ar -> {
             if (ar.failed()) {
                 promise.fail(ar.cause());
@@ -488,7 +488,7 @@ public class ReportService {
                         .put("credentialName", row.getString("credential_name"))
                         .put("hostAddress", row.getString("host_address"))
                         .put("type", row.getString("type"))
-                        .put("createdBy", row.getString("created_by") != null ? row.getString("created_by") : "admin"));
+                        .put("createdBy", row.getString("user_name") != null ? row.getString("user_name") : "admin"));
             }
             dispatchDynamicJasper("DHCP Server Statistics Report", data, createDhcpReportColumns()).onComplete(promise);
         });

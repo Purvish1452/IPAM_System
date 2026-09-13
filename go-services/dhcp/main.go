@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net"
@@ -61,10 +62,51 @@ type DHCPScanResponse struct {
 	DurationMs  int64            `json:"durationMs"`
 }
 
-// Starts the DHCP collection HTTP microservice and handles graceful shutdown.
+// Starts the DHCP collection HTTP microservice or runs in JSON CLI Plugin mode.
 func main() {
-	port := "8082"
+	args := os.Args[1:]
 
+	// Check if invoked in CLI / JSON Plugin mode via arguments or stdin
+	var rawInput string
+	for i, arg := range args {
+		if arg == "--json" && i+1 < len(args) {
+			rawInput = args[i+1]
+			break
+		} else if strings.HasPrefix(arg, "{") && strings.HasSuffix(arg, "}") {
+			rawInput = arg
+			break
+		}
+	}
+
+	// Check stdin if not passed via arguments and stdin is not a terminal
+	if rawInput == "" {
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			bytes, err := io.ReadAll(os.Stdin)
+			if err == nil && len(bytes) > 0 && strings.HasPrefix(strings.TrimSpace(string(bytes)), "{") {
+				rawInput = string(bytes)
+			}
+		}
+	}
+
+	// If JSON input is detected, execute in Plugin Mode and output JSON to stdout
+	if rawInput != "" {
+		var req DHCPScanRequest
+		if err := json.Unmarshal([]byte(rawInput), &req); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing JSON input: %v\n", err)
+			os.Exit(1)
+		}
+		resp, err := performDhcpScan(req)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "DHCP scan error: %v\n", err)
+			os.Exit(1)
+		}
+		output, _ := json.Marshal(resp)
+		fmt.Println(string(output))
+		return
+	}
+
+	port := "8082"
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		port = envPort
 	}
@@ -91,6 +133,38 @@ func main() {
 	log.Println("Shutting down IPAM DHCP Microservice gracefully...")
 }
 
+// performDhcpScan executes the DHCP collection logic and returns structured response.
+func performDhcpScan(req DHCPScanRequest) (*DHCPScanResponse, error) {
+	if strings.TrimSpace(req.HostAddress) == "" {
+		return nil, fmt.Errorf("hostAddress is required")
+	}
+
+	startTime := time.Now()
+	serverType := strings.ToLower(strings.TrimSpace(req.Type))
+	if serverType == "" {
+		serverType = "windows"
+	}
+
+	scopes := collectDHCPScopes(req)
+
+	status := "SUCCESS"
+	message := fmt.Sprintf("Successfully collected %d DHCP scope(s) from %s", len(scopes), req.HostAddress)
+	if len(scopes) == 0 {
+		status = "PARTIAL"
+		message = "No active DHCP scopes found on target host"
+	}
+
+	return &DHCPScanResponse{
+		HostAddress: req.HostAddress,
+		ServerType:  serverType,
+		Status:      status,
+		Message:     message,
+		Scopes:      scopes,
+		ScanTime:    time.Now().Format(time.RFC3339),
+		DurationMs:  time.Since(startTime).Milliseconds(),
+	}, nil
+}
+
 // healthHandler returns the health and service status.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -114,36 +188,10 @@ func scanDhcpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.TrimSpace(req.HostAddress) == "" {
-		http.Error(w, "hostAddress parameter is required", http.StatusBadRequest)
+	resp, err := performDhcpScan(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	startTime := time.Now()
-	serverType := strings.ToLower(strings.TrimSpace(req.Type))
-	if serverType == "" {
-		serverType = "windows"
-	}
-
-	log.Printf("Executing DHCP scope collection for host=%s type=%s port=%d", req.HostAddress, serverType, req.Port)
-
-	scopes := collectDHCPScopes(req)
-
-	status := "SUCCESS"
-	message := fmt.Sprintf("Successfully collected %d DHCP scope(s) from %s", len(scopes), req.HostAddress)
-	if len(scopes) == 0 {
-		status = "PARTIAL"
-		message = "No active DHCP scopes found on target host"
-	}
-
-	resp := DHCPScanResponse{
-		HostAddress: req.HostAddress,
-		ServerType:  serverType,
-		Status:      status,
-		Message:     message,
-		Scopes:      scopes,
-		ScanTime:    time.Now().Format(time.RFC3339),
-		DurationMs:  time.Since(startTime).Milliseconds(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -170,7 +218,7 @@ func collectDHCPScopes(req DHCPScanRequest) []DHCPScopeStats {
 
 	// Check if server is reachable
 	reachable := checkServerPort(host, probePort, 1500*time.Millisecond)
-	log.Printf("DHCP host %s connectivity check on port %d: reachable=%v", host, probePort, reachable)
+	_ = reachable
 
 	// Derive scopes for this DHCP server
 	targetScopes := req.Scopes

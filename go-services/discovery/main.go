@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,14 +17,14 @@ import (
 	"com.motadata/ipam/go-services/common"
 )
 
-//This represents the request sent by the client.
+// ScanRequest represents the request sent by the client or CLI.
 type ScanRequest struct {
-	SubnetCIDR string `json:"subnetCidr"`
-	TimeoutMs  int    `json:"timeoutMs"`
-	Concurrency int   `json:"concurrency"`
+	SubnetCIDR  string `json:"subnetCidr"`
+	TimeoutMs   int    `json:"timeoutMs"`
+	Concurrency int    `json:"concurrency"`
 }
 
-//This represents the result for one IP address.
+// HostResult represents the result for one IP address.
 type HostResult struct {
 	IP       string `json:"ip"`
 	Status   string `json:"status"`
@@ -30,20 +32,59 @@ type HostResult struct {
 	RTTMs    int64  `json:"rttMs"`
 }
 
-//This represents the complete scanning response.
+// ScanResponse represents the complete scanning response.
 type ScanResponse struct {
-	SubnetCIDR string       `json:"subnetCidr"`
-	TotalHosts int          `json:"totalHosts"`
-	ActiveCount int         `json:"activeCount"`
-	Hosts      []HostResult `json:"hosts"`
-	DurationMs int64        `json:"durationMs"`
+	SubnetCIDR  string       `json:"subnetCidr"`
+	TotalHosts  int          `json:"totalHosts"`
+	ActiveCount int          `json:"activeCount"`
+	Hosts       []HostResult `json:"hosts"`
+	DurationMs  int64        `json:"durationMs"`
 }
 
-// Starts the discovery HTTP microservice and handles graceful shutdown.
 func main() {
-	port := "8081"
+	args := os.Args[1:]
 
-	//This allows you to override the default port.
+	// Check if invoked in CLI / JSON Plugin mode via arguments or stdin
+	var rawInput string
+	for i, arg := range args {
+		if arg == "--json" && i+1 < len(args) {
+			rawInput = args[i+1]
+			break
+		} else if strings.HasPrefix(arg, "{") && strings.HasSuffix(arg, "}") {
+			rawInput = arg
+			break
+		}
+	}
+
+	// Check stdin if not passed via arguments and stdin is not a terminal
+	if rawInput == "" {
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			bytes, err := io.ReadAll(os.Stdin)
+			if err == nil && len(bytes) > 0 && strings.HasPrefix(strings.TrimSpace(string(bytes)), "{") {
+				rawInput = string(bytes)
+			}
+		}
+	}
+
+	// If JSON input is detected, execute in Plugin Mode and output JSON to stdout
+	if rawInput != "" {
+		var req ScanRequest
+		if err := json.Unmarshal([]byte(rawInput), &req); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing JSON input: %v\n", err)
+			os.Exit(1)
+		}
+		resp, err := performScan(req)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Scan error: %v\n", err)
+			os.Exit(1)
+		}
+		output, _ := json.Marshal(resp)
+		fmt.Println(string(output))
+		return
+	}
+
+	port := "8081"
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		port = envPort
 	}
@@ -51,14 +92,12 @@ func main() {
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/api/v1/scan/subnet", scanSubnetHandler)
 
-    //This creates the HTTP server.
 	server := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
 
-    // Starts the discovery HTTP service and handles graceful shutdown.
 	go func() {
 		log.Printf("IPAM Discovery Golang Microservice listening on port %s...", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -72,32 +111,10 @@ func main() {
 	log.Println("Shutting down IPAM Discovery Microservice gracefully...")
 }
 
-// Returns the health status of the discovery microservice.
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "UP",
-		"service": "go-discovery",
-		"timestamp": time.Now().Unix(),
-	})
-}
-
-//Receives the API request and creates the final response
-func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req ScanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-
+// performScan executes the CIDR sweep and returns the structured ScanResponse.
+func performScan(req ScanRequest) (*ScanResponse, error) {
 	if req.SubnetCIDR == "" {
-		http.Error(w, "subnetCidr parameter is required", http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("subnetCidr is required")
 	}
 
 	if req.TimeoutMs <= 0 {
@@ -112,8 +129,7 @@ func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
 
 	ips, err := common.ExpandCIDR(req.SubnetCIDR)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid CIDR format: %v", err), http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("invalid CIDR: %w", err)
 	}
 
 	results := scanIPs(ips, req.TimeoutMs, req.Concurrency)
@@ -125,19 +141,49 @@ func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := ScanResponse{
+	return &ScanResponse{
 		SubnetCIDR:  req.SubnetCIDR,
 		TotalHosts:  len(ips),
 		ActiveCount: activeCount,
 		Hosts:       results,
 		DurationMs:  time.Since(startTime).Milliseconds(),
+	}, nil
+}
+
+// Returns the health status of the discovery microservice.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "UP",
+		"service":   "go-discovery",
+		"timestamp": time.Now().Unix(),
+	})
+}
+
+// Receives the API request and creates the final response
+func scanSubnetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ScanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := performScan(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
 
-//Performs concurrent scanning using worker goroutines
+// Performs concurrent scanning using worker goroutines
 func scanIPs(ips []string, timeoutMs int, concurrency int) []HostResult {
 	ipChan := make(chan string, len(ips))
 	for _, ip := range ips {
@@ -147,6 +193,13 @@ func scanIPs(ips []string, timeoutMs int, concurrency int) []HostResult {
 
 	resultsChan := make(chan HostResult, len(ips))
 	var wg sync.WaitGroup
+
+	if concurrency > len(ips) && len(ips) > 0 {
+		concurrency = len(ips)
+	}
+	if concurrency <= 0 {
+		concurrency = 32
+	}
 
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
@@ -170,22 +223,32 @@ func scanIPs(ips []string, timeoutMs int, concurrency int) []HostResult {
 	return results
 }
 
-//Checks an individual IP and resolves its hostname
+// Checks an individual IP and resolves its hostname
 func pingAndResolve(ip string, timeoutMs int) HostResult {
 	start := time.Now()
 	timeout := time.Duration(timeoutMs) * time.Millisecond
+	if timeout > 2500*time.Millisecond {
+		timeout = 2500 * time.Millisecond
+	}
 
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "80"), timeout)
 	status := "DOWN"
-	if err == nil {
-		status = "UP"
-		conn.Close()
-	} else {
-		// Fallback check port 443 / ICMP probe simulation
-		conn443, err443 := net.DialTimeout("tcp", net.JoinHostPort(ip, "443"), timeout)
-		if err443 == nil {
+
+	// Probe common ports for host responsiveness (80, 443, 22, 53, 8080)
+	probePorts := []string{"80", "443", "22", "53", "8080", "3389", "5432"}
+	for _, port := range probePorts {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
+		if err == nil {
 			status = "UP"
-			conn443.Close()
+			conn.Close()
+			break
+		}
+	}
+
+	if status == "DOWN" && (ip == "127.0.0.1" || ip == "localhost") {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "8080"), timeout)
+		if err == nil {
+			status = "UP"
+			conn.Close()
 		}
 	}
 
@@ -195,7 +258,7 @@ func pingAndResolve(ip string, timeoutMs int) HostResult {
 	if status == "UP" {
 		names, err := net.LookupAddr(ip)
 		if err == nil && len(names) > 0 {
-			hostname = names[0]
+			hostname = strings.TrimSuffix(names[0], ".")
 		}
 	}
 

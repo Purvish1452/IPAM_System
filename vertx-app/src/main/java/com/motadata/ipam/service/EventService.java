@@ -176,15 +176,17 @@ public class EventService {
     // Return the most frequent event types.
     public Future<JsonArray> getTopEvents() {
         Promise<JsonArray> promise = Promise.promise();
-        String sql = "SELECT event_type AS eventType, COUNT(*) AS count " +
+        String sql = "SELECT event_type AS \"eventType\", COUNT(*) AS count " +
                 "FROM event GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 10";
         db.query(sql).execute().onComplete(ar -> {
             if (ar.succeeded()) {
                 JsonArray result = new JsonArray();
                 for (Row row : ar.result()) {
+                    String eventType = row.getString("eventType") != null ? row.getString("eventType") : row.getString(0);
+                    Long count = row.getLong("count") != null ? row.getLong("count") : row.getLong(1);
                     result.add(new JsonObject()
-                            .put("eventType", row.getString("eventType"))
-                            .put("count", row.getLong("count")));
+                            .put("eventType", eventType)
+                            .put("count", count));
                 }
                 promise.complete(result);
             } else {
