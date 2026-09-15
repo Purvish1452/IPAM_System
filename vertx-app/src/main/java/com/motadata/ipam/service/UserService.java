@@ -5,12 +5,10 @@ import com.motadata.ipam.model.UserRole;
 import com.motadata.ipam.security.JwtAuthProvider;
 import com.motadata.ipam.security.PasswordEncoder;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
-import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,11 +35,8 @@ public class UserService {
 
     // Authenticates a user against the database and returns a signed JWT token.
     public Future<JsonObject> authenticate(String userName, String password) {
-        Promise<JsonObject> promise = Promise.promise();
-
         if (userName == null || password == null || userName.trim().isEmpty() || password.trim().isEmpty()) {
-            promise.complete(new JsonObject().put("success", false).put("message", "Username and password required"));
-            return promise.future();
+            return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Username and password required"));
         }
 
         String sql = "SELECT u.id as id, u.user_name as user_name, u.password as password, u.email as email, " +
@@ -50,9 +45,9 @@ public class UserService {
                 "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id " +
                 "WHERE LOWER(u.user_name) = LOWER($1)";
 
-        db.preparedQuery(sql).execute(Tuple.of(userName)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
+        return db.preparedQuery(sql).execute(Tuple.of(userName)).compose(rows -> {
+            if (rows.size() > 0) {
+                Row row = rows.iterator().next();
                 String dbPass = row.getString("password");
                 boolean passMatches = (dbPass != null) &&
                         (PasswordEncoder.matches(password, dbPass) || password.equals(dbPass) || "admin123".equals(password));
@@ -75,12 +70,10 @@ public class UserService {
                     // Fetch PBAC feature permissions FIRST, then generate the JWT so that
                     // all permission strings (e.g. PERM_ALERTS_READ) are embedded in the token.
                     final String finalRoleName = roleName;
-                    fetchRoleFeatureAuthorities(roleId).onComplete(permAr -> {
+                    return fetchRoleFeatureAuthorities(roleId).map(permList -> {
                         List<String> authorities = new ArrayList<>();
                         authorities.add(finalRoleName);
-                        if (permAr.succeeded()) {
-                            authorities.addAll(permAr.result());
-                        }
+                        authorities.addAll(permList);
 
                         // Generate token AFTER permissions are known so they are in JWT claims.
                         String token = jwtAuthProvider.generateToken(user, authorities);
@@ -95,9 +88,8 @@ public class UserService {
                                 .put("authorities", new JsonArray(authorities));
 
                         LOGGER.info("User {} successfully authenticated via PostgreSQL with role {}", uname, finalRoleName);
-                        promise.complete(response);
+                        return response;
                     });
-                    return;
                 }
             }
 
@@ -110,14 +102,14 @@ public class UserService {
                 String token = jwtAuthProvider.generateToken(user);
 
                 JsonObject response = new JsonObject()
-                                .put("success", true)
+                        .put("success", true)
                         .put("token", token)
                         .put("userName", "admin")
                         .put("username", "admin")
                         .put("userId", 1)
                         .put("role", "ROLE_ADMIN")
                         .put("authorities", new JsonArray().add("ROLE_ADMIN").add("PERM_READ_ALL").add("PERM_WRITE_ALL"));
-                promise.complete(response);
+                return Future.succeededFuture(response);
             } else if ("purvish".equalsIgnoreCase(userName) && ("admin123".equals(password) || "purvish".equals(password) || "Mind@123".equals(password))) {
                 User user = new User();
                 user.setId(2L);
@@ -143,127 +135,116 @@ public class UserService {
                         .put("userId", 2)
                         .put("role", "ROLE_USER")
                         .put("authorities", new JsonArray(purvishAuthorities));
-                promise.complete(response);
+                return Future.succeededFuture(response);
             } else {
                 LOGGER.warn("Authentication failed for user: {}", userName);
-                promise.complete(new JsonObject().put("success", false).put("message", "Bad Credentials"));
+                return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Bad Credentials"));
             }
         });
-
-        return promise.future();
     }
 
     // Validates PBAC permissions and returns the active user role.
     public Future<JsonObject> validatePermission(String userName) {
-        Promise<JsonObject> promise = Promise.promise();
-
         if (userName == null || userName.trim().isEmpty() || "admin".equalsIgnoreCase(userName)) {
-            promise.complete(new JsonObject()
+            return Future.succeededFuture(new JsonObject()
                     .put("success", true)
                     .put("currentUserRole", "ROLE_ADMIN")
                     .put("message", "Permission granted"));
-            return promise.future();
         }
 
         String sql = "SELECT ur.role as role_name FROM users u " +
                 "LEFT JOIN user_role ur ON u.user_role_id = ur.id " +
                 "WHERE LOWER(u.user_name) = LOWER($1)";
 
-        db.preparedQuery(sql).execute(Tuple.of(userName)).onComplete(ar -> {
-            String role = "ROLE_USER";
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
-                String rName = row.getString("role_name");
-                if (rName != null && !rName.trim().isEmpty()) {
-                    role = rName;
-                }
-            } else if ("admin".equalsIgnoreCase(userName)) {
-                role = "ROLE_ADMIN";
-            }
+        return db.preparedQuery(sql).execute(Tuple.of(userName))
+                .map(rows -> {
+                    String role = "ROLE_USER";
+                    if (rows.size() > 0) {
+                        Row row = rows.iterator().next();
+                        String rName = row.getString("role_name");
+                        if (rName != null && !rName.trim().isEmpty()) {
+                            role = rName;
+                        }
+                    } else if ("admin".equalsIgnoreCase(userName)) {
+                        role = "ROLE_ADMIN";
+                    }
 
-            promise.complete(new JsonObject()
-                    .put("success", true)
-                    .put("currentUserRole", role)
-                    .put("message", "Permission granted"));
-        });
-
-        return promise.future();
+                    return new JsonObject()
+                            .put("success", true)
+                            .put("currentUserRole", role)
+                            .put("message", "Permission granted");
+                })
+                .recover(err -> Future.succeededFuture(new JsonObject()
+                        .put("success", true)
+                        .put("currentUserRole", "ROLE_ADMIN".equalsIgnoreCase(userName) ? "ROLE_ADMIN" : "ROLE_USER")
+                        .put("message", "Permission granted")));
     }
 
     // Fetches all registered users from the database.
     public Future<JsonArray> getAllUsers() {
-        Promise<JsonArray> promise = Promise.promise();
-
         String sql = "SELECT u.id as id, u.user_name as user_name, u.email as email, u.status as status, " +
                 "u.user_role_id as role_id, ur.role as role_name, ur.description as role_desc " +
                 "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id ORDER BY u.id ASC";
 
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray users = new JsonArray();
-                for (Row row : ar.result()) {
-                    Long roleId = row.getLong("role_id");
-                    String roleName = row.getString("role_name");
-                    String roleDesc = row.getString("role_desc");
+        return db.query(sql).execute().map(rows -> {
+            JsonArray users = new JsonArray();
+            for (Row row : rows) {
+                Long roleId = row.getLong("role_id");
+                String roleName = row.getString("role_name");
+                String roleDesc = row.getString("role_desc");
 
-                    JsonObject u = new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("userName", row.getString("user_name"))
-                            .put("email", row.getString("email"))
-                            .put("status", row.getBoolean("status"))
-                            .put("roleName", roleName != null ? roleName : "ROLE_USER")
-                            .put("userRoleId", new JsonObject()
-                                    .put("id", roleId != null ? roleId : 2L)
-                                    .put("role", roleName != null ? roleName : "ROLE_USER")
-                                    .put("description", roleDesc != null ? roleDesc : "User Role"));
-                    users.add(u);
-                }
-                promise.complete(users);
-            } else {
-                LOGGER.error("Failed to query all users: {}", ar.cause().getMessage());
-                promise.fail(ar.cause());
-            }
-        });
-
-        return promise.future();
-    }
-
-    // Fetches a specific user record by its ID.
-    public Future<JsonObject> getUserById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
-        String sql = "SELECT u.id as id, u.user_name as user_name, u.email as email, u.status as status, " +
-                "u.user_role_id as role_id, ur.role as role_name, ur.description as role_desc " +
-                "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id WHERE u.id = $1";
-
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
                 JsonObject u = new JsonObject()
                         .put("id", row.getLong("id"))
                         .put("userName", row.getString("user_name"))
                         .put("email", row.getString("email"))
                         .put("status", row.getBoolean("status"))
-                        .put("roleId", row.getLong("role_id"))
-                        .put("roleName", row.getString("role_name"));
-                promise.complete(u);
-            } else {
-                promise.complete(new JsonObject()
+                        .put("roleName", roleName != null ? roleName : "ROLE_USER")
+                        .put("userRoleId", new JsonObject()
+                                .put("id", roleId != null ? roleId : 2L)
+                                .put("role", roleName != null ? roleName : "ROLE_USER")
+                                .put("description", roleDesc != null ? roleDesc : "User Role"));
+                users.add(u);
+            }
+            return users;
+        });
+    }
+
+    // Fetches a specific user record by its ID.
+    public Future<JsonObject> getUserById(Long id) {
+        String sql = "SELECT u.id as id, u.user_name as user_name, u.email as email, u.status as status, " +
+                "u.user_role_id as role_id, ur.role as role_name, ur.description as role_desc " +
+                "FROM users u LEFT JOIN user_role ur ON u.user_role_id = ur.id WHERE u.id = $1";
+
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> {
+                    if (rows.size() > 0) {
+                        Row row = rows.iterator().next();
+                        return new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("userName", row.getString("user_name"))
+                                .put("email", row.getString("email"))
+                                .put("status", row.getBoolean("status"))
+                                .put("roleId", row.getLong("role_id"))
+                                .put("roleName", row.getString("role_name"));
+                    } else {
+                        return new JsonObject()
+                                .put("id", id)
+                                .put("userName", "admin")
+                                .put("email", "admin@motadata.com")
+                                .put("status", true)
+                                .put("roleId", 1);
+                    }
+                })
+                .recover(err -> Future.succeededFuture(new JsonObject()
                         .put("id", id)
                         .put("userName", "admin")
                         .put("email", "admin@motadata.com")
                         .put("status", true)
-                        .put("roleId", 1));
-            }
-        });
-
-        return promise.future();
+                        .put("roleId", 1)));
     }
 
     // Creates or updates a user record with encoded password in the database.
     public Future<JsonObject> saveUser(JsonObject userJson) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String userName = userJson.getString("userName", "user_" + System.currentTimeMillis());
         String password = userJson.getString("password", "admin123");
         String email = userJson.getString("email", userName + "@motadata.com");
@@ -276,155 +257,129 @@ public class UserService {
                 "ON CONFLICT (user_name) DO UPDATE SET email = EXCLUDED.email, user_role_id = EXCLUDED.user_role_id " +
                 "RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(userName, hashedPassword, email, roleId)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                LOGGER.info("User {} saved successfully in PostgreSQL", userName);
-                promise.complete(new JsonObject().put("success", true).put("message", "User Details Saved Successfully"));
-            } else {
-                LOGGER.error("Failed to save user {}: {}", userName, ar.cause().getMessage());
-                promise.complete(new JsonObject().put("success", true).put("message", "User Details Saved Successfully"));
-            }
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(userName, hashedPassword, email, roleId))
+                .map(rows -> {
+                    LOGGER.info("User {} saved successfully in PostgreSQL", userName);
+                    return new JsonObject().put("success", true).put("message", "User Details Saved Successfully");
+                })
+                .recover(err -> {
+                    LOGGER.error("Failed to save user {}: {}", userName, err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", true).put("message", "User Details Saved Successfully"));
+                });
     }
 
     // Deletes a user by ID from the database.
     public Future<JsonObject> deleteUser(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "DELETE FROM users WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "User Deleted Successfully"));
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "User Deleted Successfully"))
+                .recover(err -> Future.succeededFuture(new JsonObject().put("success", true).put("message", "User Deleted Successfully")));
     }
 
     // Fetches all user roles from the database.
     public Future<JsonArray> getAllRoles() {
-        Promise<JsonArray> promise = Promise.promise();
-
         String sql = "SELECT id, role, description FROM user_role ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray roles = new JsonArray();
-                for (Row row : ar.result()) {
-                    roles.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("role", row.getString("role"))
-                            .put("roleName", row.getString("role"))
-                            .put("description", row.getString("description")));
-                }
-                promise.complete(roles);
-            } else {
-                JsonArray fallback = new JsonArray()
-                        .add(new JsonObject().put("id", 1).put("role", "ROLE_ADMIN").put("description", "Administrator Role"))
-                        .add(new JsonObject().put("id", 2).put("role", "ROLE_USER").put("description", "Standard User Role"));
-                promise.complete(fallback);
-            }
-        });
-
-        return promise.future();
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonArray roles = new JsonArray();
+                    for (Row row : rows) {
+                        roles.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("role", row.getString("role"))
+                                .put("roleName", row.getString("role"))
+                                .put("description", row.getString("description")));
+                    }
+                    return roles;
+                })
+                .recover(err -> {
+                    JsonArray fallback = new JsonArray()
+                            .add(new JsonObject().put("id", 1).put("role", "ROLE_ADMIN").put("description", "Administrator Role"))
+                            .add(new JsonObject().put("id", 2).put("role", "ROLE_USER").put("description", "Standard User Role"));
+                    return Future.succeededFuture(fallback);
+                });
     }
 
     // Fetches a specific role by its ID.
     public Future<JsonObject> getRoleById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "SELECT id, role, description FROM user_role WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
-                promise.complete(new JsonObject()
-                        .put("id", row.getLong("id"))
-                        .put("role", row.getString("role"))
-                        .put("roleName", row.getString("role"))
-                        .put("description", row.getString("description")));
-            } else {
-                promise.complete(new JsonObject()
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> {
+                    if (rows.size() > 0) {
+                        Row row = rows.iterator().next();
+                        return new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("role", row.getString("role"))
+                                .put("roleName", row.getString("role"))
+                                .put("description", row.getString("description"));
+                    } else {
+                        return new JsonObject()
+                                .put("id", id)
+                                .put("role", "ROLE_ADMIN")
+                                .put("roleName", "ROLE_ADMIN")
+                                .put("description", "Administrator Role");
+                    }
+                })
+                .recover(err -> Future.succeededFuture(new JsonObject()
                         .put("id", id)
                         .put("role", "ROLE_ADMIN")
                         .put("roleName", "ROLE_ADMIN")
-                        .put("description", "Administrator Role"));
-            }
-        });
-
-        return promise.future();
+                        .put("description", "Administrator Role")));
     }
 
     // Saves or updates a user role record in the database.
     public Future<JsonObject> saveRole(JsonObject roleJson) {
-        Promise<JsonObject> promise = Promise.promise();
-
         Long id = roleJson.getLong("id");
         String role = roleJson.getString("role", roleJson.getString("roleName", "ROLE_CUSTOM"));
         String desc = roleJson.getString("description", "Custom Role Description");
 
         if (id != null) {
             String sql = "UPDATE user_role SET role = $1, description = $2 WHERE id = $3";
-            db.preparedQuery(sql).execute(Tuple.of(role, desc, id)).onComplete(ar -> {
-                promise.complete(new JsonObject().put("success", true).put("message", "User Role Updated Successfully"));
-            });
+            return db.preparedQuery(sql).execute(Tuple.of(role, desc, id))
+                    .map(rows -> new JsonObject().put("success", true).put("message", "User Role Updated Successfully"));
         } else {
             String sql = "INSERT INTO user_role (role, description) VALUES ($1, $2) RETURNING id";
-            db.preparedQuery(sql).execute(Tuple.of(role, desc)).onComplete(ar -> {
-                promise.complete(new JsonObject().put("success", true).put("message", "User Role Saved Successfully"));
-            });
+            return db.preparedQuery(sql).execute(Tuple.of(role, desc))
+                    .map(rows -> new JsonObject().put("success", true).put("message", "User Role Saved Successfully"));
         }
-
-        return promise.future();
     }
 
     // Deletes a user role by ID from the database.
     public Future<JsonObject> deleteRole(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "DELETE FROM user_role WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "User Role Deleted Successfully"));
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "User Role Deleted Successfully"));
     }
 
     // Fetches the list of all PBAC features.
     public Future<JsonArray> getRoleFeatures() {
-        Promise<JsonArray> promise = Promise.promise();
-
         String sql = "SELECT id, name FROM feature ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray features = new JsonArray();
-                for (Row row : ar.result()) {
-                    features.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("featureName", row.getString("name")));
-                }
-                promise.complete(features);
-            } else {
-                JsonArray fallback = new JsonArray()
-                        .add(new JsonObject().put("id", 1).put("featureName", "ALERTS"))
-                        .add(new JsonObject().put("id", 2).put("featureName", "ROGUE DETECTION"))
-                        .add(new JsonObject().put("id", 3).put("featureName", "REPORTS"))
-                        .add(new JsonObject().put("id", 4).put("featureName", "EVENT NOTIFICATIONS"))
-                        .add(new JsonObject().put("id", 5).put("featureName", "SETTINGS"))
-                        .add(new JsonObject().put("id", 6).put("featureName", "DASHBOARD"))
-                        .add(new JsonObject().put("id", 7).put("featureName", "IP REQUESTS"));
-                promise.complete(fallback);
-            }
-        });
-
-        return promise.future();
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonArray features = new JsonArray();
+                    for (Row row : rows) {
+                        features.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("featureName", row.getString("name")));
+                    }
+                    return features;
+                })
+                .recover(err -> {
+                    JsonArray fallback = new JsonArray()
+                            .add(new JsonObject().put("id", 1).put("featureName", "ALERTS"))
+                            .add(new JsonObject().put("id", 2).put("featureName", "ROGUE DETECTION"))
+                            .add(new JsonObject().put("id", 3).put("featureName", "REPORTS"))
+                            .add(new JsonObject().put("id", 4).put("featureName", "EVENT NOTIFICATIONS"))
+                            .add(new JsonObject().put("id", 5).put("featureName", "SETTINGS"))
+                            .add(new JsonObject().put("id", 6).put("featureName", "DASHBOARD"))
+                            .add(new JsonObject().put("id", 7).put("featureName", "IP REQUESTS"));
+                    return Future.succeededFuture(fallback);
+                });
     }
 
     // Fetches feature-level read and write permission authorities for a role ID.
     private Future<List<String>> fetchRoleFeatureAuthorities(Long roleId) {
-        Promise<List<String>> promise = Promise.promise();
-
         if (roleId == null) {
-            promise.complete(new ArrayList<>());
-            return promise.future();
+            return Future.succeededFuture(new ArrayList<>());
         }
 
         String sql = "SELECT rfp.read_permission, rfp.write_permission, f.name as feature_name " +
@@ -432,24 +387,22 @@ public class UserService {
                 "JOIN feature f ON rfp.feature_id = f.id " +
                 "WHERE rfp.role_id = $1";
 
-        db.preparedQuery(sql).execute(Tuple.of(roleId)).onComplete(ar -> {
-            List<String> auths = new ArrayList<>();
-            if (ar.succeeded()) {
-                for (Row row : ar.result()) {
-                    String fName = row.getString("feature_name");
-                    if (fName != null) {
-                        if (Boolean.TRUE.equals(row.getBoolean("read_permission"))) {
-                            auths.add("PERM_" + fName.toUpperCase().replace(" ", "_") + "_READ");
-                        }
-                        if (Boolean.TRUE.equals(row.getBoolean("write_permission"))) {
-                            auths.add("PERM_" + fName.toUpperCase().replace(" ", "_") + "_WRITE");
+        return db.preparedQuery(sql).execute(Tuple.of(roleId))
+                .map(rows -> {
+                    List<String> auths = new ArrayList<>();
+                    for (Row row : rows) {
+                        String fName = row.getString("feature_name");
+                        if (fName != null) {
+                            if (Boolean.TRUE.equals(row.getBoolean("read_permission"))) {
+                                auths.add("PERM_" + fName.toUpperCase().replace(" ", "_") + "_READ");
+                            }
+                            if (Boolean.TRUE.equals(row.getBoolean("write_permission"))) {
+                                auths.add("PERM_" + fName.toUpperCase().replace(" ", "_") + "_WRITE");
+                            }
                         }
                     }
-                }
-            }
-            promise.complete(auths);
-        });
-
-        return promise.future();
+                    return auths;
+                })
+                .recover(err -> Future.succeededFuture(new ArrayList<>()));
     }
 }

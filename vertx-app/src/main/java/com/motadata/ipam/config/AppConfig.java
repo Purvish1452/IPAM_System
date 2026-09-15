@@ -4,7 +4,6 @@ import io.vertx.config.ConfigRetriever;
 import io.vertx.config.ConfigRetrieverOptions;
 import io.vertx.config.ConfigStoreOptions;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import org.slf4j.LoggerFactory;
@@ -31,8 +30,6 @@ public class AppConfig {
      */
     // Loads the application configuration asynchronously from the YAML file or defaults.
     public static Future<AppConfig> load(Vertx vertx) {
-        Promise<AppConfig> promise = Promise.promise();
-
         String configPath = findConfigFilePath();
         LOGGER.info("Loading configuration from path: {}", configPath);
 
@@ -44,19 +41,15 @@ public class AppConfig {
         ConfigRetrieverOptions options = new ConfigRetrieverOptions().addStore(yamlStore);
         ConfigRetriever retriever = ConfigRetriever.create(vertx, options);
 
-        retriever.getConfig().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonObject json = ar.result();
-                LOGGER.info("Configuration loaded successfully: {}", json.encodePrettily());
-                promise.complete(new AppConfig(json));
-            } else {
-                LOGGER.warn("Failed to load configuration from {}, using defaults: {}", configPath, ar.cause().getMessage());
-                promise.complete(new AppConfig(createDefaultConfig()));
-            }
-        });
-
-
-        return promise.future();
+        return retriever.getConfig()
+                .map(json -> {
+                    LOGGER.info("Configuration loaded successfully: {}", json.encodePrettily());
+                    return new AppConfig(json);
+                })
+                .recover(err -> {
+                    LOGGER.warn("Failed to load configuration from {}, using defaults: {}", configPath, err.getMessage());
+                    return Future.succeededFuture(new AppConfig(createDefaultConfig()));
+                });
     }
 
     // Locates the path to the YAML configuration file.
@@ -100,42 +93,47 @@ public class AppConfig {
         return config.getString("server-host", "localhost");
     }
 
-    // Returns the configured PostgreSQL database host.
+    // Returns the database host.
     public String getDbHost() {
-        return config.getString("db-host", "localhost");
+        return config.getString("db-host", "127.0.0.1");
     }
 
-    // Returns the configured PostgreSQL database port.
+    // Returns the database port.
     public int getDbPort() {
         return config.getInteger("db-port", 5432);
     }
 
-    // Returns the configured PostgreSQL database name.
+    // Returns the database name.
     public String getDbName() {
         return config.getString("db-name", "ipam_db");
     }
 
-    // Returns the configured PostgreSQL database username.
+    // Returns the database username.
     public String getDbUser() {
         return config.getString("db-user", "postgres");
     }
 
-    // Returns the configured PostgreSQL database password.
+    // Returns the database password.
     public String getDbPassword() {
         return config.getString("db-password", "password");
     }
 
-    // Returns the maximum ping timeout in seconds.
-    public int getMaxPingTimeout() {
-        return config.getInteger("max-ping-check-timeout", 10);
+    // Returns the database pool maximum size.
+    public int getDbPoolMaxSize() {
+        return config.getInteger("db-pool-max-size", 20);
     }
 
-    // Returns the maximum ping retry count.
-    public int getMaxPingRetryCount() {
+    // Returns the ping check timeout in milliseconds.
+    public int getMaxPingCheckTimeout() {
+        return config.getInteger("max-ping-check-timeout", 10) * 100; // default 1000ms
+    }
+
+    // Returns the ping retry count.
+    public int getMaxPingCheckRetryCount() {
         return config.getInteger("max-ping-check-retry-count", 2);
     }
 
-    // Returns the maximum number of concurrent ping requests.
+    // Returns the max concurrent ping workers.
     public int getMaxConcurrentPing() {
         return config.getInteger("max-concurrent-ping", 500);
     }
@@ -145,8 +143,18 @@ public class AppConfig {
         return config.getInteger("process-request-timeout", 1200);
     }
 
-    // Returns the underlying JsonObject configuration.
-    public JsonObject getJsonObject() {
-        return config;
+    // Returns the JWT secret key.
+    public String getJwtSecret() {
+        return config.getString("jwt-secret", "motadata-ipam-secure-jwt-secret-key-2026-production-super-strong-token");
+    }
+
+    // Returns the JWT token validity duration in milliseconds.
+    public long getJwtExpiryMs() {
+        return config.getLong("jwt-expiry-ms", 86400000L); // 24 hours default
+    }
+
+    // Returns the raw configuration JSON object.
+    public JsonObject toJson() {
+        return config.copy();
     }
 }

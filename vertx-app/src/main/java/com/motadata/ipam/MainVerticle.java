@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  *   - Worker Pool Layer: NetworkWorkerVerticle (30 threads), ReportWorkerVerticle (5 threads)
  *   - Messaging: Vert.x EventBus
  */
-public class MainVerticle extends AbstractVerticle {
+public class    MainVerticle extends AbstractVerticle {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MainVerticle.class);
 
@@ -50,32 +50,20 @@ public class MainVerticle extends AbstractVerticle {
         ReportWorkerVerticle.silenceThirdPartyLoggers();
         LOGGER.info("Starting Vert.x IPAM Main Deployer (Reactive EventBus Engine)...");
 
-        AppConfig.load(vertx).onComplete(configAr -> {
-            if (configAr.failed()) {
-                LOGGER.error("Failed to load application configuration: {}", configAr.cause().getMessage());
-                startPromise.fail(configAr.cause());
-                return;
-            }
-
-            AppConfig config = configAr.result();
-
+        AppConfig.load(vertx).compose(config -> {
             // Initialize PostgreSQL Reactive Connection Pool
             pgClientProvider = new PgClientProvider(vertx, config);
             Pool db = pgClientProvider.getPool();
 
+            // Initialize Security Provider
+            JwtAuthProvider jwtAuthProvider = new JwtAuthProvider(vertx);
+
+            // Initialize Background Job Scheduler
+            jobScheduler = new JobScheduler(vertx);
+            jobScheduler.start();
+
             // Initialize PostgreSQL Schema & Seed Data
-            DatabaseInit.initSchema(vertx, db).onComplete(initAr -> {
-                if (initAr.failed()) {
-                    LOGGER.warn("Database initialization warning: {}", initAr.cause().getMessage());
-                }
-
-                // Initialize Security Provider
-                JwtAuthProvider jwtAuthProvider = new JwtAuthProvider(vertx);
-
-                // Initialize Background Job Scheduler
-                jobScheduler = new JobScheduler(vertx);
-                jobScheduler.start();
-
+            return DatabaseInit.initSchema(vertx, db).compose(v -> {
                 // 1. Deploy Network Discovery Worker Verticle (Worker Pool: 30 Threads)
                 DeploymentOptions networkWorkerOpts = new DeploymentOptions()
                         .setThreadingModel(io.vertx.core.ThreadingModel.WORKER)
@@ -97,28 +85,25 @@ public class MainVerticle extends AbstractVerticle {
                 // 3. Deploy HTTP Server Verticle on the Event Loop
                 DeploymentOptions httpOptions = new DeploymentOptions()
                         .setConfig(config())
-                        .setInstances(Runtime.getRuntime().availableProcessors()*2); //It use (2* core(16)=32) thread use all core.
+                        .setInstances(Runtime.getRuntime().availableProcessors() * 2);
 
                 Future<String> deployHttpServer = vertx.deployVerticle(() -> new HttpServerVerticle(db, config, jwtAuthProvider), httpOptions);
 
                 // Wait for all verticles to deploy successfully
-                Future.all(deployNetworkWorker, deployReportWorker, deployHttpServer).onComplete(deployAr -> {
-                    if (deployAr.succeeded()) {
-                        LOGGER.info("===============================================================");
-                        LOGGER.info(" Vert.x IPAM System Fully Initialized & Deployed");
-                        LOGGER.info(" [1] Event Loop Layer: HttpServerVerticle");
-                        LOGGER.info(" [2] Network Worker Pool: 30 Threads (NetworkWorkerVerticle)");
-                        LOGGER.info(" [3] Report Worker Pool: 5 Threads (ReportWorkerVerticle)");
-                        LOGGER.info(" [4] Messaging Backbone: Vert.x EventBus");
-                        LOGGER.info("===============================================================");
-                        startPromise.complete();
-                    } else {
-                        LOGGER.error("Failed to deploy all verticles: {}", deployAr.cause().getMessage(), deployAr.cause());
-                        startPromise.fail(deployAr.cause());
-                    }
-                });
+                return Future.all(deployNetworkWorker, deployReportWorker, deployHttpServer)
+                        .mapEmpty()
+                        .onSuccess(x -> {
+                            LOGGER.info("===============================================================");
+                            LOGGER.info(" Vert.x IPAM System Fully Initialized & Deployed");
+                            LOGGER.info(" [1] Event Loop Layer: HttpServerVerticle");
+                            LOGGER.info(" [2] Network Worker Pool: 30 Threads (NetworkWorkerVerticle)");
+                            LOGGER.info(" [3] Report Worker Pool: 5 Threads (ReportWorkerVerticle)");
+                            LOGGER.info(" [4] Messaging Backbone: Vert.x EventBus");
+                            LOGGER.info("===============================================================");
+                        });
             });
-        });
+        }).onSuccess(v -> startPromise.complete())
+          .onFailure(startPromise::fail);
     }
 
     // Stops background scheduler jobs and closes the database connection pool on shutdown.

@@ -1,11 +1,11 @@
 package com.motadata.ipam.service;
 
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.SqlResult;
 import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,8 +33,6 @@ public class AlertService {
 
     // Fetch, filter, search, paginate, and convert alert records into a JSON response.
     public Future<JsonObject> getAlerts(String alertFilter, String search, Integer page, Integer pageSize) {
-        Promise<JsonObject> promise = Promise.promise();
-
         int p = (page == null || page < 1) ? 1 : page;
         int size = (pageSize == null || pageSize < 1) ? 20 : pageSize;
         int offset = (p - 1) * size;
@@ -66,40 +64,29 @@ public class AlertService {
         dataParams.addInteger(size);
         dataParams.addInteger(offset);
 
-        db.preparedQuery(countSql).execute(countParams).onComplete(countAr -> {
-            if (countAr.failed()) {
-                LOGGER.error("Failed to query alert count: {}", countAr.cause().getMessage());
-                promise.fail(countAr.cause());
-                return;
-            }
+        return db.preparedQuery(countSql).execute(countParams)
+                .compose(countRows -> {
+                    long total = countRows.size() > 0 ? countRows.iterator().next().getLong("total") : 0L;
 
-            long total = 0;
-            if (countAr.result().size() > 0) {
-                total = countAr.result().iterator().next().getLong("total");
-            }
-
-            if (total == 0) {
-                db.query("SELECT count(*) as cnt FROM alert_stream").execute().onComplete(allCntAr -> {
-                    long allCnt = (allCntAr.succeeded() && allCntAr.result().size() > 0) ?
-                            allCntAr.result().iterator().next().getLong("cnt") : 0;
-                    if (allCnt == 0) {
-                        seedInitialAlerts().onComplete(seedAr -> {
-                            db.preparedQuery(countSql).execute(countParams).onComplete(reCountAr -> {
-                                long reTotal = (reCountAr.succeeded() && reCountAr.result().size() > 0) ?
-                                        reCountAr.result().iterator().next().getLong("total") : 0;
-                                fetchAlertData(dataSql, dataParams, reTotal, promise);
-                            });
-                        });
+                    if (total == 0) {
+                        return db.query("SELECT count(*) as cnt FROM alert_stream").execute()
+                                .compose(allCntRows -> {
+                                    long allCnt = (allCntRows.size() > 0) ? allCntRows.iterator().next().getLong("cnt") : 0L;
+                                    if (allCnt == 0) {
+                                        return seedInitialAlerts()
+                                                .compose(v -> db.preparedQuery(countSql).execute(countParams))
+                                                .compose(reCountRows -> {
+                                                    long reTotal = (reCountRows.size() > 0) ? reCountRows.iterator().next().getLong("total") : 0L;
+                                                    return fetchAlertData(dataSql, dataParams, reTotal);
+                                                });
+                                    } else {
+                                        return fetchAlertData(dataSql, dataParams, 0L);
+                                    }
+                                });
                     } else {
-                        fetchAlertData(dataSql, dataParams, 0, promise);
+                        return fetchAlertData(dataSql, dataParams, total);
                     }
                 });
-            } else {
-                fetchAlertData(dataSql, dataParams, total, promise);
-            }
-        });
-
-        return promise.future();
     }
 
     // Retrieves filtered and paginated alerts without search term.
@@ -108,39 +95,32 @@ public class AlertService {
     }
 
     // Fetches alert database rows and shapes the JSON response payload.
-    private void fetchAlertData(String sql, Tuple params, long total, Promise<JsonObject> promise) {
-        db.preparedQuery(sql).execute(params).onComplete(dataAr -> {
-            if (dataAr.succeeded()) {
-                JsonArray list = new JsonArray();
-                for (Row row : dataAr.result()) {
-                    Date ts = row.getLocalDateTime("timestamp") != null ?
-                            java.sql.Timestamp.valueOf(row.getLocalDateTime("timestamp")) : new Date();
+    private Future<JsonObject> fetchAlertData(String sql, Tuple params, long total) {
+        return db.preparedQuery(sql).execute(params).map(rows -> {
+            JsonArray list = new JsonArray();
+            for (Row row : rows) {
+                Date ts = row.getLocalDateTime("timestamp") != null ?
+                        java.sql.Timestamp.valueOf(row.getLocalDateTime("timestamp")) : new Date();
 
-                    JsonObject a = new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("alertType", row.getString("alert_type") != null ? row.getString("alert_type") : "CRITICAL")
-                            .put("message", row.getString("message") != null ? row.getString("message") : "Subnet alert triggered")
-                            .put("subnet", row.getString("subnet") != null ? row.getString("subnet") : "192.168.10.0")
-                            .put("timestamp", DATE_FORMAT.format(ts))
-                            .put("status", row.getBoolean("status") != null && row.getBoolean("status"));
-                    list.add(a);
-                }
-
-                JsonObject response = new JsonObject()
-                        .put("data", list)
-                        .put("total", total)
-                        .put("success", true);
-                promise.complete(response);
-            } else {
-                LOGGER.error("Failed to query alert data: {}", dataAr.cause().getMessage());
-                promise.fail(dataAr.cause());
+                JsonObject a = new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("alertType", row.getString("alert_type") != null ? row.getString("alert_type") : "CRITICAL")
+                        .put("message", row.getString("message") != null ? row.getString("message") : "Subnet alert triggered")
+                        .put("subnet", row.getString("subnet") != null ? row.getString("subnet") : "192.168.10.0")
+                        .put("timestamp", DATE_FORMAT.format(ts))
+                        .put("status", row.getBoolean("status") != null && row.getBoolean("status"));
+                list.add(a);
             }
+
+            return new JsonObject()
+                    .put("data", list)
+                    .put("total", total)
+                    .put("success", true);
         });
     }
 
     // Insert default alert records when the alert stream is initially empty.
     public Future<Void> seedInitialAlerts() {
-        Promise<Void> promise = Promise.promise();
         String seedSql = "INSERT INTO alert_stream (subnet_id, alert_type, message, subnet, timestamp, status) VALUES " +
                 "(1, 'CRITICAL', 'Subnet 192.168.10.0/24 utilization reached 85.2% (Threshold: 80%)', '192.168.10.0', CURRENT_TIMESTAMP - INTERVAL '15 minutes', true), " +
                 "(1, 'MAJOR', 'Rogue Device 00:50:56:FE:DC:BA detected on IP 192.168.10.155', '192.168.10.0', CURRENT_TIMESTAMP - INTERVAL '45 minutes', true), " +
@@ -151,21 +131,14 @@ public class AlertService {
                 "(1, 'CLEARED', 'Rogue Device 00:50:56:FE:10:04 authorized as Gateway Host', '192.168.10.0', CURRENT_TIMESTAMP - INTERVAL '2 days', false), " +
                 "(2, 'CLEARED', 'IP Conflict on 10.0.0.12 resolved automatically', '10.0.0.0', CURRENT_TIMESTAMP - INTERVAL '3 days', false)";
 
-        db.query(seedSql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                LOGGER.info("Seeded initial realistic alert records into alert_stream table.");
-                promise.complete();
-            } else {
-                LOGGER.warn("Initial alert seeding skipped: {}", ar.cause().getMessage());
-                promise.complete();
-            }
-        });
-        return promise.future();
+        return db.query(seedSql).execute()
+                .onSuccess(v -> LOGGER.info("Seeded initial realistic alert records into alert_stream table."))
+                .onFailure(err -> LOGGER.warn("Initial alert seeding skipped: {}", err.getMessage()))
+                .mapEmpty();
     }
 
     // Creates a new dynamic alert record.
     public Future<JsonObject> createAlert(Long subnetId, String alertType, String message, String subnet, boolean status) {
-        Promise<JsonObject> promise = Promise.promise();
         long sid = subnetId != null ? subnetId : 1L;
         String type = alertType != null ? alertType.toUpperCase() : "INFO";
         String sub = subnet != null ? subnet : "General";
@@ -173,17 +146,12 @@ public class AlertService {
         String sql = "INSERT INTO alert_stream (subnet_id, alert_type, message, subnet, timestamp, status) " +
                 "VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5) RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(sid, type, message, sub, status)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                long id = ar.result().iterator().next().getLong("id");
-                LOGGER.info("Created alert [id={}, type={}, subnet={}]: {}", id, type, sub, message);
-                promise.complete(new JsonObject().put("success", true).put("id", id).put("message", "Alert created"));
-            } else {
-                LOGGER.error("Failed to create alert: {}", ar.cause().getMessage());
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(sid, type, message, sub, status))
+                .map(rows -> {
+                    long id = rows.iterator().next().getLong("id");
+                    LOGGER.info("Created alert [id={}, type={}, subnet={}]: {}", id, type, sub, message);
+                    return new JsonObject().put("success", true).put("id", id).put("message", "Alert created");
+                });
     }
 
     // Creates an active alert record with default status true.
@@ -193,65 +161,42 @@ public class AlertService {
 
     // Clears an alert by ID.
     public Future<JsonObject> clearAlert(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "UPDATE alert_stream SET status = false WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "Alert marked as cleared"));
-            } else {
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Alert marked as cleared"));
     }
 
     // Clears all active alerts.
     public Future<JsonObject> clearAllLiveAlerts() {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "UPDATE alert_stream SET status = false WHERE status = true";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "All live alerts cleared"));
-            } else {
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
+        return db.query(sql).execute()
+                .map(rows -> new JsonObject().put("success", true).put("message", "All live alerts cleared"));
     }
 
     // Deletes an alert by ID.
     public Future<JsonObject> deleteAlert(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM alert_stream WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "Alert deleted"));
-            } else {
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Alert deleted"));
     }
 
     // Checks and generates live subnet threshold alerts.
     public Future<Void> checkAndGenerateSubnetAlerts(Long subnetId, String subnetAddress, long totalIp, long usedIp, long availableIp) {
-        Promise<Void> promise = Promise.promise();
         if (totalIp <= 0) {
-            promise.complete();
-            return promise.future();
+            return Future.succeededFuture();
         }
 
         double pct = (double) usedIp * 100.0 / totalIp;
         String sAddr = subnetAddress != null ? subnetAddress : "Subnet-" + subnetId;
 
-        getAlertConfig().onComplete(configAr -> {
+        return getAlertConfig().compose(configRes -> {
             double highThreshold = 80.0;
             double lowThreshold = 20.0;
             boolean highEnabled = true;
             boolean lowEnabled = true;
 
-            if (configAr.succeeded() && configAr.result().getJsonObject("data") != null) {
-                JsonObject data = configAr.result().getJsonObject("data");
+            JsonObject data = configRes.getJsonObject("data");
+            if (data != null) {
                 try {
                     if (data.containsKey("ipUtilization")) {
                         highThreshold = Double.parseDouble(data.getString("ipUtilization"));
@@ -270,15 +215,13 @@ public class AlertService {
 
             if (highEnabled && pct >= highThreshold && usedIp > 0) {
                 String msg = String.format("Subnet %s utilization is critical (%.1f%%). Exceeds threshold of %.0f%%.", sAddr, pct, highThreshold);
-                createAlert(subnetId, "CRITICAL", msg, sAddr, true);
+                return createAlert(subnetId, "CRITICAL", msg, sAddr, true).mapEmpty();
             } else if (lowEnabled && pct <= lowThreshold && usedIp > 0) {
                 String msg = String.format("Subnet %s utilization is low (%.1f%%). Below threshold of %.0f%%.", sAddr, pct, lowThreshold);
-                createAlert(subnetId, "WARNING", msg, sAddr, true);
+                return createAlert(subnetId, "WARNING", msg, sAddr, true).mapEmpty();
             }
-            promise.complete();
+            return Future.succeededFuture();
         });
-
-        return promise.future();
     }
 
     // Checks and raises a security alert when a rogue MAC address is detected.
@@ -297,53 +240,43 @@ public class AlertService {
 
     // Retrieve alert configuration from the database and return it as JSON.
     public Future<JsonObject> getAlertConfig() {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "SELECT alert_key, alert_value FROM alert";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonObject config = new JsonObject();
-                for (Row row : ar.result()) {
-                    config.put(row.getString("alert_key"), row.getString("alert_value"));
-                }
-                promise.complete(new JsonObject().put("data", config).put("success", true));
-            } else {
-                promise.complete(new JsonObject().put("data", getFallbackAlertConfig()).put("success", true));
-            }
-        });
-
-        return promise.future();
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonObject config = new JsonObject();
+                    for (Row row : rows) {
+                        config.put(row.getString("alert_key"), row.getString("alert_value"));
+                    }
+                    return new JsonObject().put("data", config).put("success", true);
+                })
+                .recover(err -> Future.succeededFuture(new JsonObject().put("data", getFallbackAlertConfig()).put("success", true)));
     }
 
     // Save or update alert configuration values in the database.
     public Future<JsonObject> saveAlertConfig(JsonObject config) {
-        Promise<JsonObject> promise = Promise.promise();
-
-        if (config != null) {
-            for (String key : config.fieldNames()) {
-                String val = String.valueOf(config.getValue(key));
-                String sql = "INSERT INTO alert (alert_key, alert_value) VALUES ($1, $2) " +
-                        "ON CONFLICT (alert_key) DO UPDATE SET alert_value = EXCLUDED.alert_value";
-                db.preparedQuery(sql).execute(Tuple.of(key, val)).onComplete(ar -> {});
-            }
+        if (config == null || config.isEmpty()) {
+            return Future.succeededFuture(new JsonObject().put("success", true).put("message", "Alert Configuration Saved Successfully"));
         }
 
-        promise.complete(new JsonObject().put("success", true).put("message", "Alert Configuration Saved Successfully"));
-        return promise.future();
+        List<Tuple> batch = new ArrayList<>();
+        for (String key : config.fieldNames()) {
+            String val = String.valueOf(config.getValue(key));
+            batch.add(Tuple.of(key, val));
+        }
+
+        String sql = "INSERT INTO alert (alert_key, alert_value) VALUES ($1, $2) " +
+                "ON CONFLICT (alert_key) DO UPDATE SET alert_value = EXCLUDED.alert_value";
+
+        return db.preparedQuery(sql).executeBatch(batch)
+                .map(rows -> new JsonObject().put("success", true).put("message", "Alert Configuration Saved Successfully"));
     }
 
     // Delete alert records older than the specified number of days.
     public Future<Integer> cleanupOldAlerts(int days) {
-        Promise<Integer> promise = Promise.promise();
         String sql = "DELETE FROM alert_stream WHERE timestamp < CURRENT_TIMESTAMP - INTERVAL '" + days + " days'";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(ar.result().rowCount());
-            } else {
-                promise.complete(0);
-            }
-        });
-        return promise.future();
+        return db.query(sql).execute()
+                .map(SqlResult::rowCount)
+                .recover(err -> Future.succeededFuture(0));
     }
 
     // Return default alert configuration values when database configuration is unavailable.

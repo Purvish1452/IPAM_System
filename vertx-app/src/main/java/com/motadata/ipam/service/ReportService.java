@@ -1,11 +1,7 @@
 package com.motadata.ipam.service;
 
-import com.motadata.ipam.model.AlertStream;
-import com.motadata.ipam.model.Event;
-import com.motadata.ipam.model.SubnetDetails;
 import com.motadata.ipam.verticle.ReportWorkerVerticle;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
@@ -16,7 +12,6 @@ import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -43,54 +38,43 @@ public class ReportService {
 
     // Retrieves all scheduled report configurations from the database.
     public Future<JsonArray> getReportSchedulers() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients FROM report ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("scheduleName", row.getString("schedule_name"))
-                            .put("reportType", row.getString("report_type"))
-                            .put("scheduleTime", row.getString("schedule_time"))
-                            .put("scheduleStatus", row.getBoolean("schedule_status"))
-                            .put("recipients", row.getString("recipients")));
-                }
-                promise.complete(result);
-            } else {
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
-    }
-
-    // Retrieves a specific scheduled report configuration by ID.
-    public Future<JsonObject> getReportSchedulerById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-        db.preparedQuery("SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients " +
-                "FROM report WHERE id = $1").execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().iterator().hasNext()) {
-                Row row = ar.result().iterator().next();
-                promise.complete(new JsonObject()
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                result.add(new JsonObject()
                         .put("id", row.getLong("id"))
                         .put("scheduleName", row.getString("schedule_name"))
                         .put("reportType", row.getString("report_type"))
                         .put("scheduleTime", row.getString("schedule_time"))
                         .put("scheduleStatus", row.getBoolean("schedule_status"))
                         .put("recipients", row.getString("recipients")));
-            } else if (ar.succeeded()) {
-                promise.fail("Report schedule " + id + " was not found");
+            }
+            return result;
+        });
+    }
+
+    // Retrieves a specific scheduled report configuration by ID.
+    public Future<JsonObject> getReportSchedulerById(Long id) {
+        return db.preparedQuery("SELECT id, schedule_name, report_type, schedule_time, schedule_status, recipients " +
+                "FROM report WHERE id = $1").execute(Tuple.of(id)).compose(rows -> {
+            if (rows.iterator().hasNext()) {
+                Row row = rows.iterator().next();
+                return Future.succeededFuture(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("scheduleName", row.getString("schedule_name"))
+                        .put("reportType", row.getString("report_type"))
+                        .put("scheduleTime", row.getString("schedule_time"))
+                        .put("scheduleStatus", row.getBoolean("schedule_status"))
+                        .put("recipients", row.getString("recipients")));
             } else {
-                promise.fail(ar.cause());
+                return Future.failedFuture("Report schedule " + id + " was not found");
             }
         });
-        return promise.future();
     }
 
     // Saves or updates a scheduled report definition in the database.
     public Future<JsonObject> saveReportScheduler(JsonObject json) {
-        Promise<JsonObject> promise = Promise.promise();
         String name = json.getString("scheduleName", "Report Schedule");
         String type = json.getString("reportType", "PDF");
         String time = json.getString("scheduleTime", "09:00");
@@ -100,62 +84,45 @@ public class ReportService {
                 : "UPDATE report SET schedule_name = $1, report_type = $2, schedule_time = $3, recipients = $4 WHERE id = $5";
         String recipients = json.getString("recipients", "");
         Tuple params = id == null ? Tuple.of(name, type, time, recipients) : Tuple.of(name, type, time, recipients, id);
-        db.preparedQuery(sql).execute(params).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Saved Successfully"));
-            } else {
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
+
+        return db.preparedQuery(sql).execute(params)
+                .map(rows -> new JsonObject().put("success", true).put("message", "Report Schedule Saved Successfully"));
     }
 
     // Deletes a scheduled report entry by its ID.
     public Future<JsonObject> deleteReportScheduler(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM report WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "Report Schedule Deleted"));
-            } else {
-                promise.fail(ar.cause());
-            }
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Report Schedule Deleted"));
     }
 
     // Retrieves report tree options and subnets with filtering child categories.
     public Future<JsonArray> getSubnetByReport() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, subnet_name, subnet_address FROM subnet_details ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
+        return db.query(sql).execute().map(rows -> {
             JsonArray result = new JsonArray();
-            if (ar.succeeded() && ar.result().size() > 0) {
-                for (Row row : ar.result()) {
-                    long id = row.getLong("id");
-                    String addr = row.getString("subnet_address");
-                    String name = row.getString("subnet_name") != null ? row.getString("subnet_name") : addr;
+            for (Row row : rows) {
+                long id = row.getLong("id");
+                String addr = row.getString("subnet_address");
+                String name = row.getString("subnet_name") != null ? row.getString("subnet_name") : addr;
 
-                    JsonArray children = new JsonArray()
-                            .add(new JsonObject().put("id", id).put("subnetName", "All IP").put("networkInterface", "ALL"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Used IP").put("networkInterface", "USED"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Available IP").put("networkInterface", "AVAILABLE"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Reserved IP").put("networkInterface", "RESERVED"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Transient IP").put("networkInterface", "TRANSIENT"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Rogue IP").put("networkInterface", "ROGUE"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Trusted IP").put("networkInterface", "TRUSTED"))
-                            .add(new JsonObject().put("id", id).put("subnetName", "Vendor Summary").put("networkInterface", "VENDOR SUMMARY"));
+                JsonArray children = new JsonArray()
+                        .add(new JsonObject().put("id", id).put("subnetName", "All IP").put("networkInterface", "ALL"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Used IP").put("networkInterface", "USED"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Available IP").put("networkInterface", "AVAILABLE"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Reserved IP").put("networkInterface", "RESERVED"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Transient IP").put("networkInterface", "TRANSIENT"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Rogue IP").put("networkInterface", "ROGUE"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Trusted IP").put("networkInterface", "TRUSTED"))
+                        .add(new JsonObject().put("id", id).put("subnetName", "Vendor Summary").put("networkInterface", "VENDOR SUMMARY"));
 
-                    result.add(new JsonObject()
-                            .put("id", id)
-                            .put("subnetAddress", name)
-                            .put("subnets", children));
-                }
+                result.add(new JsonObject()
+                        .put("id", id)
+                        .put("subnetAddress", name)
+                        .put("subnets", children));
             }
-            if (ar.succeeded()) promise.complete(result);
-            else promise.fail(ar.cause());
+            return result;
         });
-        return promise.future();
     }
 
     // Retrieves report timeline data for a single subnet ID and status.
@@ -165,7 +132,6 @@ public class ReportService {
 
     // Retrieves report timeline data for multiple subnet IDs with status filtering.
     public Future<JsonArray> getSubnetIpByReportTimeline(List<Long> subnetIds, String status) {
-        Promise<JsonArray> promise = Promise.promise();
         String normalizedStatus = normalizeStatus(status);
 
         if ("VENDOR SUMMARY".equals(normalizedStatus)) {
@@ -218,59 +184,50 @@ public class ReportService {
 
         sql.append("ORDER BY ip.subnet_id ASC, ip.id ASC");
 
-        db.preparedQuery(sql.toString()).execute(tuple).onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray list = new JsonArray();
-                for (Row row : ar.result()) {
-                    String ipStatus = row.getString("status") != null ? row.getString("status").toUpperCase() : "AVAILABLE";
-                    Date dt = row.getLocalDateTime("last_scan_time") != null ?
-                            java.sql.Timestamp.valueOf(row.getLocalDateTime("last_scan_time")) : new Date();
-                    long sid = row.getLong("subnet_id") != null ? row.getLong("subnet_id") : 1L;
-                    String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
-                            (row.getString("subnet_address") != null ? row.getString("subnet_address") : "Subnet-" + sid);
-                    String subnetAddress = row.getString("subnet_address") != null
-                            ? row.getString("subnet_address") : sName;
-                    String deviceType = row.getString("device_type") != null
-                            ? row.getString("device_type") : "Unknown";
-                    String dnsStat = row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK";
-                    String ipToDnsVal = dnsStat.contains("Forward") ? "Forward OK" : (dnsStat.contains("Reverse") ? "Forward Failed" : "-");
-                    String dnsToIpVal = dnsStat.contains("Reverse") ? "Reverse OK" : (dnsStat.contains("Forward") ? "Reverse Failed" : "-");
-                    String authenticity = row.getString("authenticity") != null ? row.getString("authenticity") : "TRUSTED";
-                    String timeFormatted = DATE_FORMAT.format(dt);
+        return db.preparedQuery(sql.toString()).execute(tuple).map(rows -> {
+            JsonArray list = new JsonArray();
+            for (Row row : rows) {
+                String ipStatus = row.getString("status") != null ? row.getString("status").toUpperCase() : "AVAILABLE";
+                Date dt = row.getLocalDateTime("last_scan_time") != null ?
+                        java.sql.Timestamp.valueOf(row.getLocalDateTime("last_scan_time")) : new Date();
+                long sid = row.getLong("subnet_id") != null ? row.getLong("subnet_id") : 1L;
+                String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
+                        (row.getString("subnet_address") != null ? row.getString("subnet_address") : "Subnet-" + sid);
+                String subnetAddress = row.getString("subnet_address") != null
+                        ? row.getString("subnet_address") : sName;
+                String deviceType = row.getString("device_type") != null
+                        ? row.getString("device_type") : "Unknown";
+                String dnsStat = row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK";
+                String ipToDnsVal = dnsStat.contains("Forward") ? "Forward OK" : (dnsStat.contains("Reverse") ? "Forward Failed" : "-");
+                String dnsToIpVal = dnsStat.contains("Reverse") ? "Reverse OK" : (dnsStat.contains("Forward") ? "Reverse Failed" : "-");
+                String authenticity = row.getString("authenticity") != null ? row.getString("authenticity") : "TRUSTED";
+                String timeFormatted = DATE_FORMAT.format(dt);
 
-                    list.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("ipAddress", row.getString("ip_address"))
-                            .put("subnetId", new JsonObject()
-                                    .put("id", sid)
-                                    .put("subnetAddress", subnetAddress))
-                            .put("subnetName", sName)
-                            .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
-                            .put("status", ipStatus)
-                            .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "host-" + row.getLong("id"))
-                            .put("deviceType", deviceType)
-                            .put("dnsStatus", dnsStat)
-                            .put("ipToDns", ipToDnsVal)
-                            .put("dnsToIp", dnsToIpVal)
-                            .put("authenticity", authenticity)
-                            .put("lastAliveTime", timeFormatted)
-                            .put("lastScanTime", timeFormatted)
-                            .put("lastSeen", timeFormatted));
-                }
-                promise.complete(list);
-            } else {
-                LOGGER.error("Failed to query subnet IP report: {}", ar.cause().getMessage());
-                promise.fail(ar.cause());
+                list.add(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("ipAddress", row.getString("ip_address"))
+                        .put("subnetId", new JsonObject()
+                                .put("id", sid)
+                                .put("subnetAddress", subnetAddress))
+                        .put("subnetName", sName)
+                        .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
+                        .put("status", ipStatus)
+                        .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "host-" + row.getLong("id"))
+                        .put("deviceType", deviceType)
+                        .put("dnsStatus", dnsStat)
+                        .put("ipToDns", ipToDnsVal)
+                        .put("dnsToIp", dnsToIpVal)
+                        .put("authenticity", authenticity)
+                        .put("lastAliveTime", timeFormatted)
+                        .put("lastScanTime", timeFormatted)
+                        .put("lastSeen", timeFormatted));
             }
+            return list;
         });
-
-        return promise.future();
     }
 
     // Generates a grouped vendor device summary report for the given subnets.
     public Future<JsonArray> getVendorSummaryReport(List<Long> subnetIds) {
-        Promise<JsonArray> promise = Promise.promise();
-
         StringBuilder sql = new StringBuilder(
                 "SELECT COALESCE(NULLIF(TRIM(ip.device_type), ''), NULLIF(TRIM(ip.vendor), ''), 'Unknown') AS vendor_name, " +
                         "COUNT(*) as vendor_count " +
@@ -290,32 +247,25 @@ public class ReportService {
 
         sql.append("GROUP BY vendor_name ORDER BY vendor_count DESC");
 
-        db.preparedQuery(sql.toString()).execute(tuple).onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray list = new JsonArray();
-                long totalCount = 0;
-                List<Row> rows = new ArrayList<>();
-                for (Row r : ar.result()) {
-                    rows.add(r);
-                    totalCount += r.getLong("vendor_count");
-                }
-
-                for (Row row : rows) {
-                    long count = row.getLong("vendor_count");
-                    double pct = totalCount > 0 ? Math.round(((double) count / totalCount * 100.0) * 10.0) / 10.0 : 0.0;
-                    list.add(new JsonObject()
-                            .put("VendorName", row.getString("vendor_name"))
-                            .put("VendorCount", count)
-                            .put("VendorPercentage", pct));
-                }
-                promise.complete(list);
-            } else {
-                LOGGER.error("Failed to query vendor summary report: {}", ar.cause().getMessage());
-                promise.fail(ar.cause());
+        return db.preparedQuery(sql.toString()).execute(tuple).map(rows -> {
+            JsonArray list = new JsonArray();
+            long totalCount = 0;
+            List<Row> rowList = new ArrayList<>();
+            for (Row r : rows) {
+                rowList.add(r);
+                totalCount += r.getLong("vendor_count");
             }
-        });
 
-        return promise.future();
+            for (Row row : rowList) {
+                long count = row.getLong("vendor_count");
+                double pct = totalCount > 0 ? Math.round(((double) count / totalCount * 100.0) * 10.0) / 10.0 : 0.0;
+                list.add(new JsonObject()
+                        .put("VendorName", row.getString("vendor_name"))
+                        .put("VendorCount", count)
+                        .put("VendorPercentage", pct));
+            }
+            return list;
+        });
     }
 
     // Generates a subnet IP PDF report for a single subnet.
@@ -325,71 +275,42 @@ public class ReportService {
 
     // Generates a subnet IP PDF report file via ReportWorkerVerticle and returns the filename.
     public Future<String> generateSubnetIpPdfReport(List<Long> subnetIds, String status) {
-        Promise<String> promise = Promise.promise();
         String normalizedStatus = normalizeStatus(status);
         String subLabel = (subnetIds != null && !subnetIds.isEmpty()) ? String.join("_", subnetIds.stream().map(Object::toString).toList()) : "All";
 
         if ("VENDOR SUMMARY".equals(normalizedStatus)) {
-            getVendorSummaryReport(subnetIds).onComplete(ar -> {
-                if (ar.failed()) {
-                    promise.fail(ar.cause());
-                    return;
-                }
+            return getVendorSummaryReport(subnetIds).compose(data -> {
                 JsonObject payload = new JsonObject()
-                        .put("data", ar.result())
+                        .put("data", data)
                         .put("subLabel", subLabel);
-                vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_VENDOR_PDF, payload)
-                        .onComplete(replyAr -> {
-                            if (replyAr.succeeded()) {
-                                promise.complete(replyAr.result().body().getString("filename"));
-                            } else {
-                                promise.fail(replyAr.cause());
-                            }
-                        });
+                return vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_VENDOR_PDF, payload)
+                        .map(reply -> reply.body().getString("filename"));
             });
-            return promise.future();
         }
 
-        getSubnetIpByReportTimeline(subnetIds, status).onComplete(ar -> {
-            if (ar.failed()) {
-                promise.fail(ar.cause());
-                return;
-            }
+        return getSubnetIpByReportTimeline(subnetIds, status).compose(data -> {
             JsonObject payload = new JsonObject()
-                    .put("data", ar.result())
+                    .put("data", data)
                     .put("subLabel", subLabel);
-            vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_SUBNET_PDF, payload)
-                    .onComplete(replyAr -> {
-                        if (replyAr.succeeded()) {
-                            promise.complete(replyAr.result().body().getString("filename"));
-                        } else {
-                            promise.fail(replyAr.cause());
-                        }
-                    });
+            return vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_SUBNET_PDF, payload)
+                    .map(reply -> reply.body().getString("filename"));
         });
-        return promise.future();
     }
 
     // Generates a PDF report summarizing all subnets using dynamic Jasper reports.
     public Future<byte[]> generateSubnetPdfReport() {
-        Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, subnet_name, subnet_address, subnet_mask, description, created_by FROM subnet_details ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.failed()) {
-                promise.fail(ar.cause());
-                return;
-            }
+        return db.query(sql).execute().compose(rows -> {
             JsonArray data = new JsonArray();
-            for (Row row : ar.result()) {
+            for (Row row : rows) {
                 data.add(new JsonObject()
                         .put("subnetAddress", row.getString("subnet_address"))
                         .put("subnetMask", row.getString("subnet_mask"))
                         .put("description", row.getString("description"))
                         .put("createdBy", row.getString("created_by") != null ? row.getString("created_by") : "admin"));
             }
-            dispatchDynamicJasper("Subnet Utilization Report", data, createSubnetReportColumns()).onComplete(promise);
+            return dispatchDynamicJasper("Subnet Utilization Report", data, createSubnetReportColumns());
         });
-        return promise.future();
     }
 
     // Generates a CSV report for a single subnet.
@@ -430,65 +351,47 @@ public class ReportService {
 
     // Generates an alert history PDF report using dynamic Jasper layout.
     public Future<byte[]> generateAlertPdfReport() {
-        Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT a.id, a.message, a.alert_type, s.subnet_address FROM alert_stream a LEFT JOIN subnet_details s ON s.id = a.subnet_id ORDER BY a.id DESC LIMIT 100";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.failed()) {
-                promise.fail(ar.cause());
-                return;
-            }
+        return db.query(sql).execute().compose(rows -> {
             JsonArray data = new JsonArray();
-            for (Row row : ar.result()) {
+            for (Row row : rows) {
                 data.add(new JsonObject()
                         .put("message", row.getString("message"))
                         .put("alertType", row.getString("alert_type"))
                         .put("subnet", row.getString("subnet_address") != null ? row.getString("subnet_address") : "General"));
             }
-            dispatchDynamicJasper("Alert History Report", data, createAlertReportColumns()).onComplete(promise);
+            return dispatchDynamicJasper("Alert History Report", data, createAlertReportColumns());
         });
-        return promise.future();
     }
 
     // Generates an audit event log PDF report using dynamic Jasper layout.
     public Future<byte[]> generateEventPdfReport() {
-        Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, event_type, event_context, timestamp FROM event ORDER BY id DESC LIMIT 100";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.failed()) {
-                promise.fail(ar.cause());
-                return;
-            }
+        return db.query(sql).execute().compose(rows -> {
             JsonArray data = new JsonArray();
-            for (Row row : ar.result()) {
+            for (Row row : rows) {
                 data.add(new JsonObject()
                         .put("eventType", row.getString("event_type"))
                         .put("eventContext", row.getString("event_context")));
             }
-            dispatchDynamicJasper("Event Audit Log Report", data, createEventReportColumns()).onComplete(promise);
+            return dispatchDynamicJasper("Event Audit Log Report", data, createEventReportColumns());
         });
-        return promise.future();
     }
 
     // Generates a DHCP server statistics PDF report using dynamic Jasper layout.
     public Future<byte[]> generateDhcpPdfReport() {
-        Promise<byte[]> promise = Promise.promise();
         String sql = "SELECT id, credential_name, host_address, type, user_name FROM dhcp_credential_details ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.failed()) {
-                promise.fail(ar.cause());
-                return;
-            }
+        return db.query(sql).execute().compose(rows -> {
             JsonArray data = new JsonArray();
-            for (Row row : ar.result()) {
+            for (Row row : rows) {
                 data.add(new JsonObject()
                         .put("credentialName", row.getString("credential_name"))
                         .put("hostAddress", row.getString("host_address"))
                         .put("type", row.getString("type"))
                         .put("createdBy", row.getString("user_name") != null ? row.getString("user_name") : "admin"));
             }
-            dispatchDynamicJasper("DHCP Server Statistics Report", data, createDhcpReportColumns()).onComplete(promise);
+            return dispatchDynamicJasper("DHCP Server Statistics Report", data, createDhcpReportColumns());
         });
-        return promise.future();
     }
 
     // Serializes arbitrary tabular dataset and columns definition to CSV bytes via ReportWorkerVerticle.
@@ -521,12 +424,6 @@ public class ReportService {
 
         return vertx.eventBus().<Buffer>request(ReportWorkerVerticle.ADDR_DYNAMIC_JASPER_PDF, payload)
                 .map(msg -> msg.body().getBytes());
-    }
-
-    // Escapes special characters for safe inclusion in CSV fields.
-    private static String csvValue(String value) {
-        if (value == null || "null".equals(value)) return "";
-        return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
     // Normalizes status query parameter into a standard IPAM status string.

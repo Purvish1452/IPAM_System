@@ -142,6 +142,22 @@ public class SubnetRouter {
         router.get("/exportPdfSubnetIp/:params").handler(this::handleExportPDF);
         router.get("/exportCsvSubnetIp/:params").handler(this::handleExportCSV);
 
+        // Rogue Detection Export to PDF/CSV
+        router.get("/exportRogueDetectionPdf/").handler(this::handleExportRogueDetectionPDF);
+        router.get("/exportRogueDetectionPdf/:params").handler(this::handleExportRogueDetectionPDF);
+        router.get("/exportRogueDetectionCSV/").handler(this::handleExportRogueDetectionCSV);
+        router.get("/exportRogueDetectionCSV/:params").handler(this::handleExportRogueDetectionCSV);
+        router.get("/exportRogueDetectionCsv/").handler(this::handleExportRogueDetectionCSV);
+        router.get("/exportRogueDetectionCsv/:params").handler(this::handleExportRogueDetectionCSV);
+
+        // Dashboard Widget PDF Exports
+        router.get("/exportNormalPdfSubnet/").handler(this::handleExportPDF);
+        router.get("/exportDhcpPdfSubnet/").handler(this::handleExportPDF);
+        router.get("/exportPdfSubnetConflictIp/").handler(this::handleExportPDF);
+        router.get("/exportPdfRecentlyDiscovered/").handler(this::handleExportPDF);
+        router.get("/exportPdfTop10CategoryUtilization/").handler(this::handleExportPDF);
+        router.get("/exportPdfTop10SubnetUtilization/").handler(this::handleExportPDF);
+
         // Download previously exported files
         router.get("/downloadPdf/:filename").handler(this::handleDownloadPDF);
         router.get("/downloadCsv/:filename").handler(this::handleDownloadCSV);
@@ -994,6 +1010,50 @@ public class SubnetRouter {
         ipActionService.exportSubnetIPsToCSV(subnetId, selectedIds).onComplete(ar -> {
             JsonObject result = ar.succeeded() ? ar.result() :
                     new JsonObject().put("success", false).put("message", "CSV export failed");
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
+    }
+
+    // Exports rogue detection records to a PDF report file.
+    private void handleExportRogueDetectionPDF(RoutingContext ctx) {
+        String params = ctx.pathParam("params");
+        List<String> selectedIds = Collections.emptyList();
+
+        try {
+            if (params != null && !params.trim().isEmpty()) {
+                selectedIds = Arrays.asList(params.trim().split(","));
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to parse exportRogueDetectionPdf params: {}", params);
+        }
+
+        LOGGER.info("Export Rogue Detection PDF for ids={}", selectedIds);
+
+        ipActionService.exportRogueDetectionToPDF(selectedIds).onComplete(ar -> {
+            JsonObject result = ar.succeeded() ? ar.result() :
+                    new JsonObject().put("success", false).put("message", "Rogue Detection PDF export failed");
+            ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+        });
+    }
+
+    // Exports rogue detection records to a CSV report file.
+    private void handleExportRogueDetectionCSV(RoutingContext ctx) {
+        String params = ctx.pathParam("params");
+        List<String> selectedIds = Collections.emptyList();
+
+        try {
+            if (params != null && !params.trim().isEmpty()) {
+                selectedIds = Arrays.asList(params.trim().split(","));
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to parse exportRogueDetectionCSV params: {}", params);
+        }
+
+        LOGGER.info("Export Rogue Detection CSV for ids={}", selectedIds);
+
+        ipActionService.exportRogueDetectionToCSV(selectedIds).onComplete(ar -> {
+            JsonObject result = ar.succeeded() ? ar.result() :
+                    new JsonObject().put("success", false).put("message", "Rogue Detection CSV export failed");
             ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
         });
     }

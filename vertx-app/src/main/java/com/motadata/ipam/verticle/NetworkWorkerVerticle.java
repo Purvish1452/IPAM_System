@@ -1,7 +1,7 @@
 package com.motadata.ipam.verticle;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Promise;
+import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
@@ -46,7 +46,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
 
     // Registers EventBus consumers for ping, subnet scanning, DNS lookups, port scanning, traceroute, and CSV imports.
     @Override
-    public void start(Promise<Void> startPromise) {
+    public void start(io.vertx.core.Promise<Void> startPromise) {
         LOGGER.info("Starting NetworkWorkerVerticle on Worker Thread Pool: {}", Thread.currentThread().getName());
 
         // 1. Single IP Ping Consumer (via Go Plugin)

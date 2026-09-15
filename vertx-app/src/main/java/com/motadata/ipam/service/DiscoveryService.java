@@ -2,7 +2,6 @@ package com.motadata.ipam.service;
 
 import com.motadata.ipam.verticle.NetworkWorkerVerticle;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -36,7 +35,6 @@ public class DiscoveryService {
 
     // Fetch discovered subnets from PostgreSQL and convert them to JSON.
     public Future<JsonArray> getDiscoveredSubnets() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT d.id, COALESCE(d.subnet, d.subnet_address, '192.168.1.0') as subnet_val, " +
                 "COALESCE(d.subnet_address, d.subnet, '192.168.1.0') as subnet_address_val, " +
                 "d.subnet_mask, d.discovered_time, d.gateway_id, d.status, " +
@@ -44,45 +42,38 @@ public class DiscoveryService {
                 "FROM discovered_subnet d " +
                 "LEFT JOIN gateway g ON d.gateway_id = g.id " +
                 "ORDER BY d.id DESC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    String sub = row.getString("subnet_val");
-                    String subAddr = row.getString("subnet_address_val");
-                    String mask = row.getString("subnet_mask") != null ? row.getString("subnet_mask") : "255.255.255.0";
-                    String gw = row.getString("gateway_val") != null ? row.getString("gateway_val") : "192.168.1.1";
-                    Object discoveredTime = row.getValue("discovered_time");
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("subnet", sub)
-                            .put("subnetAddress", subAddr)
-                            .put("subnetMask", mask)
-                            .put("gateway", gw)
-                            .put("gatewayId", row.getLong("gateway_id"))
-                            .put("discoveredTime", discoveredTime != null ? discoveredTime.toString() : null)
-                            .put("status", row.getString("status") != null ? row.getString("status") : "Active"));
-                }
-                promise.complete(result);
-            } else {
-                LOGGER.error("Failed to query discovered_subnet: {}", ar.cause().getMessage());
-                promise.complete(new JsonArray());
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                String sub = row.getString("subnet_val");
+                String subAddr = row.getString("subnet_address_val");
+                String mask = row.getString("subnet_mask") != null ? row.getString("subnet_mask") : "255.255.255.0";
+                String gw = row.getString("gateway_val") != null ? row.getString("gateway_val") : "192.168.1.1";
+                Object discoveredTime = row.getValue("discovered_time");
+                result.add(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("subnet", sub)
+                        .put("subnetAddress", subAddr)
+                        .put("subnetMask", mask)
+                        .put("gateway", gw)
+                        .put("gatewayId", row.getLong("gateway_id"))
+                        .put("discoveredTime", discoveredTime != null ? discoveredTime.toString() : null)
+                        .put("status", row.getString("status") != null ? row.getString("status") : "Active"));
             }
+            return result;
         });
-        return promise.future();
     }
 
     // Fetch a discovered subnet by ID and return its details.
     public Future<JsonObject> getDiscoveredSubnetById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT d.id, d.subnet_address, d.subnet_mask, d.gateway_id, g.gateway " +
                 "FROM discovered_subnet d LEFT JOIN gateway g ON d.gateway_id = g.id WHERE d.id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
+        return db.preparedQuery(sql).execute(Tuple.of(id)).map(rows -> {
+            if (rows.size() > 0) {
+                Row row = rows.iterator().next();
                 String sub = row.getString("subnet_address");
                 String mask = row.getString("subnet_mask") != null ? row.getString("subnet_mask") : "255.255.255.0";
-                promise.complete(new JsonObject()
+                return new JsonObject()
                         .put("id", row.getLong("id"))
                         .put("subnet", sub)
                         .put("subnetAddress", sub)
@@ -94,22 +85,17 @@ public class DiscoveryService {
                         .put("description", "Auto-discovered Subnet")
                         .put("location", "HQ DC")
                         .put("vlanName", "Default VLAN")
-                        .put("dnsAddress", "8.8.8.8"));
-            } else {
-                promise.complete(new JsonObject());
+                        .put("dnsAddress", "8.8.8.8");
             }
+            return new JsonObject();
         });
-        return promise.future();
     }
 
     // Delete the discovered subnet with the specified ID from PostgreSQL.
     public Future<JsonObject> deleteDiscoveredSubnet(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM discovered_subnet WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Discovered Subnet deleted successfully"));
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Discovered Subnet deleted successfully"));
     }
 
     // Return the configured subnet discovery profiles.

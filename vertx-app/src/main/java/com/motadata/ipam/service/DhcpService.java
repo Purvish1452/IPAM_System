@@ -2,7 +2,6 @@ package com.motadata.ipam.service;
 
 import com.motadata.ipam.verticle.NetworkWorkerVerticle;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -35,63 +34,51 @@ public class DhcpService {
     }
 
     // Fetch all DHCP credentials from the database and return them as JSON.
-    public Future<JsonArray>getCredentials() {
-        Promise<JsonArray> promise = Promise.promise();
-
+    // Fetch all DHCP credentials from the database and return them as JSON.
+    public Future<JsonArray> getCredentials() {
         String sql = "SELECT id, credential_name, server_ip, host_address, server_type, type, user_name, status FROM dhcp_credential_details ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("credentialName", row.getString("credential_name"))
-                            .put("serverIp", row.getString("server_ip") != null ? row.getString("server_ip") : row.getString("host_address"))
-                            .put("serverType", row.getString("server_type") != null ? row.getString("server_type") : row.getString("type"))
-                            .put("type", row.getString("type") != null ? row.getString("type") : row.getString("server_type"))
-                            .put("userName", row.getString("user_name"))
-                            .put("status", row.getString("status") != null ? row.getString("status") : "Active"));
-                }
-                promise.complete(result);
-            } else {
-                LOGGER.error("Failed to query DHCP credentials: {}", ar.cause().getMessage());
-                promise.complete(getFallbackCredentials());
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                result.add(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("credentialName", row.getString("credential_name"))
+                        .put("serverIp", row.getString("server_ip") != null ? row.getString("server_ip") : row.getString("host_address"))
+                        .put("serverType", row.getString("server_type") != null ? row.getString("server_type") : row.getString("type"))
+                        .put("type", row.getString("type") != null ? row.getString("type") : row.getString("server_type"))
+                        .put("userName", row.getString("user_name"))
+                        .put("status", row.getString("status") != null ? row.getString("status") : "Active"));
             }
+            return result;
+        }).otherwise(err -> {
+            LOGGER.error("Failed to query DHCP credentials: {}", err.getMessage());
+            return getFallbackCredentials();
         });
-
-        return promise.future();
     }
 
     // Fetch a DHCP credential by ID or return a default credential if not found.
     public Future<JsonObject> getCredentialById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "SELECT id, credential_name, server_ip, host_address, server_type, type, user_name, status FROM dhcp_credential_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
-                promise.complete(new JsonObject()
+        return db.preparedQuery(sql).execute(Tuple.of(id)).map(rows -> {
+            if (rows.size() > 0) {
+                Row row = rows.iterator().next();
+                return new JsonObject()
                         .put("id", row.getLong("id"))
                         .put("credentialName", row.getString("credential_name"))
                         .put("serverIp", row.getString("server_ip"))
                         .put("type", row.getString("type"))
-                        .put("userName", row.getString("user_name")));
-            } else {
-                promise.complete(new JsonObject()
-                        .put("id", id)
-                        .put("credentialName", "Default DHCP Server")
-                        .put("serverIp", "192.168.1.1")
-                        .put("type", "WINDOWS"));
+                        .put("userName", row.getString("user_name"));
             }
+            return new JsonObject()
+                    .put("id", id)
+                    .put("credentialName", "Default DHCP Server")
+                    .put("serverIp", "192.168.1.1")
+                    .put("type", "WINDOWS");
         });
-
-        return promise.future();
     }
 
     // Save a new DHCP server credential to the database.
     public Future<JsonObject> saveCredential(JsonObject cred) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String name = cred.getString("credentialName", "DHCP-Server");
         String ip = cred.getString("serverIp", "192.168.1.1");
         String type = cred.getString("type", cred.getString("serverType", "WINDOWS"));
@@ -101,110 +88,79 @@ public class DhcpService {
         String sql = "INSERT INTO dhcp_credential_details (credential_name, server_ip, host_address, server_type, type, user_name, password, status) " +
                 "VALUES ($1, $2, $2, $3, $3, $4, $5, 'Active') RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(name, ip, type, user, pass)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "DHCP Credential Saved Successfully"));
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(name, ip, type, user, pass))
+                .map(rows -> new JsonObject().put("success", true).put("message", "DHCP Credential Saved Successfully"));
     }
 
     // Delete a DHCP server credential by its ID.
     public Future<JsonObject> deleteCredential(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "DELETE FROM dhcp_credential_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "DHCP Credential Deleted Successfully"));
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "DHCP Credential Deleted Successfully"));
     }
 
     // Validate the DHCP server credentials and return the connection result.
     public Future<JsonObject> checkCredential(JsonObject cred) {
-        Promise<JsonObject> promise = Promise.promise();
-        promise.complete(new JsonObject().put("success", true).put("message", "Connection to DHCP Server succeeded"));
-        return promise.future();
+        return Future.succeededFuture(new JsonObject().put("success", true).put("message", "Connection to DHCP Server succeeded"));
     }
 
     // Fetch all Windows DHCP server credentials from the database.
     public Future<JsonArray> getWindowsCredentials() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, credential_name, server_ip FROM dhcp_credential_details WHERE UPPER(type) = 'WINDOWS' OR UPPER(server_type) = 'WINDOWS'";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject().put("id", row.getLong("id")).put("credentialName", row.getString("credential_name")));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(new JsonArray().add(new JsonObject().put("id", 1).put("credentialName", "WinDHCP-Primary")));
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                result.add(new JsonObject().put("id", row.getLong("id")).put("credentialName", row.getString("credential_name")));
             }
-        });
-        return promise.future();
+            return result;
+        }).otherwise(err -> new JsonArray().add(new JsonObject().put("id", 1).put("credentialName", "WinDHCP-Primary")));
     }
 
     // Fetch all Cisco DHCP server credentials from the database.
     public Future<JsonArray> getCiscoCredentials() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, credential_name, server_ip FROM dhcp_credential_details WHERE UPPER(type) = 'CISCO' OR UPPER(server_type) = 'CISCO'";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject().put("id", row.getLong("id")).put("credentialName", row.getString("credential_name")));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(new JsonArray().add(new JsonObject().put("id", 2).put("credentialName", "CiscoDHCP-Core")));
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                result.add(new JsonObject().put("id", row.getLong("id")).put("credentialName", row.getString("credential_name")));
             }
-        });
-        return promise.future();
+            return result;
+        }).otherwise(err -> new JsonArray().add(new JsonObject().put("id", 2).put("credentialName", "CiscoDHCP-Core")));
     }
 
     // Fetch DHCP scope utilization and calculate usage percentage and severity.
     public Future<JsonArray> getDhcpUtilization() {
-        Promise<JsonArray> promise = Promise.promise();
-
         String sql = "SELECT du.id, du.scope_name, du.start_ip, du.end_ip, du.total_ip, du.used_ip, du.available_ip, " +
                 "du.used_ip_percentage, d.type, d.server_type, d.credential_name " +
                 "FROM dhcp_utilization du " +
                 "LEFT JOIN dhcp_credential_details d ON du.credential_id = d.id " +
                 "ORDER BY du.id ASC";
 
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 254L;
-                    long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 45L;
-                    double usedPct = total > 0 ? ((double) used * 100.0) / total : 17.7;
-                    int severity = usedPct >= 80.0 ? 1 : (usedPct >= 50.0 ? 2 : 3);
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 254L;
+                long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 45L;
+                double usedPct = total > 0 ? ((double) used * 100.0) / total : 17.7;
+                int severity = usedPct >= 80.0 ? 1 : (usedPct >= 50.0 ? 2 : 3);
 
-                    String scope = row.getString("scope_name");
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("subnetAddress", scope != null ? scope : "192.168.1.0/24")
-                            .put("subnetName", scope != null ? scope : "192.168.1.0/24")
-                            .put("usedIpPercentage", Math.round(usedPct * 100.0) / 100.0)
-                            .put("type", row.getString("type") != null ? row.getString("type") : "WINDOWS")
-                            .put("usedIp", used)
-                            .put("availableIp", row.getLong("available_ip") != null ? row.getLong("available_ip") : total - used)
-                            .put("severity", severity));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(getFallbackUtilization());
+                String scope = row.getString("scope_name");
+                result.add(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("subnetAddress", scope != null ? scope : "192.168.1.0/24")
+                        .put("subnetName", scope != null ? scope : "192.168.1.0/24")
+                        .put("usedIpPercentage", Math.round(usedPct * 100.0) / 100.0)
+                        .put("type", row.getString("type") != null ? row.getString("type") : "WINDOWS")
+                        .put("usedIp", used)
+                        .put("availableIp", row.getLong("available_ip") != null ? row.getLong("available_ip") : total - used)
+                        .put("severity", severity));
             }
-        });
-
-        return promise.future();
+            return result;
+        }).otherwise(err -> getFallbackUtilization());
     }
 
     // Fetch DHCP utilization details for a specific scope ID.
     public Future<JsonObject> getDhcpUtilizationById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT COUNT(*) AS address_scopes, COALESCE(SUM(du.total_ip), 0) AS total_ip, " +
                 "COALESCE(SUM(du.used_ip), 0) AS used_ip, COALESCE(SUM(du.available_ip), 0) AS available_ip, " +
                 "COALESCE(MAX(du.used_ip_percentage), 0) AS used_ip_percentage, " +
@@ -213,14 +169,14 @@ public class DhcpService {
                 "LEFT JOIN dhcp_credential_details d ON du.credential_id = d.id " +
                 "WHERE du.credential_id = $1";
 
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().iterator().hasNext()) {
-                Row row = ar.result().iterator().next();
+        return db.preparedQuery(sql).execute(Tuple.of(id)).map(rows -> {
+            if (rows.iterator().hasNext()) {
+                Row row = rows.iterator().next();
                 long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 0L;
                 long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 0L;
                 long available = row.getLong("available_ip") != null ? row.getLong("available_ip") : total - used;
                 double percentage = total > 0 ? used * 100.0 / total : 0.0;
-                promise.complete(new JsonObject()
+                return new JsonObject()
                         .put("addressScopes", row.getLong("address_scopes"))
                         .put("totalIp", total)
                         .put("usedIp", used)
@@ -234,13 +190,10 @@ public class DhcpService {
                         .put("discovers", 0)
                         .put("releases", 0)
                         .put("acks", 0)
-                        .put("naks", 0));
-            } else {
-                LOGGER.error("Failed to query DHCP utilization for credential {}: {}", id, ar.cause().getMessage());
-                promise.fail(ar.cause());
+                        .put("naks", 0);
             }
+            throw new RuntimeException("DHCP credential utilization not found for id=" + id);
         });
-        return promise.future();
     }
 
     // Initiate a DHCP scope scan for the specified credential or scope ID.

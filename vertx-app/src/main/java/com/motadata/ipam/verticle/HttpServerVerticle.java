@@ -18,10 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Dedicated Event Loop Verticle for HTTP Web Server & REST Routing.
- * Runs strictly on the Netty Event Loop.
- * Zero blocking operations: all database queries are reactive (PgPool)
- * and all heavy/blocking jobs are dispatched asynchronously to the EventBus.
+ * Standard Verticle serving the REST API and UI routes non-blockingly on the Netty Event Loop.
+ * Direct Architecture: Event Loop Handler -> Service -> PgPool / EventBus
+ * Zero blocking operations on the Event Loop.
  */
 public class HttpServerVerticle extends AbstractVerticle {
 
@@ -82,17 +81,17 @@ public class HttpServerVerticle extends AbstractVerticle {
         vertx.createHttpServer(new HttpServerOptions().setHost("0.0.0.0").setPort(port))
                 .requestHandler(router)
                 .listen(port, "0.0.0.0")
-                .onComplete(httpAr -> {
-                    if (httpAr.succeeded()) {
-                        LOGGER.info("===============================================================");
-                        LOGGER.info(" HttpServerVerticle running on http://0.0.0.0:{}", port);
-                        LOGGER.info(" Mode: Non-blocking Event Loop [Netty]");
-                        LOGGER.info("===============================================================");
-                        startPromise.complete();
-                    } else {
-                        LOGGER.error("Failed to start HTTP server on port {}: {}", port, httpAr.cause().getMessage());
-                        startPromise.fail(httpAr.cause());
-                    }
+                .mapEmpty()
+                .onSuccess(v -> {
+                    LOGGER.info("===============================================================");
+                    LOGGER.info(" HttpServerVerticle running on http://0.0.0.0:{}", port);
+                    LOGGER.info(" Mode: Non-blocking Event Loop [Netty]");
+                    LOGGER.info("===============================================================");
+                    startPromise.complete();
+                })
+                .onFailure(err -> {
+                    LOGGER.error("Failed to start HTTP server on port {}: {}", port, err.getMessage());
+                    startPromise.fail(err);
                 });
     }
 }

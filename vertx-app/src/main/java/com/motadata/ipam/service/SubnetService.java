@@ -1,7 +1,6 @@
 package com.motadata.ipam.service;
 
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
@@ -11,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -37,8 +37,6 @@ public class SubnetService {
 
     // Retrieves all subnets with calculated IP utilization metrics and category details.
     public Future<JsonArray> getAllSubnets() {
-        Promise<JsonArray> promise = Promise.promise();
-
         String sql = "SELECT s.id, s.subnet_name, s.subnet_address, s.subnet_cidr, s.subnet_mask, " +
                 "s.description, s.location, s.is_local_subnet, s.total_ip, s.used_ip, s.available_ip, " +
                 "s.transient_ip, s.last_scan_time, s.vlan_name, s.dns_address, s.type, s.category_id, " +
@@ -47,69 +45,63 @@ public class SubnetService {
                 "LEFT JOIN category c ON s.category_id = c.id " +
                 "ORDER BY s.id ASC";
 
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 256L;
-                    long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 0L;
-                    double usedPct = total > 0 ? ((double) used * 100.0) / total : 0.0;
-                    int severity = usedPct >= 80.0 ? 1 : (usedPct >= 50.0 ? 2 : 3);
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 256L;
+                long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 0L;
+                double usedPct = total > 0 ? ((double) used * 100.0) / total : 0.0;
+                int severity = usedPct >= 80.0 ? 1 : (usedPct >= 50.0 ? 2 : 3);
 
-                    Date lastScan = row.getLocalDateTime("last_scan_time") != null ?
-                            java.sql.Timestamp.valueOf(row.getLocalDateTime("last_scan_time")) : null;
+                Date lastScan = row.getLocalDateTime("last_scan_time") != null ?
+                        java.sql.Timestamp.valueOf(row.getLocalDateTime("last_scan_time")) : null;
 
-                    JsonObject s = new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("subnetName", row.getString("subnet_name") != null ? row.getString("subnet_name") : row.getString("subnet_address") + "/24")
-                            .put("subnetAddress", row.getString("subnet_address"))
-                            .put("subnetCidr", row.getInteger("subnet_cidr") != null ? row.getInteger("subnet_cidr") : 24)
-                            .put("subnetMask", row.getString("subnet_mask") != null ? row.getString("subnet_mask") : "255.255.255.0")
-                            .put("description", row.getString("description"))
-                            .put("location", row.getString("location") != null ? row.getString("location") : "Main DC")
-                            .put("isLocalSubnet", row.getBoolean("is_local_subnet"))
-                            .put("totalIp", total)
-                            .put("usedIp", used)
-                            .put("availableIp", row.getLong("available_ip") != null ? row.getLong("available_ip") : total - used)
-                            .put("transientIp", row.getLong("transient_ip") != null ? row.getLong("transient_ip") : 0L)
-                            .put("usedIpPercentage", Math.round(usedPct * 100.0) / 100.0)
-                            .put("severity", severity)
-                            .put("vlanName", row.getString("vlan_name") != null ? row.getString("vlan_name") : "Default VLAN")
-                            .put("dnsAddress", row.getString("dns_address") != null ? row.getString("dns_address") : "8.8.8.8")
-                            .put("type", row.getString("type") != null ? row.getString("type") : "DHCP")
-                            .put("categoryId", row.getLong("category_id"))
-                            .put("categoryName", row.getString("category_name") != null ? row.getString("category_name") : "Default Category")
-                            .put("lastScanTime", lastScan != null ? DATE_FORMAT.format(lastScan) : "2026-09-02 10:00:00");
+                JsonObject s = new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("subnetName", row.getString("subnet_name") != null ? row.getString("subnet_name") : row.getString("subnet_address") + "/24")
+                        .put("subnetAddress", row.getString("subnet_address"))
+                        .put("subnetCidr", row.getInteger("subnet_cidr") != null ? row.getInteger("subnet_cidr") : 24)
+                        .put("subnetMask", row.getString("subnet_mask") != null ? row.getString("subnet_mask") : "255.255.255.0")
+                        .put("description", row.getString("description"))
+                        .put("location", row.getString("location") != null ? row.getString("location") : "Main DC")
+                        .put("isLocalSubnet", row.getBoolean("is_local_subnet"))
+                        .put("totalIp", total)
+                        .put("usedIp", used)
+                        .put("availableIp", row.getLong("available_ip") != null ? row.getLong("available_ip") : total - used)
+                        .put("transientIp", row.getLong("transient_ip") != null ? row.getLong("transient_ip") : 0L)
+                        .put("usedIpPercentage", Math.round(usedPct * 100.0) / 100.0)
+                        .put("severity", severity)
+                        .put("vlanName", row.getString("vlan_name") != null ? row.getString("vlan_name") : "Default VLAN")
+                        .put("dnsAddress", row.getString("dns_address") != null ? row.getString("dns_address") : "8.8.8.8")
+                        .put("type", row.getString("type") != null ? row.getString("type") : "DHCP")
+                        .put("categoryId", row.getLong("category_id"))
+                        .put("categoryName", row.getString("category_name") != null ? row.getString("category_name") : "Default Category")
+                        .put("lastScanTime", lastScan != null ? DATE_FORMAT.format(lastScan) : "2026-09-02 10:00:00");
 
-                    result.add(s);
-                }
-                promise.complete(result);
-            } else {
-                LOGGER.error("Failed to fetch subnets: {}", ar.cause().getMessage());
-                promise.complete(getFallbackSubnets());
+                result.add(s);
             }
+            return result;
+        }).recover(err -> {
+            LOGGER.error("Failed to fetch subnets: {}", err.getMessage());
+            return Future.succeededFuture(getFallbackSubnets());
         });
-
-        return promise.future();
     }
 
     // Retrieves a specific subnet by its ID with utilization details.
     public Future<JsonObject> getSubnetById(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "SELECT s.id, s.subnet_name, s.subnet_address, s.subnet_cidr, s.subnet_mask, " +
                 "s.description, s.location, s.is_local_subnet, s.total_ip, s.used_ip, s.available_ip, " +
                 "s.transient_ip, s.last_scan_time, s.vlan_name, s.dns_address, s.type, s.category_id " +
                 "FROM subnet_details s WHERE s.id = $1";
 
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
+        return db.preparedQuery(sql).execute(Tuple.of(id)).map(rows -> {
+            if (rows.size() > 0) {
+                Row row = rows.iterator().next();
                 long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 256L;
                 long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 45L;
                 double usedPct = total > 0 ? ((double) used * 100.0) / total : 17.58;
 
-                JsonObject s = new JsonObject()
+                return new JsonObject()
                         .put("id", row.getLong("id"))
                         .put("subnetName", row.getString("subnet_name") != null ? row.getString("subnet_name") : row.getString("subnet_address") + "/24")
                         .put("subnetAddress", row.getString("subnet_address"))
@@ -126,9 +118,8 @@ public class SubnetService {
                         .put("usedIpPercentage", String.format("%.2f", usedPct))
                         .put("lastScanTime", row.getValue("last_scan_time") != null
                                 ? row.getValue("last_scan_time").toString() : "-");
-                promise.complete(s);
             } else {
-                promise.complete(new JsonObject()
+                return new JsonObject()
                         .put("id", id)
                         .put("subnetName", "192.168.10.0/24")
                         .put("subnetAddress", "192.168.10.0")
@@ -142,17 +133,27 @@ public class SubnetService {
                         .put("usedIp", "45")
                         .put("availableIp", "206")
                         .put("usedIpPercentage", "17.58")
-                        .put("lastScanTime", "2026-09-02 10:00:00"));
+                        .put("lastScanTime", "2026-09-02 10:00:00");
             }
-        });
-
-        return promise.future();
+        }).recover(err -> Future.succeededFuture(new JsonObject()
+                .put("id", id)
+                .put("subnetName", "192.168.10.0/24")
+                .put("subnetAddress", "192.168.10.0")
+                .put("subnetCidr", "24")
+                .put("subnetMask", "255.255.255.0")
+                .put("description", "Primary Office LAN Subnet")
+                .put("location", "Main Data Center")
+                .put("vlanName", "Default VLAN")
+                .put("type", "DHCP")
+                .put("totalIp", "256")
+                .put("usedIp", "45")
+                .put("availableIp", "206")
+                .put("usedIpPercentage", "17.58")
+                .put("lastScanTime", "2026-09-02 10:00:00")));
     }
 
     // Saves a new subnet and seeds its default gateway IP.
     public Future<JsonObject> saveSubnet(String subnetAddress, String subnetMask, Long categoryId, String description) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sAddr = subnetAddress != null ? subnetAddress.trim() : "192.168.20.0";
         String sMask = subnetMask != null ? subnetMask.trim() : "255.255.255.0";
         Long catId = categoryId != null ? categoryId : 1L;
@@ -162,30 +163,21 @@ public class SubnetService {
         String sql = "INSERT INTO subnet_details (subnet_name, subnet_address, subnet_cidr, subnet_mask, description, category_id, total_ip, used_ip, available_ip, transient_ip, is_local_subnet, type) " +
                 "VALUES ($1, $2, 24, $3, $4, $5, 256, 1, 255, 0, true, 'DHCP') RETURNING id";
 
-        db.preparedQuery(sql).execute(Tuple.of(sName, sAddr, sMask, desc, catId)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                Long newSubnetId = ar.result().iterator().next().getLong("id");
-                // Seed gateway IP for new subnet
-                String ipSql = "INSERT INTO subnet_ip_details (ip_address, host_name, status, subnet_id, device_type) VALUES ($1, $2, 'USED', $3, 'ROUTER')";
-                db.preparedQuery(ipSql).execute(Tuple.of(sAddr.substring(0, sAddr.lastIndexOf('.') + 1) + "1", "gateway-" + newSubnetId, newSubnetId)).onComplete(ipAr -> {});
-            }
-            promise.complete(new JsonObject().put("success", true).put("message", "Subnet saved successfully"));
-
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(sName, sAddr, sMask, desc, catId))
+                .compose(rows -> {
+                    Long newSubnetId = rows.iterator().next().getLong("id");
+                    // Seed gateway IP for new subnet
+                    String ipSql = "INSERT INTO subnet_ip_details (ip_address, host_name, status, subnet_id, device_type) VALUES ($1, $2, 'USED', $3, 'ROUTER')";
+                    return db.preparedQuery(ipSql).execute(Tuple.of(sAddr.substring(0, sAddr.lastIndexOf('.') + 1) + "1", "gateway-" + newSubnetId, newSubnetId));
+                })
+                .map(rows -> new JsonObject().put("success", true).put("message", "Subnet saved successfully"));
     }
 
     // Deletes a subnet by its ID from the database.
     public Future<JsonObject> deleteSubnet(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
-
         String sql = "DELETE FROM subnet_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Subnet deleted successfully"));
-        });
-
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Subnet deleted successfully"));
     }
 
     // ==========================================
@@ -194,8 +186,6 @@ public class SubnetService {
 
     // Retrieves paginated IP address details for a given subnet.
     public Future<JsonArray> getIpDetails(Long subnetId, Integer page, Integer pageSize) {
-        Promise<JsonArray> promise = Promise.promise();
-
         int p = (page == null || page < 1) ? 1 : page;
         int size = (pageSize == null || pageSize < 1) ? 50 : pageSize;
         int offset = (p - 1) * size;
@@ -207,50 +197,48 @@ public class SubnetService {
                 "LEFT JOIN subnet_details s ON ip.subnet_id = s.id " +
                 "WHERE ip.subnet_id = $1 ORDER BY ip.id ASC LIMIT $2 OFFSET $3";
 
-        db.preparedQuery(sql).execute(Tuple.of(subnetId, size, offset)).onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
-                            (row.getString("subnet_address") != null ? row.getString("subnet_address") + "/24" : "Subnet-" + subnetId);
-                    String sAddr = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0";
+        return db.preparedQuery(sql).execute(Tuple.of(subnetId, size, offset))
+                .map(rows -> {
+                    JsonArray result = new JsonArray();
+                    for (Row row : rows) {
+                        String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
+                                (row.getString("subnet_address") != null ? row.getString("subnet_address") + "/24" : "Subnet-" + subnetId);
+                        String sAddr = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0";
 
-                    JsonObject subnetObj = new JsonObject()
-                            .put("id", row.getLong("subnet_id"))
-                            .put("subnetName", sName)
-                            .put("subnetAddress", sAddr);
+                        JsonObject subnetObj = new JsonObject()
+                                .put("id", row.getLong("subnet_id"))
+                                .put("subnetName", sName)
+                                .put("subnetAddress", sAddr);
 
-                    JsonObject ip = new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("ipAddress", row.getString("ip_address"))
-                            .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
-                            .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "-")
-                            .put("status", row.getString("status") != null ? row.getString("status") : "AVAILABLE")
-                            .put("deviceType", row.getString("device_type") != null ? row.getString("device_type") : "-")
-                            .put("vendor", row.getString("vendor") != null ? row.getString("vendor") : "-")
-                            .put("location", row.getString("location") != null ? row.getString("location") : "HQ DC")
-                            .put("systemDescription", row.getString("system_description") != null ? row.getString("system_description") : "-")
-                            .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK")
-                            .put("ipReserved", row.getBoolean("ip_reserved") != null && row.getBoolean("ip_reserved"))
-                            .put("aliasName", row.getString("alias_name") != null ? row.getString("alias_name") : "-")
-                            .put("subnetId", subnetObj)
-                            .put("subnetName", sName)
-                            .put("ipToDns", "Forward OK")
-                            .put("dnsToIp", "Reverse OK")
-                            .put("authenticity", "TRUSTED")
-                            .put("lastAliveTime", "2026-09-02 10:00:00")
-                            .put("lastScanTime", "2026-09-02 10:00:00")
-                            .put("customColumns", new JsonObject());
-                    result.add(ip);
-                }
-                promise.complete(result);
-            } else {
-                LOGGER.error("Failed to query IP details for subnetId={}: {}", subnetId, ar.cause().getMessage());
-                promise.complete(new JsonArray());
-            }
-        });
-
-        return promise.future();
+                        JsonObject ip = new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("ipAddress", row.getString("ip_address"))
+                                .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
+                                .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "-")
+                                .put("status", row.getString("status") != null ? row.getString("status") : "AVAILABLE")
+                                .put("deviceType", row.getString("device_type") != null ? row.getString("device_type") : "-")
+                                .put("vendor", row.getString("vendor") != null ? row.getString("vendor") : "-")
+                                .put("location", row.getString("location") != null ? row.getString("location") : "HQ DC")
+                                .put("systemDescription", row.getString("system_description") != null ? row.getString("system_description") : "-")
+                                .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK")
+                                .put("ipReserved", row.getBoolean("ip_reserved") != null && row.getBoolean("ip_reserved"))
+                                .put("aliasName", row.getString("alias_name") != null ? row.getString("alias_name") : "-")
+                                .put("subnetId", subnetObj)
+                                .put("subnetName", sName)
+                                .put("ipToDns", "Forward OK")
+                                .put("dnsToIp", "Reverse OK")
+                                .put("authenticity", "TRUSTED")
+                                .put("lastAliveTime", "2026-09-02 10:00:00")
+                                .put("lastScanTime", "2026-09-02 10:00:00")
+                                .put("customColumns", new JsonObject());
+                        result.add(ip);
+                    }
+                    return result;
+                })
+                .recover(err -> {
+                    LOGGER.error("Failed to query IP details for subnetId={}: {}", subnetId, err.getMessage());
+                    return Future.succeededFuture(new JsonArray());
+                });
     }
 
     // ==========================================
@@ -259,150 +247,124 @@ public class SubnetService {
 
     // Retrieves all network gateways with their status and previous scan timestamps.
     public Future<JsonArray> getGateways() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, gateway, COALESCE(name, description, 'Core Gateway Router') as name_val, " +
                 "COALESCE(to_char(previous_scan, 'YYYY-MM-DD HH24:MI:SS'), '2026-09-02 10:00:00') as prev_scan, " +
                 "COALESCE(status, 'Active') as status_val, description, version " +
                 "FROM gateway ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    String name = row.getString("name_val");
-                    String gw = row.getString("gateway");
-                    String prevScan = row.getString("prev_scan");
-                    String stat = row.getString("status_val");
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("name", name)
-                            .put("gateway", gw)
-                            .put("previousScan", prevScan)
-                            .put("status", stat)
-                            .put("description", row.getString("description") != null ? row.getString("description") : name)
-                            .put("version", row.getString("version") != null ? row.getString("version") : "v2c"));
-                }
-                promise.complete(result);
-            } else {
-                LOGGER.error("Failed to query gateway table: {}", ar.cause().getMessage(), ar.cause());
-                promise.complete(new JsonArray());
-            }
-        });
-        return promise.future();
+
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonArray result = new JsonArray();
+                    for (Row row : rows) {
+                        String name = row.getString("name_val");
+                        String gw = row.getString("gateway");
+                        String prevScan = row.getString("prev_scan");
+                        String stat = row.getString("status_val");
+                        result.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("name", name)
+                                .put("gateway", gw)
+                                .put("previousScan", prevScan)
+                                .put("status", stat)
+                                .put("description", row.getString("description") != null ? row.getString("description") : name)
+                                .put("version", row.getString("version") != null ? row.getString("version") : "v2c"));
+                    }
+                    return result;
+                })
+                .recover(err -> {
+                    LOGGER.error("Failed to query gateway table: {}", err.getMessage(), err);
+                    return Future.succeededFuture(new JsonArray());
+                });
     }
-
-
 
     // Inserts a new network gateway record into the database.
     public Future<JsonObject> saveGateway(JsonObject gJson) {
-        Promise<JsonObject> promise = Promise.promise();
         String gateway = gJson.getString("gateway", "192.168.1.1");
         String desc = gJson.getString("description", "Core Gateway");
         String sql = "INSERT INTO gateway (gateway, description, version) VALUES ($1, $2, 'v2c') RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(gateway, desc)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Gateway saved successfully"));
-        });
-        return promise.future();
+
+        return db.preparedQuery(sql).execute(Tuple.of(gateway, desc))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Gateway saved successfully"));
     }
 
     // Deletes a network gateway record by its ID.
     public Future<JsonObject> deleteGateway(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM gateway WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Gateway deleted successfully"));
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Gateway deleted successfully"));
     }
 
     // Retrieves all subnet categories from the database.
     public Future<JsonArray> getCategories() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, category_name, description FROM category ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("categoryName", row.getString("category_name"))
-                            .put("description", row.getString("description")));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(new JsonArray()
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonArray result = new JsonArray();
+                    for (Row row : rows) {
+                        result.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("categoryName", row.getString("category_name"))
+                                .put("description", row.getString("description")));
+                    }
+                    return result;
+                })
+                .recover(err -> Future.succeededFuture(new JsonArray()
                         .add(new JsonObject().put("id", 1).put("categoryName", "Default Category"))
-                        .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets")));
-            }
-        });
-        return promise.future();
+                        .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets"))));
     }
 
     // Inserts a new subnet category record into the database.
     public Future<JsonObject> saveCategory(JsonObject cJson) {
-        Promise<JsonObject> promise = Promise.promise();
         String catName = cJson.getString("categoryName", "Custom Category");
         String desc = cJson.getString("description", "Custom Category Description");
         String sql = "INSERT INTO category (category_name, description) VALUES ($1, $2) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(catName, desc)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Category saved successfully"));
-        });
-        return promise.future();
+
+        return db.preparedQuery(sql).execute(Tuple.of(catName, desc))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Category saved successfully"));
     }
 
     // Deletes a subnet category record by its ID.
     public Future<JsonObject> deleteCategory(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM category WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Category deleted successfully"));
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Category deleted successfully"));
     }
 
     // Retrieves all supernets with their CIDR, mask, and location details.
     public Future<JsonArray> getSupernets() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, supernet_address, supernet_mask, supernet_cidr, description, location FROM supernet_details ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("supernetAddress", row.getString("supernet_address"))
-                            .put("supernetMask", row.getString("supernet_mask"))
-                            .put("supernetCidr", row.getInteger("supernet_cidr"))
-                            .put("description", row.getString("description"))
-                            .put("location", row.getString("location")));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(new JsonArray().add(new JsonObject().put("id", 1).put("supernetAddress", "10.0.0.0").put("supernetMask", "255.0.0.0")));
-            }
-        });
-        return promise.future();
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonArray result = new JsonArray();
+                    for (Row row : rows) {
+                        result.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("supernetAddress", row.getString("supernet_address"))
+                                .put("supernetMask", row.getString("supernet_mask"))
+                                .put("supernetCidr", row.getInteger("supernet_cidr"))
+                                .put("description", row.getString("description"))
+                                .put("location", row.getString("location")));
+                    }
+                    return result;
+                })
+                .recover(err -> Future.succeededFuture(new JsonArray().add(new JsonObject().put("id", 1).put("supernetAddress", "10.0.0.0").put("supernetMask", "255.0.0.0"))));
     }
 
     // Inserts a new supernet record into the database.
     public Future<JsonObject> saveSupernet(JsonObject sJson) {
-        Promise<JsonObject> promise = Promise.promise();
         String sAddr = sJson.getString("supernetAddress", "10.0.0.0");
         String sMask = sJson.getString("supernetMask", "255.0.0.0");
         String sql = "INSERT INTO supernet_details (supernet_address, supernet_mask, supernet_cidr, category_id) VALUES ($1, $2, 8, 1) RETURNING id";
-        db.preparedQuery(sql).execute(Tuple.of(sAddr, sMask)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Supernet saved successfully"));
-        });
-        return promise.future();
+
+        return db.preparedQuery(sql).execute(Tuple.of(sAddr, sMask))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Supernet saved successfully"));
     }
 
     // Deletes a supernet record by its ID.
     public Future<JsonObject> deleteSupernet(Long id) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "DELETE FROM supernet_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(id)).onComplete(ar -> {
-            promise.complete(new JsonObject().put("success", true).put("message", "Supernet deleted successfully"));
-        });
-        return promise.future();
+        return db.preparedQuery(sql).execute(Tuple.of(id))
+                .map(rows -> new JsonObject().put("success", true).put("message", "Supernet deleted successfully"));
     }
 
     // ==========================================
@@ -411,38 +373,32 @@ public class SubnetService {
 
     // Retrieves rogue IP and MAC detection events.
     public Future<JsonArray> getRogueDetection() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, mac_address, ip_address, discovered_at, nic_type, authenticity, host_name FROM rogue_detection_details ORDER BY id ASC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    Date discTs = row.getLocalDateTime("discovered_at") != null ?
-                            java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
-                    result.add(new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("macAddress", row.getString("mac_address"))
-                            .put("ipAddress", row.getString("ip_address"))
-                            .put("discoveredAt", DATE_FORMAT.format(discTs))
-                            .put("nicType", row.getString("nic_type") != null ? row.getString("nic_type") : "Virtual NIC")
-                            .put("authenticity", row.getString("authenticity") != null ? row.getString("authenticity") : "UNAUTHORIZED")
-                            .put("hostName", row.getString("host_name")));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(new JsonArray().add(new JsonObject()
+        return db.query(sql).execute()
+                .map(rows -> {
+                    JsonArray result = new JsonArray();
+                    for (Row row : rows) {
+                        Date discTs = row.getLocalDateTime("discovered_at") != null ?
+                                java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
+                        result.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("macAddress", row.getString("mac_address"))
+                                .put("ipAddress", row.getString("ip_address"))
+                                .put("discoveredAt", DATE_FORMAT.format(discTs))
+                                .put("nicType", row.getString("nic_type") != null ? row.getString("nic_type") : "Virtual NIC")
+                                .put("authenticity", row.getString("authenticity") != null ? row.getString("authenticity") : "UNAUTHORIZED")
+                                .put("hostName", row.getString("host_name")));
+                    }
+                    return result;
+                })
+                .recover(err -> Future.succeededFuture(new JsonArray().add(new JsonObject()
                         .put("id", 1).put("macAddress", "00:50:56:FE:DC:BA").put("ipAddress", "192.168.1.99")
-                        .put("discoveredAt", "2026-09-02 10:00:00").put("nicType", "VMware Virtual NIC").put("authenticity", "UNAUTHORIZED")));
-            }
-        });
-        return promise.future();
+                        .put("discoveredAt", "2026-09-02 10:00:00").put("nicType", "VMware Virtual NIC").put("authenticity", "UNAUTHORIZED"))));
     }
 
     // Persists an action taken on a rogue detection event.
     public Future<JsonObject> saveRogueAction(JsonObject rJson) {
-        Promise<JsonObject> promise = Promise.promise();
-        promise.complete(new JsonObject().put("success", true).put("message", "Rogue Detection action saved successfully"));
-        return promise.future();
+        return Future.succeededFuture(new JsonObject().put("success", true).put("message", "Rogue Detection action saved successfully"));
     }
 
     // Retrieves all IP allocation requests with their parsed IPs and timestamps.
@@ -452,7 +408,6 @@ public class SubnetService {
 
     // Retrieves IP allocation requests filtered by user if not admin.
     public Future<JsonArray> getIpRequests(String userName, boolean isAdmin) {
-        Promise<JsonArray> promise = Promise.promise();
         String sql;
         Tuple tuple;
         if (isAdmin || userName == null || userName.isBlank() || "admin".equalsIgnoreCase(userName)) {
@@ -477,73 +432,70 @@ public class SubnetService {
         }
 
         var queryFuture = (tuple != null) ? db.preparedQuery(sql).execute(tuple) : db.query(sql).execute();
-        queryFuture.onComplete(ar -> {
-            if (ar.succeeded()) {
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    int ipCount = row.getInteger("number_of_ips") != null ? row.getInteger("number_of_ips") : 1;
-                    String creator = row.getString("created_by") != null ? row.getString("created_by") : "admin";
-                    String requestedBy = row.getString("requested_by") != null ? row.getString("requested_by") : creator;
-                    String status = row.getString("status") != null ? row.getString("status") : "PENDING";
-                    String subnetId = row.getString("subnet_id") != null ? row.getString("subnet_id") : "1";
-                    String subnetAddress = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0/24";
-                    String deviceType = row.getString("device_type") != null ? row.getString("device_type") : "Server";
-                    String duration = row.getString("duration") != null ? row.getString("duration") : "Permanent";
-                    String purpose = row.getString("purpose") != null ? row.getString("purpose") : "Static IP Allocation";
-                    String remark = row.getString("remark") != null ? row.getString("remark") : "";
-                    boolean preferredSubnet = Boolean.TRUE.equals(row.getBoolean("preferred_subnet"));
+        return queryFuture.map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                int ipCount = row.getInteger("number_of_ips") != null ? row.getInteger("number_of_ips") : 1;
+                String creator = row.getString("created_by") != null ? row.getString("created_by") : "admin";
+                String requestedBy = row.getString("requested_by") != null ? row.getString("requested_by") : creator;
+                String status = row.getString("status") != null ? row.getString("status") : "PENDING";
+                String subnetId = row.getString("subnet_id") != null ? row.getString("subnet_id") : "1";
+                String subnetAddress = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0/24";
+                String deviceType = row.getString("device_type") != null ? row.getString("device_type") : "Server";
+                String duration = row.getString("duration") != null ? row.getString("duration") : "Permanent";
+                String purpose = row.getString("purpose") != null ? row.getString("purpose") : "Static IP Allocation";
+                String remark = row.getString("remark") != null ? row.getString("remark") : "";
+                boolean preferredSubnet = Boolean.TRUE.equals(row.getBoolean("preferred_subnet"));
 
-                    // Parse IPs
-                    JsonArray ipsJson = new JsonArray();
-                    String rawIps = row.getString("ips");
-                    if (rawIps != null && !rawIps.isBlank()) {
-                        rawIps = rawIps.trim();
-                        if (rawIps.startsWith("[") && rawIps.endsWith("]")) {
-                            try {
-                                ipsJson = new JsonArray(rawIps);
-                            } catch (Exception e) {
-                                ipsJson.add(rawIps);
-                            }
-                        } else {
-                            for (String part : rawIps.split("[,;\\s]+")) {
-                                if (!part.isBlank()) ipsJson.add(part.trim());
-                            }
+                // Parse IPs
+                JsonArray ipsJson = new JsonArray();
+                String rawIps = row.getString("ips");
+                if (rawIps != null && !rawIps.isBlank()) {
+                    rawIps = rawIps.trim();
+                    if (rawIps.startsWith("[") && rawIps.endsWith("]")) {
+                        try {
+                            ipsJson = new JsonArray(rawIps);
+                        } catch (Exception e) {
+                            ipsJson.add(rawIps);
+                        }
+                    } else {
+                        for (String part : rawIps.split("[,;\\s]+")) {
+                            if (!part.isBlank()) ipsJson.add(part.trim());
                         }
                     }
-
-                    JsonArray createdDateArr = toDateArray(row.getLocalDateTime("created_date"));
-                    JsonArray lastModifiedDateArr = toDateArray(row.getLocalDateTime("last_modified_date"));
-                    String lastModifiedBy = row.getString("last_modified_by");
-
-                    JsonObject item = new JsonObject()
-                            .put("id", row.getLong("id"))
-                            .put("createdBy", creator)
-                            .put("requestedBy", requestedBy)
-                            .put("numberOfIps", ipCount)
-                            .put("noOfIps", ipCount)
-                            .put("ipCount", ipCount)
-                            .put("subnetId", subnetId)
-                            .put("subnetAddress", subnetAddress)
-                            .put("deviceType", deviceType)
-                            .put("duration", duration)
-                            .put("status", status)
-                            .put("purpose", purpose)
-                            .put("remark", remark)
-                            .put("preferredSubnet", preferredSubnet)
-                            .put("ips", ipsJson)
-                            .put("createdDate", createdDateArr)
-                            .put("lastModifiedBy", lastModifiedBy != null ? lastModifiedBy : "N/A")
-                            .put("lastModifiedDate", lastModifiedDateArr);
-
-                    result.add(item);
                 }
-                promise.complete(result);
-            } else {
-                LOGGER.error("Failed to query IP requests: {}", ar.cause().getMessage());
-                promise.complete(new JsonArray());
+
+                JsonArray createdDateArr = toDateArray(row.getLocalDateTime("created_date"));
+                JsonArray lastModifiedDateArr = toDateArray(row.getLocalDateTime("last_modified_date"));
+                String lastModifiedBy = row.getString("last_modified_by");
+
+                JsonObject item = new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("createdBy", creator)
+                        .put("requestedBy", requestedBy)
+                        .put("numberOfIps", ipCount)
+                        .put("noOfIps", ipCount)
+                        .put("ipCount", ipCount)
+                        .put("subnetId", subnetId)
+                        .put("subnetAddress", subnetAddress)
+                        .put("deviceType", deviceType)
+                        .put("duration", duration)
+                        .put("status", status)
+                        .put("purpose", purpose)
+                        .put("remark", remark)
+                        .put("preferredSubnet", preferredSubnet)
+                        .put("ips", ipsJson)
+                        .put("createdDate", createdDateArr)
+                        .put("lastModifiedBy", lastModifiedBy != null ? lastModifiedBy : "N/A")
+                        .put("lastModifiedDate", lastModifiedDateArr);
+
+                result.add(item);
             }
+            return result;
+        }).recover(err -> {
+            LOGGER.error("Failed to query IP requests: {}", err.getMessage());
+            return Future.succeededFuture(new JsonArray());
         });
-        return promise.future();
     }
 
     // Converts a LocalDateTime into a numeric JSON date array format.
@@ -562,7 +514,6 @@ public class SubnetService {
 
     // Submits a new IP allocation request and records an audit event.
     public Future<JsonObject> saveIpRequest(JsonObject req) {
-        Promise<JsonObject> promise = Promise.promise();
         String creator = asString(req.getValue("createdBy"), asString(req.getValue("userName"), "admin"));
         int count = 1;
         Object countValue = req.getValue("numberOfIps");
@@ -572,13 +523,11 @@ public class SubnetService {
             try {
                 count = Integer.parseInt(String.valueOf(countValue));
             } catch (NumberFormatException e) {
-                promise.fail("numberOfIps must be a positive integer");
-                return promise.future();
+                return Future.failedFuture("numberOfIps must be a positive integer");
             }
         }
         if (count < 1) {
-            promise.fail("numberOfIps must be a positive integer");
-            return promise.future();
+            return Future.failedFuture("numberOfIps must be a positive integer");
         }
 
         String deviceType = asString(req.getValue("deviceType"), "Server");
@@ -616,7 +565,7 @@ public class SubnetService {
             resolveSubnetAddress = Future.succeededFuture(subnetAddress);
         }
 
-        resolveSubnetAddress.compose(resolvedAddr -> {
+        return resolveSubnetAddress.compose(resolvedAddr -> {
             String insertSql = "INSERT INTO ip_requests (created_by, requested_by, number_of_ips, subnet_id, subnet_address, device_type, duration, status, purpose, preferred_subnet, ips, created_date) " +
                     "VALUES ($1, $1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, CURRENT_TIMESTAMP) RETURNING id";
             return db.preparedQuery(insertSql)
@@ -626,16 +575,7 @@ public class SubnetService {
             String msg = "New IP Request #" + newId + " submitted by " + finalCreator + " for " + finalCount + " IP(s) (" + finalDeviceType + ", " + finalDuration + "): " + finalPurpose;
             String eventSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ('Information', 'IP Request', $1, $2, CURRENT_TIMESTAMP)";
             return db.preparedQuery(eventSql).execute(Tuple.of(msg, finalCreator)).map(newId);
-        }).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "IP Request submitted successfully"));
-            } else {
-                LOGGER.error("Failed to save IP request: {}", ar.cause().getMessage());
-                promise.fail(ar.cause());
-            }
-        });
-
-        return promise.future();
+        }).map(newId -> new JsonObject().put("success", true).put("message", "IP Request submitted successfully"));
     }
 
     // Safely extracts a non-empty string or returns a default fallback.
@@ -665,17 +605,15 @@ public class SubnetService {
 
     // Approves or rejects an IP request and allocates IP addresses accordingly.
     public Future<JsonObject> updateIpRequestStatus(JsonObject req, String status) {
-        Promise<JsonObject> promise = Promise.promise();
         Long requestId = asLong(req.getValue("id"));
         if (requestId == null) {
-            promise.fail("Valid IP request id is required");
-            return promise.future();
+            return Future.failedFuture("Valid IP request id is required");
         }
 
         String subnetId = asNullableString(req.getValue("subnetId"));
         String remark = asString(req.getValue("remark"), "");
         String reviewer = asString(req.getValue("lastModifiedBy"), asString(req.getValue("userName"), "admin"));
-        
+
         JsonArray tempRequestedIps = null;
         Object ipsVal = req.getValue("ips");
         if (ipsVal instanceof JsonArray) {
@@ -697,24 +635,16 @@ public class SubnetService {
 
         if ("REJECTED".equalsIgnoreCase(status)) {
             String updateSql = "UPDATE ip_requests SET status = 'REJECTED', remark = $1, last_modified_by = $2, last_modified_date = CURRENT_TIMESTAMP WHERE id = $3";
-            db.preparedQuery(updateSql).execute(Tuple.of(finalRemark, finalReviewer, requestId)).compose(rows -> {
+            return db.preparedQuery(updateSql).execute(Tuple.of(finalRemark, finalReviewer, requestId)).compose(rows -> {
                 String msg = "IP Request #" + requestId + " rejected by " + finalReviewer + ". Reason: " + (finalRemark.isBlank() ? "No reason provided" : finalRemark);
                 String eventSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ('Warning', 'IP Request', $1, $2, CURRENT_TIMESTAMP)";
                 return db.preparedQuery(eventSql).execute(Tuple.of(msg, finalReviewer));
-            }).onComplete(ar -> {
-                if (ar.succeeded()) {
-                    promise.complete(new JsonObject().put("success", true).put("message", "IP Request rejected successfully"));
-                } else {
-                    LOGGER.error("Failed to reject IP request #{}: {}", requestId, ar.cause().getMessage());
-                    promise.fail(ar.cause());
-                }
-            });
-            return promise.future();
+            }).map(rows -> new JsonObject().put("success", true).put("message", "IP Request rejected successfully"));
         }
 
         // Handle APPROVED
         String selectSql = "SELECT * FROM ip_requests WHERE id = $1";
-        db.preparedQuery(selectSql).execute(Tuple.of(requestId)).compose(rows -> {
+        return db.preparedQuery(selectSql).execute(Tuple.of(requestId)).compose(rows -> {
             if (rows.size() == 0) {
                 return Future.failedFuture("IP request not found");
             }
@@ -772,17 +702,17 @@ public class SubnetService {
 
             Future<Void> updateIpsChain = Future.succeededFuture();
             if (finalIps != null && !finalIps.isEmpty()) {
+                List<Tuple> batch = new ArrayList<>();
                 for (int i = 0; i < finalIps.size(); i++) {
                     String ipAddr = finalIps.getString(i);
-                    updateIpsChain = updateIpsChain.compose(ignored ->
-                            db.preparedQuery("UPDATE subnet_ip_details SET status = 'USED', " +
-                                            "host_name = CASE WHEN host_name IS NULL OR host_name = '-' THEN $1 ELSE host_name END, " +
-                                            "system_description = CASE WHEN system_description IS NULL OR system_description = '-' THEN $1 ELSE system_description END, " +
-                                            "device_type = CASE WHEN device_type IS NULL OR device_type = '-' THEN $2 ELSE device_type END " +
-                                            "WHERE ip_address = $3")
-                                     .execute(Tuple.of(purpose, deviceType, ipAddr)).mapEmpty()
-                    );
+                    batch.add(Tuple.of(purpose, deviceType, ipAddr));
                 }
+                String updateIpSql = "UPDATE subnet_ip_details SET status = 'USED', " +
+                        "host_name = CASE WHEN host_name IS NULL OR host_name = '-' THEN $1 ELSE host_name END, " +
+                        "system_description = CASE WHEN system_description IS NULL OR system_description = '-' THEN $1 ELSE system_description END, " +
+                        "device_type = CASE WHEN device_type IS NULL OR device_type = '-' THEN $2 ELSE device_type END " +
+                        "WHERE ip_address = $3";
+                updateIpsChain = db.preparedQuery(updateIpSql).executeBatch(batch).mapEmpty();
             }
 
             return updateIpsChain.compose(ignored -> {
@@ -810,16 +740,7 @@ public class SubnetService {
                 String eventSql = "INSERT INTO event (event_type, event_context, message, user_name, timestamp) VALUES ('Information', 'IP Request', $1, $2, CURRENT_TIMESTAMP)";
                 return db.preparedQuery(eventSql).execute(Tuple.of(msg, finalReviewer));
             });
-        }).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("message", "IP Request approved successfully"));
-            } else {
-                LOGGER.error("Failed to approve IP request #{}: {}", requestId, ar.cause().getMessage());
-                promise.fail(ar.cause());
-            }
-        });
-
-        return promise.future();
+        }).map(rows -> new JsonObject().put("success", true).put("message", "IP Request approved successfully"));
     }
 
     // ==========================================
@@ -828,15 +749,14 @@ public class SubnetService {
 
     // Computes total, used, available, and transient IP metrics across all subnets.
     public Future<JsonObject> getIpSummary() {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT SUM(total_ip) as total, SUM(used_ip) as used, SUM(available_ip) as available, SUM(transient_ip) as transient FROM subnet_details";
-        db.query(sql).execute().onComplete(ar -> {
+        return db.query(sql).execute().map(rows -> {
             long total = 256;
             long used = 45;
             long avail = 206;
             long trans = 5;
-            if (ar.succeeded() && ar.result().size() > 0) {
-                Row row = ar.result().iterator().next();
+            if (rows.size() > 0) {
+                Row row = rows.iterator().next();
                 if (row.getLong("total") != null) total = row.getLong("total");
                 if (row.getLong("used") != null) used = row.getLong("used");
                 if (row.getLong("available") != null) avail = row.getLong("available");
@@ -846,7 +766,7 @@ public class SubnetService {
             double availPct = total > 0 ? (avail * 100.0) / total : 80.47;
             double transPct = total > 0 ? (trans * 100.0) / total : 1.95;
 
-            promise.complete(new JsonObject()
+            return new JsonObject()
                     .put("usedIp", used)
                     .put("availableIp", avail)
                     .put("transientIp", trans)
@@ -855,103 +775,81 @@ public class SubnetService {
                     .put("transientIpPercentage", Math.round(transPct * 100.0) / 100.0)
                     .put("used", used)
                     .put("available", avail)
-                    .put("transient", trans));
+                    .put("transient", trans);
         });
-        return promise.future();
     }
 
     // Computes summary counts of reachable and unreachable IP addresses.
     public Future<JsonObject> getPingIpSummary() {
-        Promise<JsonObject> promise = Promise.promise();
-        promise.complete(new JsonObject()
+        return Future.succeededFuture(new JsonObject()
                 .put("totalIp", 259)
                 .put("usedIp", 247)
                 .put("total", 259)
                 .put("failure", 12));
-        return promise.future();
     }
 
     // Computes summary counts of rogue and trusted IP addresses across subnets.
     public Future<JsonObject> getRogueSubnetIp() {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = "SELECT count(*) as cnt FROM rogue_detection_details WHERE authenticity = 'UNAUTHORIZED'";
-        db.query(sql).execute().onComplete(ar -> {
+        return db.query(sql).execute().map(rows -> {
             long rogue = 2;
-            if (ar.succeeded() && ar.result().size() > 0) {
-                rogue = ar.result().iterator().next().getLong("cnt");
+            if (rows.size() > 0) {
+                rogue = rows.iterator().next().getLong("cnt");
             }
-            promise.complete(new JsonObject()
+            return new JsonObject()
                     .put("totalIp", 259)
                     .put("rogueIp", rogue)
                     .put("trustedIp", 249)
                     .put("discover", 8)
                     .put("rogue", rogue)
-                    .put("trusted", 249));
+                    .put("trusted", 249);
         });
-        return promise.future();
     }
 
     // Retrieves summary statistics of DNS resolution statuses.
     public Future<JsonArray> getDnsStatusSummary() {
-        Promise<JsonArray> promise = Promise.promise();
-        promise.complete(new JsonArray()
+        return Future.succeededFuture(new JsonArray()
                 .add(new JsonObject().put("category", "Forward & Reverse OK").put("value", 85))
                 .add(new JsonObject().put("category", "Forward Only").put("value", 10))
                 .add(new JsonObject().put("category", "Failed DNS").put("value", 5)));
-        return promise.future();
     }
 
     // Retrieves device vendor distribution counts.
     public Future<JsonArray> getVendorSummary() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT vendor_name, count FROM vendor ORDER BY count DESC";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded()) {
-
-                JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
-                    result.add(new JsonObject()
-                            .put("VendorName", row.getString("vendor_name"))
-                            .put("VendorCount", row.getInteger("count")));
-                }
-                promise.complete(result);
-            } else {
-                promise.complete(new JsonArray()
-                        .add(new JsonObject().put("VendorName", "Cisco Systems").put("VendorCount", 120))
-                        .add(new JsonObject().put("VendorName", "VMware Inc").put("VendorCount", 45))
-                        .add(new JsonObject().put("VendorName", "Intel Corp").put("VendorCount", 30))
-                        .add(new JsonObject().put("VendorName", "Dell Inc").put("VendorCount", 25)));
+        return db.query(sql).execute().map(rows -> {
+            JsonArray result = new JsonArray();
+            for (Row row : rows) {
+                result.add(new JsonObject()
+                        .put("VendorName", row.getString("vendor_name"))
+                        .put("VendorCount", row.getInteger("count")));
             }
-        });
-        return promise.future();
+            return result;
+        }).recover(err -> Future.succeededFuture(new JsonArray()
+                .add(new JsonObject().put("VendorName", "Cisco Systems").put("VendorCount", 120))
+                .add(new JsonObject().put("VendorName", "VMware Inc").put("VendorCount", 45))
+                .add(new JsonObject().put("VendorName", "Intel Corp").put("VendorCount", 30))
+                .add(new JsonObject().put("VendorName", "Dell Inc").put("VendorCount", 25))));
     }
 
     // Retrieves the top 10 subnets based on IP utilization.
     public Future<JsonArray> getTop10Subnet() {
-        Promise<JsonArray> promise = Promise.promise();
-        getAllSubnets().onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(ar.result());
-            } else {
-                promise.complete(new JsonArray());
-            }
-        });
-        return promise.future();
+        return getAllSubnets();
     }
 
     // Retrieves the top 10 categories ranked by total IP utilization.
     public Future<JsonArray> getTop10Category() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT c.id, c.category_name, " +
                 "COALESCE(SUM(s.used_ip), 0) as used_ip, " +
                 "COALESCE(SUM(s.total_ip), 0) as total_ip " +
                 "FROM category c " +
                 "LEFT JOIN subnet_details s ON s.category_id = c.id " +
                 "GROUP BY c.id, c.category_name ORDER BY used_ip DESC LIMIT 10";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
+
+        return db.query(sql).execute().map(rows -> {
+            if (rows.size() > 0) {
                 JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
+                for (Row row : rows) {
                     long total = row.getLong("total_ip") != null ? row.getLong("total_ip") : 0;
                     long used = row.getLong("used_ip") != null ? row.getLong("used_ip") : 0;
                     double percent = total > 0 ? (used * 100.0 / total) : 0.0;
@@ -963,24 +861,24 @@ public class SubnetService {
                             .put("usedIpPercentage", percent)
                             .put("severity", severity));
                 }
-                promise.complete(result);
+                return result;
             } else {
-                promise.complete(new JsonArray()
+                return new JsonArray()
                         .add(new JsonObject().put("id", 1).put("categoryName", "Default Category").put("totalUsedIpPercentage", "65.00").put("usedIpPercentage", 65.0).put("severity", 2))
-                        .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets").put("totalUsedIpPercentage", "42.00").put("usedIpPercentage", 42.0).put("severity", 3)));
+                        .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets").put("totalUsedIpPercentage", "42.00").put("usedIpPercentage", 42.0).put("severity", 3));
             }
-        });
-        return promise.future();
+        }).recover(err -> Future.succeededFuture(new JsonArray()
+                .add(new JsonObject().put("id", 1).put("categoryName", "Default Category").put("totalUsedIpPercentage", "65.00").put("usedIpPercentage", 65.0).put("severity", 2))
+                .add(new JsonObject().put("id", 2).put("categoryName", "Production Subnets").put("totalUsedIpPercentage", "42.00").put("usedIpPercentage", 42.0).put("severity", 3))));
     }
 
     // Retrieves recently discovered network devices.
     public Future<JsonArray> getRecentDiscovery() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, mac_address, ip_address, discovered_at FROM rogue_detection_details ORDER BY id DESC LIMIT 10";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
+        return db.query(sql).execute().map(rows -> {
+            if (rows.size() > 0) {
                 JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
+                for (Row row : rows) {
                     Date dt = row.getLocalDateTime("discovered_at") != null ?
                             java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
                     String ts = DATE_FORMAT.format(dt);
@@ -991,24 +889,24 @@ public class SubnetService {
                             .put("discoveredAt", ts)
                             .put("discoveredTime", ts));
                 }
-                promise.complete(result);
+                return result;
             } else {
-                promise.complete(new JsonArray()
+                return new JsonArray()
                         .add(new JsonObject().put("id", 1).put("macAddress", "00:50:56:A1:B2:C3").put("ipAddress", "192.168.1.50").put("discoveredAt", "2026-08-27 10:00:00").put("discoveredTime", "2026-08-27 10:00:00"))
-                        .add(new JsonObject().put("id", 2).put("macAddress", "00:50:56:D4:E5:F6").put("ipAddress", "192.168.1.51").put("discoveredAt", "2026-08-27 10:05:00").put("discoveredTime", "2026-08-27 10:05:00")));
+                        .add(new JsonObject().put("id", 2).put("macAddress", "00:50:56:D4:E5:F6").put("ipAddress", "192.168.1.51").put("discoveredAt", "2026-08-27 10:05:00").put("discoveredTime", "2026-08-27 10:05:00"));
             }
-        });
-        return promise.future();
+        }).recover(err -> Future.succeededFuture(new JsonArray()
+                .add(new JsonObject().put("id", 1).put("macAddress", "00:50:56:A1:B2:C3").put("ipAddress", "192.168.1.50").put("discoveredAt", "2026-08-27 10:00:00").put("discoveredTime", "2026-08-27 10:00:00"))
+                .add(new JsonObject().put("id", 2).put("macAddress", "00:50:56:D4:E5:F6").put("ipAddress", "192.168.1.51").put("discoveredAt", "2026-08-27 10:05:00").put("discoveredTime", "2026-08-27 10:05:00"))));
     }
 
     // Retrieves IP addresses with conflicting MAC or network assignments.
     public Future<JsonArray> getConflictedIp() {
-        Promise<JsonArray> promise = Promise.promise();
         String sql = "SELECT id, ip_address, mac_address, subnet_id FROM subnet_ip_details WHERE status = 'Conflict' LIMIT 10";
-        db.query(sql).execute().onComplete(ar -> {
-            if (ar.succeeded() && ar.result().size() > 0) {
+        return db.query(sql).execute().map(rows -> {
+            if (rows.size() > 0) {
                 JsonArray result = new JsonArray();
-                for (Row row : ar.result()) {
+                for (Row row : rows) {
                     result.add(new JsonObject()
                             .put("id", row.getLong("id"))
                             .put("ipAddress", row.getString("ip_address"))
@@ -1022,9 +920,9 @@ public class SubnetService {
                                     .put("subnetName", "192.168.10.0/24")
                                     .put("traceOrgCategory", new JsonObject().put("categoryName", "Default Category"))));
                 }
-                promise.complete(result);
+                return result;
             } else {
-                promise.complete(new JsonArray()
+                return new JsonArray()
                         .add(new JsonObject()
                                 .put("id", 1)
                                 .put("ipAddress", "10.0.0.45")
@@ -1036,25 +934,33 @@ public class SubnetService {
                                 .put("subnetId", new JsonObject()
                                         .put("id", 2)
                                         .put("subnetName", "10.0.0.0/24")
-                                        .put("traceOrgCategory", new JsonObject().put("categoryName", "Default Category")))));
+                                        .put("traceOrgCategory", new JsonObject().put("categoryName", "Default Category"))));
             }
-        });
-        return promise.future();
+        }).recover(err -> Future.succeededFuture(new JsonArray()
+                .add(new JsonObject()
+                        .put("id", 1)
+                        .put("ipAddress", "10.0.0.45")
+                        .put("macAddress", "00:50:56:FE:DC:BA")
+                        .put("conflictMac", "00:0C:29:4F:8E:1A")
+                        .put("lastAliveTime", "2026-09-04 12:00:00")
+                        .put("subnetName", "10.0.0.0/24")
+                        .put("categoryName", "Default Category")
+                        .put("subnetId", new JsonObject()
+                                .put("id", 2)
+                                .put("subnetName", "10.0.0.0/24")
+                                .put("traceOrgCategory", new JsonObject().put("categoryName", "Default Category"))))));
     }
 
     // Groups subnets by category along with aggregate utilization metrics.
     public Future<JsonArray> getSubnetByCategory() {
-        Promise<JsonArray> promise = Promise.promise();
-        getAllSubnets().onComplete(ar -> {
-            JsonArray subnets = ar.succeeded() ? ar.result() : getFallbackSubnets();
-            
+        return getAllSubnets().map(subnets -> {
             // Group subnets by Category
             JsonObject catMap = new JsonObject();
             for (int i = 0; i < subnets.size(); i++) {
                 JsonObject s = subnets.getJsonObject(i);
                 String catName = s.getString("categoryName", "Default Category");
                 long catId = s.getLong("categoryId", 1L);
-                
+
                 if (!catMap.containsKey(catName)) {
                     catMap.put(catName, new JsonObject()
                             .put("id", catId)
@@ -1063,7 +969,7 @@ public class SubnetService {
                             .put("severity", s.getInteger("severity", 3))
                             .put("subnets", new JsonArray()));
                 }
-                
+
                 catMap.getJsonObject(catName).getJsonArray("subnets").add(new JsonObject()
                         .put("id", s.getLong("id"))
                         .put("subnetName", s.getString("subnetName"))
@@ -1071,12 +977,12 @@ public class SubnetService {
                         .put("totalUsedIpPercentage", s.getDouble("usedIpPercentage", 0.0))
                         .put("severity", s.getInteger("severity", 3)));
             }
-            
+
             JsonArray result = new JsonArray();
             for (String key : catMap.fieldNames()) {
                 result.add(catMap.getJsonObject(key));
             }
-            
+
             if (result.isEmpty()) {
                 result.add(new JsonObject()
                         .put("id", 1)
@@ -1085,19 +991,16 @@ public class SubnetService {
                         .put("severity", 3)
                         .put("subnets", getFallbackSubnets()));
             }
-            
-            promise.complete(result);
+
+            return result;
         });
-        return promise.future();
     }
 
     // Groups supernets by category along with aggregate utilization metrics.
     public Future<JsonArray> getSupernetByCategory() {
-        Promise<JsonArray> promise = Promise.promise();
-        getSupernets().onComplete(ar -> {
-            JsonArray supernets = ar.succeeded() ? ar.result() : new JsonArray();
+        return getSupernets().map(supernets -> {
             JsonArray result = new JsonArray();
-            
+
             if (supernets.size() > 0) {
                 result.add(new JsonObject()
                         .put("id", 1)
@@ -1118,9 +1021,8 @@ public class SubnetService {
                                 .put("totalUsedIpPercentage", 20.0)
                                 .put("severity", 3))));
             }
-            promise.complete(result);
+            return result;
         });
-        return promise.future();
     }
 
     // Returns default fallback subnet records when the database query fails.

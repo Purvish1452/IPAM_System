@@ -8,7 +8,7 @@ import ar.com.fdvs.dj.domain.builders.ColumnBuilder;
 import ar.com.fdvs.dj.domain.builders.FastReportBuilder;
 import ar.com.fdvs.dj.domain.constants.Font;
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Promise;
+import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -38,6 +38,8 @@ public class ReportWorkerVerticle extends AbstractVerticle {
 
     public static final String ADDR_GENERATE_SUBNET_PDF = "ipam.worker.report.subnet.pdf";
     public static final String ADDR_GENERATE_SUBNET_CSV = "ipam.worker.report.subnet.csv";
+    public static final String ADDR_GENERATE_ROGUE_PDF = "ipam.worker.report.rogue.pdf";
+    public static final String ADDR_GENERATE_ROGUE_CSV = "ipam.worker.report.rogue.csv";
     public static final String ADDR_GENERATE_VENDOR_PDF = "ipam.worker.report.vendor.pdf";
     public static final String ADDR_DYNAMIC_JASPER_PDF = "ipam.worker.report.dynamic.pdf";
     public static final String ADDR_GENERATE_CSV = "ipam.worker.report.generic.csv";
@@ -91,7 +93,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
 
     // Registers EventBus consumers for subnet PDF/CSV, vendor summary PDF, and DynamicJasper PDF rendering.
     @Override
-    public void start(Promise<Void> startPromise) {
+    public void start(io.vertx.core.Promise<Void> startPromise) {
         silenceThirdPartyLoggers();
         LOGGER.info("Starting ReportWorkerVerticle on Worker Thread Pool: {}", Thread.currentThread().getName());
 
@@ -312,6 +314,86 @@ public class ReportWorkerVerticle extends AbstractVerticle {
             }
         });
 
+        // 6. Rogue Detection PDF Generation (File-backed)
+        vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_ROGUE_PDF, message -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                JsonObject body = message.body();
+                JsonArray data = body.getJsonArray("data", new JsonArray());
+
+                LOGGER.info("ReportWorkerVerticle [{}] generating Rogue Detection PDF report (records={})",
+                        Thread.currentThread().getName(), data.size());
+
+                List<JsonObject> list = new ArrayList<>();
+                for (int i = 0; i < data.size(); i++) {
+                    list.add(data.getJsonObject(i));
+                }
+
+                String filename = "RogueDetection_Export_" + System.currentTimeMillis() + ".pdf";
+                String filePath = EXPORT_DIR + filename;
+                byte[] pdfBytes = generateRogueDetectionPdf(list);
+                Files.write(Paths.get(filePath), pdfBytes);
+
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully generated Rogue Detection PDF report '{}' ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), filename, pdfBytes.length, list.size(), duration);
+
+                message.reply(new JsonObject()
+                        .put("success", true)
+                        .put("filename", filename)
+                        .put("filePath", filePath)
+                        .put("size", pdfBytes.length));
+            } catch (Exception e) {
+                LOGGER.error("ReportWorkerVerticle [{}] error generating Rogue Detection PDF report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
+                message.fail(500, e.getMessage());
+            }
+        });
+
+        // 7. Rogue Detection CSV Generation (File-backed)
+        vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_ROGUE_CSV, message -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                JsonObject body = message.body();
+                JsonArray data = body.getJsonArray("data", new JsonArray());
+
+                LOGGER.info("ReportWorkerVerticle [{}] generating Rogue Detection CSV report (records={})",
+                        Thread.currentThread().getName(), data.size());
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("MAC Address,IP Address,Discovered At,NIC Type,Authenticity,Host Name\n");
+
+                for (int i = 0; i < data.size(); i++) {
+                    JsonObject row = data.getJsonObject(i);
+                    sb.append(csvEscape(row.getString("macAddress"))).append(",")
+                            .append(csvEscape(row.getString("ipAddress"))).append(",")
+                            .append(csvEscape(row.getString("discoveredAt"))).append(",")
+                            .append(csvEscape(row.getString("nicType"))).append(",")
+                            .append(csvEscape(row.getString("authenticity"))).append(",")
+                            .append(csvEscape(row.getString("hostName"))).append("\n");
+                }
+
+                String filename = "RogueDetection_Export_" + System.currentTimeMillis() + ".csv";
+                String filePath = EXPORT_DIR + filename;
+                byte[] csvBytes = sb.toString().getBytes(StandardCharsets.UTF_8);
+                Files.write(Paths.get(filePath), csvBytes);
+
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully generated Rogue Detection CSV report '{}' ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), filename, csvBytes.length, data.size(), duration);
+
+                message.reply(new JsonObject()
+                        .put("success", true)
+                        .put("filename", filename)
+                        .put("filePath", filePath)
+                        .put("size", csvBytes.length));
+            } catch (Exception e) {
+                LOGGER.error("ReportWorkerVerticle [{}] error generating Rogue Detection CSV report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
+                message.fail(500, e.getMessage());
+            }
+        });
+
         LOGGER.info("ReportWorkerVerticle consumers successfully initialized on EventBus.");
         startPromise.complete();
     }
@@ -406,6 +488,70 @@ public class ReportWorkerVerticle extends AbstractVerticle {
             content.append("0 -15 Td\n");
             content.append("/F1 9 Tf\n");
             content.append("(").append(sanitize(vName + vCount + vPct)).append(") Tj\n");
+        }
+        content.append("ET\n");
+
+        byte[] streamBytes = content.toString().getBytes(StandardCharsets.ISO_8859_1);
+        List<String> objects = new ArrayList<>();
+        objects.add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        objects.add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        objects.add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n");
+        objects.add("4 0 obj\n<< /Length " + streamBytes.length + " >>\nstream\n" + content + "\nendstream\nendobj\n");
+        objects.add("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+
+        StringBuilder pdf = new StringBuilder();
+        pdf.append("%PDF-1.4\n");
+        List<Integer> offsets = new ArrayList<>();
+        int currentOffset = pdf.length();
+
+        for (String obj : objects) {
+            offsets.add(currentOffset);
+            pdf.append(obj);
+            currentOffset = pdf.length();
+        }
+
+        int xrefOffset = pdf.length();
+        pdf.append("xref\n0 ").append(objects.size() + 1).append("\n");
+        pdf.append("0000000000 65535 f \n");
+        for (int offset : offsets) {
+            pdf.append(String.format("%010d 00000 n \n", offset));
+        }
+
+        pdf.append("trailer\n<< /Size ").append(objects.size() + 1).append(" /Root 1 0 R >>\n");
+        pdf.append("startxref\n").append(xrefOffset).append("\n%%EOF\n");
+
+        return pdf.toString().getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    // Generates raw PDF bytes containing formatted rogue detection records.
+    private byte[] generateRogueDetectionPdf(List<JsonObject> list) throws Exception {
+        StringBuilder content = new StringBuilder();
+        content.append("BT\n");
+        content.append("/F1 12 Tf\n");
+        content.append("50 750 Td\n");
+        content.append("(Rogue Detection Report) Tj\n");
+        content.append("0 -20 Td\n");
+        content.append("/F1 9 Tf\n");
+        content.append("(Generated: ").append(DATE_FORMAT.format(new Date())).append(") Tj\n");
+        content.append("0 -25 Td\n");
+        content.append("/F1 10 Tf\n");
+        content.append("(MAC Address         IP Address        Discovered At        NIC Type             Authenticity) Tj\n");
+        content.append("0 -18 Td\n");
+        content.append("(----------------------------------------------------------------------------------------) Tj\n");
+        content.append("0 -5 Td\n");
+
+        int lineCount = 0;
+        for (JsonObject row : list) {
+            if (lineCount++ >= 45) break;
+            String mac = pad(row.getString("macAddress", "-"), 20);
+            String ip = pad(row.getString("ipAddress", "-"), 18);
+            String disc = pad(row.getString("discoveredAt", "-"), 21);
+            String nic = pad(row.getString("nicType", "-"), 21);
+            String auth = pad(row.getString("authenticity", "-"), 15);
+
+            content.append("0 -14 Td\n");
+            content.append("/F1 9 Tf\n");
+            content.append("(").append(sanitize(mac + ip + disc + nic + auth)).append(") Tj\n");
         }
         content.append("ET\n");
 

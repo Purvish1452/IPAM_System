@@ -3,7 +3,6 @@ package com.motadata.ipam.service;
 import com.motadata.ipam.verticle.NetworkWorkerVerticle;
 import com.motadata.ipam.verticle.ReportWorkerVerticle;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
@@ -17,7 +16,9 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 public class SubnetIPActionService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SubnetIPActionService.class);
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private static final String EXPORT_DIR = "file-uploads/exports/";
 
     private final Pool db;
@@ -71,8 +73,6 @@ public class SubnetIPActionService {
 
     // Dispatches a subnet scanning job to NetworkWorkerVerticle via EventBus.
     public Future<JsonObject> startScanSubnet(Long subnetId) {
-        Promise<JsonObject> promise = Promise.promise();
-
         long now = System.currentTimeMillis();
         if (scanRunning.get()) {
             if (now - lastScanStartTime > 60000) {
@@ -80,32 +80,29 @@ public class SubnetIPActionService {
                 scanRunning.set(false);
                 lastScanSubnetAddress = null;
             } else {
-                promise.complete(new JsonObject()
+                return Future.succeededFuture(new JsonObject()
                         .put("success", false)
                         .put("message", "Please wait for some time, Scan is running"));
-                return promise.future();
             }
         }
 
         // Fetch subnet details first
         String sql = "SELECT id, subnet_address, subnet_cidr FROM subnet_details WHERE id = $1";
-        db.preparedQuery(sql).execute(Tuple.of(subnetId)).onComplete(ar -> {
-            if (ar.failed() || ar.result().size() == 0) {
-                promise.complete(new JsonObject()
+        return db.preparedQuery(sql).execute(Tuple.of(subnetId)).map(rows -> {
+            if (rows.size() == 0) {
+                return new JsonObject()
                         .put("success", false)
-                        .put("message", "Subnet not found"));
-                return;
+                        .put("message", "Subnet not found");
             }
 
-            Row row = ar.result().iterator().next();
+            Row row = rows.iterator().next();
             String subnetAddress = row.getString("subnet_address");
             int cidr = row.getInteger("subnet_cidr") != null ? row.getInteger("subnet_cidr") : 24;
 
             if (!scanRunning.compareAndSet(false, true)) {
-                promise.complete(new JsonObject()
+                return new JsonObject()
                         .put("success", false)
-                        .put("message", "Please wait for some time, Scan is running"));
-                return;
+                        .put("message", "Please wait for some time, Scan is running");
             }
 
             lastScanStartTime = System.currentTimeMillis();
@@ -118,13 +115,6 @@ public class SubnetIPActionService {
                     .put("subnetAddress", subnetAddress)
                     .put("cidr", cidr);
 
-            // Respond immediately with success so UI displays the running scan banner & begins polling
-            promise.complete(new JsonObject()
-                    .put("success", true)
-                    .put("message", "Scan started for " + lastScanSubnetAddress)
-                    .put("scopeAddress", lastScanSubnetAddress)
-                    .put("subnetId", subnetId));
-
             // Send non-blocking request to NetworkWorkerVerticle via EventBus in background
             vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_SCAN, scanPayload)
                     .onComplete(replyAr -> {
@@ -136,43 +126,42 @@ public class SubnetIPActionService {
                             LOGGER.error("Worker subnet scan failed for subnet {}: {}", subnetAddress, replyAr.cause().getMessage());
                         }
                     });
-        });
 
-        return promise.future();
+            return new JsonObject()
+                    .put("success", true)
+                    .put("message", "Scan started for " + lastScanSubnetAddress)
+                    .put("scopeAddress", lastScanSubnetAddress)
+                    .put("subnetId", subnetId);
+        });
     }
 
     // Returns current running status and target address of active network scans.
     public Future<JsonObject> getScanStatus() {
-        Promise<JsonObject> promise = Promise.promise();
         long now = System.currentTimeMillis();
         if (scanRunning.get()) {
             if (now - lastScanStartTime > 60000) {
                 LOGGER.warn("Auto-clearing stuck scan status lock");
                 scanRunning.set(false);
                 lastScanSubnetAddress = null;
-                promise.complete(new JsonObject()
+                return Future.succeededFuture(new JsonObject()
                         .put("success", false)
                         .put("message", (Object) null));
             } else {
-                promise.complete(new JsonObject()
+                return Future.succeededFuture(new JsonObject()
                         .put("success", true)
                         .put("message", lastScanSubnetAddress));
             }
         } else {
-            promise.complete(new JsonObject()
+            return Future.succeededFuture(new JsonObject()
                     .put("success", false)
                     .put("message", (Object) null));
         }
-        return promise.future();
     }
 
     // Dispatches gateway IP scan job to NetworkWorkerVerticle via EventBus.
     public Future<JsonObject> startScanGateway(Long gatewayId) {
-        Promise<JsonObject> promise = Promise.promise();
-
         if (gatewayId == null) {
-            promise.complete(new JsonObject().put("success", false).put("message", "Invalid gateway id"));
-            return promise.future();
+            return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Invalid gateway id"));
         }
 
         long now = System.currentTimeMillis();
@@ -182,34 +171,25 @@ public class SubnetIPActionService {
                 scanRunning.set(false);
                 lastScanSubnetAddress = null;
             } else {
-                promise.complete(new JsonObject().put("success", false)
+                return Future.succeededFuture(new JsonObject().put("success", false)
                         .put("message", "Please wait for the current scan to complete"));
-                return promise.future();
             }
         }
 
-        db.preparedQuery("SELECT id, gateway, description, COALESCE(name, 'Core Gateway') as name FROM gateway WHERE id = $1")
+        return db.preparedQuery("SELECT id, gateway, description, COALESCE(name, 'Core Gateway') as name FROM gateway WHERE id = $1")
                 .execute(Tuple.of(gatewayId))
-                .onComplete(ar -> {
-                    if (ar.failed()) {
-                        LOGGER.error("Gateway lookup failed for id={}: {}", gatewayId, ar.cause().getMessage(), ar.cause());
-                        promise.complete(new JsonObject().put("success", false)
-                                .put("message", "Gateway lookup failed: " + ar.cause().getMessage()));
-                        return;
-                    }
-                    if (ar.result().size() == 0) {
-                        promise.complete(new JsonObject().put("success", false).put("message", "Gateway not found"));
-                        return;
+                .map(rows -> {
+                    if (rows.size() == 0) {
+                        return new JsonObject().put("success", false).put("message", "Gateway not found");
                     }
 
-                    Row row = ar.result().iterator().next();
+                    Row row = rows.iterator().next();
                     String rawGateway = row.getString("gateway");
                     final String gatewayIp = (rawGateway != null && rawGateway.contains(".")) ? rawGateway : "192.168.1.1";
 
                     if (!scanRunning.compareAndSet(false, true)) {
-                        promise.complete(new JsonObject().put("success", false)
-                                .put("message", "Please wait for the current scan to complete"));
-                        return;
+                        return new JsonObject().put("success", false)
+                                .put("message", "Please wait for the current scan to complete");
                     }
 
                     lastScanStartTime = System.currentTimeMillis();
@@ -229,13 +209,6 @@ public class SubnetIPActionService {
                             .put("timeoutMs", 1000)
                             .put("concurrency", 64);
 
-                    // Respond immediately with success so UI displays the running scan banner & begins polling
-                    promise.complete(new JsonObject()
-                            .put("success", true)
-                            .put("message", "Gateway discovery scan started for " + gatewayIp)
-                            .put("scopeAddress", gatewayIp)
-                            .put("gatewayIp", gatewayIp));
-
                     // Send non-blocking request to NetworkWorkerVerticle via EventBus in background
                     vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_DISCOVERY_SCAN, scanPayload)
                             .onComplete(res -> {
@@ -249,9 +222,18 @@ public class SubnetIPActionService {
                                             .execute(Tuple.of(gatewayId));
                                 }
                             });
-                });
 
-        return promise.future();
+                    return new JsonObject()
+                            .put("success", true)
+                            .put("message", "Gateway discovery scan started for " + gatewayIp)
+                            .put("scopeAddress", gatewayIp)
+                            .put("gatewayIp", gatewayIp);
+                })
+                .recover(err -> {
+                    LOGGER.error("Gateway lookup failed for id={}: {}", gatewayId, err.getMessage(), err);
+                    return Future.succeededFuture(new JsonObject().put("success", false)
+                            .put("message", "Gateway lookup failed: " + err.getMessage()));
+                });
     }
 
     // ==========================================
@@ -281,21 +263,15 @@ public class SubnetIPActionService {
                 "VALUES ($1, 'AVAILABLE', $2, CURRENT_TIMESTAMP) " +
                 "ON CONFLICT (ip_address) DO NOTHING";
 
-        Promise<JsonObject> promise = Promise.promise();
-        db.preparedQuery(sql).executeBatch(batch).onComplete(ar -> {
-            if (ar.succeeded()) {
-                refreshSubnetStats(subnetId).onComplete(statAr -> {
-                    promise.complete(new JsonObject()
-                            .put("success", true)
-                            .put("message", ips.size() + " IP(s) processed successfully"));
+        return db.preparedQuery(sql).executeBatch(batch)
+                .compose(rows -> refreshSubnetStats(subnetId))
+                .map(v -> new JsonObject()
+                        .put("success", true)
+                        .put("message", ips.size() + " IP(s) processed successfully"))
+                .recover(err -> {
+                    LOGGER.error("Add Multiple IP range failed: {}", err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Failed: " + err.getMessage()));
                 });
-            } else {
-                LOGGER.error("Add Multiple IP range failed: {}", ar.cause().getMessage());
-                promise.complete(new JsonObject().put("success", false).put("message", "Failed: " + ar.cause().getMessage()));
-            }
-        });
-
-        return promise.future();
     }
 
     // ==========================================
@@ -321,21 +297,15 @@ public class SubnetIPActionService {
 
         String sql = "UPDATE subnet_ip_details SET status = $1, last_scan_time = CURRENT_TIMESTAMP WHERE ip_address = $2";
 
-        Promise<JsonObject> promise = Promise.promise();
-        db.preparedQuery(sql).executeBatch(batch).onComplete(ar -> {
-            if (ar.succeeded()) {
-                refreshSubnetStats(subnetId).onComplete(statAr -> {
-                    promise.complete(new JsonObject()
-                            .put("success", true)
-                            .put("message", ips.size() + " IP(s) status updated to " + dbStatus));
+        return db.preparedQuery(sql).executeBatch(batch)
+                .compose(rows -> refreshSubnetStats(subnetId))
+                .map(v -> new JsonObject()
+                        .put("success", true)
+                        .put("message", ips.size() + " IP(s) status updated to " + dbStatus))
+                .recover(err -> {
+                    LOGGER.error("Update IP range status failed: {}", err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Failed: " + err.getMessage()));
                 });
-            } else {
-                LOGGER.error("Update IP range status failed: {}", ar.cause().getMessage());
-                promise.complete(new JsonObject().put("success", false).put("message", "Failed: " + ar.cause().getMessage()));
-            }
-        });
-
-        return promise.future();
     }
 
     // ==========================================
@@ -360,21 +330,15 @@ public class SubnetIPActionService {
 
         String sql = "DELETE FROM subnet_ip_details WHERE ip_address = $1 AND subnet_id = $2";
 
-        Promise<JsonObject> promise = Promise.promise();
-        db.preparedQuery(sql).executeBatch(batch).onComplete(ar -> {
-            if (ar.succeeded()) {
-                refreshSubnetStats(subnetId).onComplete(statAr -> {
-                    promise.complete(new JsonObject()
-                            .put("success", true)
-                            .put("message", ips.size() + " IP(s) deleted successfully"));
+        return db.preparedQuery(sql).executeBatch(batch)
+                .compose(rows -> refreshSubnetStats(subnetId))
+                .map(v -> new JsonObject()
+                        .put("success", true)
+                        .put("message", ips.size() + " IP(s) deleted successfully"))
+                .recover(err -> {
+                    LOGGER.error("Delete IP range failed: {}", err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", "Failed: " + err.getMessage()));
                 });
-            } else {
-                LOGGER.error("Delete IP range failed: {}", ar.cause().getMessage());
-                promise.complete(new JsonObject().put("success", false).put("message", "Failed: " + ar.cause().getMessage()));
-            }
-        });
-
-        return promise.future();
     }
 
     // ==========================================
@@ -392,18 +356,9 @@ public class SubnetIPActionService {
                 .put("csvText", csvText)
                 .put("subnetId", subnetId);
 
-        Promise<JsonObject> promise = Promise.promise();
-        vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_IMPORT_CSV, payload).onComplete(ar -> {
-            if (ar.succeeded()) {
-                refreshSubnetStats(subnetId).onComplete(statAr -> {
-                    promise.complete(ar.result().body());
-                });
-            } else {
-                promise.complete(new JsonObject().put("success", false).put("message", "Import failed: " + ar.cause().getMessage()));
-            }
-        });
-
-        return promise.future();
+        return vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_IMPORT_CSV, payload)
+                .compose(reply -> refreshSubnetStats(subnetId).map(v -> reply.body()))
+                .recover(err -> Future.succeededFuture(new JsonObject().put("success", false).put("message", "Import failed: " + err.getMessage())));
     }
 
     // ==========================================
@@ -412,50 +367,41 @@ public class SubnetIPActionService {
 
     // Exports subnet IP details to a CSV file via the report worker.
     public Future<JsonObject> exportSubnetIPsToCSV(Long subnetId, List<String> selectedIds) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = buildExportSQL(subnetId, selectedIds);
 
-        db.preparedQuery(sql).execute(Tuple.of(subnetId)).onComplete(ar -> {
-            if (ar.failed()) {
-                LOGGER.error("Export Subnet IP query failed for subnetId={}: {}", subnetId, ar.cause().getMessage());
-                promise.complete(new JsonObject().put("success", false).put("message", "Export failed"));
-                return;
-            }
+        return db.preparedQuery(sql).execute(Tuple.of(subnetId))
+                .compose(rows -> {
+                    JsonArray ipList = new JsonArray();
+                    for (Row row : rows) {
+                        ipList.add(new JsonObject()
+                                .put("ipAddress", safe(row.getString("ip_address")))
+                                .put("macAddress", safe(row.getString("mac_address")))
+                                .put("hostName", safe(row.getString("host_name")))
+                                .put("status", safe(row.getString("status")))
+                                .put("deviceType", safe(row.getString("device_type")))
+                                .put("dnsStatus", safe(row.getString("dns_status")))
+                                .put("lastAliveTime", "N/A")
+                                .put("location", safe(row.getString("location")))
+                                .put("description", safe(row.getString("system_description"))));
+                    }
 
-            JsonArray ipList = new JsonArray();
-            for (Row row : ar.result()) {
-                ipList.add(new JsonObject()
-                        .put("ipAddress", safe(row.getString("ip_address")))
-                        .put("macAddress", safe(row.getString("mac_address")))
-                        .put("hostName", safe(row.getString("host_name")))
-                        .put("status", safe(row.getString("status")))
-                        .put("deviceType", safe(row.getString("device_type")))
-                        .put("dnsStatus", safe(row.getString("dns_status")))
-                        .put("lastAliveTime", "N/A")
-                        .put("location", safe(row.getString("location")))
-                        .put("description", safe(row.getString("system_description"))));
-            }
+                    JsonObject payload = new JsonObject()
+                            .put("data", ipList)
+                            .put("subLabel", String.valueOf(subnetId));
 
-            JsonObject payload = new JsonObject()
-                    .put("data", ipList)
-                    .put("subLabel", String.valueOf(subnetId));
+                    LOGGER.info("Dispatching Subnet IP CSV export to ReportWorkerVerticle (subnetId={}, records={})", subnetId, ipList.size());
 
-            LOGGER.info("Dispatching Subnet IP CSV export to ReportWorkerVerticle (subnetId={}, records={})", subnetId, ipList.size());
-
-            vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_SUBNET_CSV, payload)
-                    .onComplete(replyAr -> {
-                        if (replyAr.succeeded()) {
-                            JsonObject res = replyAr.result().body();
-                            LOGGER.info("Subnet IP CSV exported successfully via ReportWorkerVerticle: {}", res.getString("filename"));
-                            promise.complete(new JsonObject().put("success", true).put("data", res.getString("filename")));
-                        } else {
-                            LOGGER.error("ReportWorker Subnet IP CSV generation failed: {}", replyAr.cause().getMessage());
-                            promise.complete(new JsonObject().put("success", false).put("message", replyAr.cause().getMessage()));
-                        }
-                    });
-        });
-
-        return promise.future();
+                    return vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_SUBNET_CSV, payload)
+                            .map(reply -> {
+                                JsonObject res = reply.body();
+                                LOGGER.info("Subnet IP CSV exported successfully via ReportWorkerVerticle: {}", res.getString("filename"));
+                                return new JsonObject().put("success", true).put("data", res.getString("filename"));
+                            });
+                })
+                .recover(err -> {
+                    LOGGER.error("Export Subnet IP CSV failed for subnetId={}: {}", subnetId, err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", err.getMessage()));
+                });
     }
 
     // ==========================================
@@ -464,48 +410,121 @@ public class SubnetIPActionService {
 
     // Exports subnet IP details to a PDF file via the report worker.
     public Future<JsonObject> exportSubnetIPsToPDF(Long subnetId, List<String> selectedIds) {
-        Promise<JsonObject> promise = Promise.promise();
         String sql = buildExportSQL(subnetId, selectedIds);
 
-        db.preparedQuery(sql).execute(Tuple.of(subnetId)).onComplete(ar -> {
-            if (ar.failed()) {
-                LOGGER.error("Export Subnet IP query failed for subnetId={}: {}", subnetId, ar.cause().getMessage());
-                promise.complete(new JsonObject().put("success", false).put("message", "Export failed"));
-                return;
-            }
+        return db.preparedQuery(sql).execute(Tuple.of(subnetId))
+                .compose(rows -> {
+                    JsonArray ipList = new JsonArray();
+                    for (Row row : rows) {
+                        ipList.add(new JsonObject()
+                                .put("ipAddress", safe(row.getString("ip_address")))
+                                .put("macAddress", safe(row.getString("mac_address")))
+                                .put("hostName", safe(row.getString("host_name")))
+                                .put("status", safe(row.getString("status")))
+                                .put("deviceType", safe(row.getString("device_type")))
+                                .put("dnsStatus", safe(row.getString("dns_status")))
+                                .put("location", safe(row.getString("location"))));
+                    }
 
-            JsonArray ipList = new JsonArray();
-            for (Row row : ar.result()) {
-                ipList.add(new JsonObject()
-                        .put("ipAddress", safe(row.getString("ip_address")))
-                        .put("macAddress", safe(row.getString("mac_address")))
-                        .put("hostName", safe(row.getString("host_name")))
-                        .put("status", safe(row.getString("status")))
-                        .put("deviceType", safe(row.getString("device_type")))
-                        .put("dnsStatus", safe(row.getString("dns_status")))
-                        .put("location", safe(row.getString("location"))));
-            }
+                    JsonObject payload = new JsonObject()
+                            .put("data", ipList)
+                            .put("subLabel", String.valueOf(subnetId));
 
-            JsonObject payload = new JsonObject()
-                    .put("data", ipList)
-                    .put("subLabel", String.valueOf(subnetId));
+                    LOGGER.info("Dispatching Subnet IP PDF export to ReportWorkerVerticle (subnetId={}, records={})", subnetId, ipList.size());
 
-            LOGGER.info("Dispatching Subnet IP PDF export to ReportWorkerVerticle (subnetId={}, records={})", subnetId, ipList.size());
+                    return vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_SUBNET_PDF, payload)
+                            .map(reply -> {
+                                JsonObject res = reply.body();
+                                LOGGER.info("Subnet IP PDF exported successfully via ReportWorkerVerticle: {}", res.getString("filename"));
+                                return new JsonObject().put("success", true).put("data", res.getString("filename"));
+                            });
+                })
+                .recover(err -> {
+                    LOGGER.error("Export Subnet IP PDF failed for subnetId={}: {}", subnetId, err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", err.getMessage()));
+                });
+    }
 
-            vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_SUBNET_PDF, payload)
-                    .onComplete(replyAr -> {
-                        if (replyAr.succeeded()) {
-                            JsonObject res = replyAr.result().body();
-                            LOGGER.info("Subnet IP PDF exported successfully via ReportWorkerVerticle: {}", res.getString("filename"));
-                            promise.complete(new JsonObject().put("success", true).put("data", res.getString("filename")));
-                        } else {
-                            LOGGER.error("ReportWorker Subnet IP PDF generation failed: {}", replyAr.cause().getMessage());
-                            promise.complete(new JsonObject().put("success", false).put("message", replyAr.cause().getMessage()));
-                        }
-                    });
-        });
+    // ==========================================
+    // Export Rogue Detection to PDF (EventBus Report Worker)
+    // ==========================================
 
-        return promise.future();
+    // Exports rogue detection events to a PDF report file.
+    public Future<JsonObject> exportRogueDetectionToPDF(List<String> selectedIds) {
+        String sql = buildRogueExportSQL(selectedIds);
+
+        return db.query(sql).execute()
+                .compose(rows -> {
+                    JsonArray rogueList = new JsonArray();
+                    for (Row row : rows) {
+                        Date discTs = row.getLocalDateTime("discovered_at") != null ?
+                                java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
+                        rogueList.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("macAddress", safe(row.getString("mac_address")))
+                                .put("ipAddress", safe(row.getString("ip_address")))
+                                .put("discoveredAt", safe(DATE_FORMAT.format(discTs)))
+                                .put("nicType", safe(row.getString("nic_type") != null ? row.getString("nic_type") : "Virtual NIC"))
+                                .put("authenticity", safe(row.getString("authenticity") != null ? row.getString("authenticity") : "UNAUTHORIZED"))
+                                .put("hostName", safe(row.getString("host_name"))));
+                    }
+
+                    JsonObject payload = new JsonObject().put("data", rogueList);
+
+                    LOGGER.info("Dispatching Rogue Detection PDF export to ReportWorkerVerticle (records={})", rogueList.size());
+
+                    return vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_ROGUE_PDF, payload)
+                            .map(reply -> {
+                                JsonObject res = reply.body();
+                                LOGGER.info("Rogue Detection PDF exported successfully via ReportWorkerVerticle: {}", res.getString("filename"));
+                                return new JsonObject().put("success", true).put("data", res.getString("filename"));
+                            });
+                })
+                .recover(err -> {
+                    LOGGER.error("Export Rogue Detection PDF failed: {}", err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", err.getMessage()));
+                });
+    }
+
+    // ==========================================
+    // Export Rogue Detection to CSV (EventBus Report Worker)
+    // ==========================================
+
+    // Exports rogue detection events to a CSV report file.
+    public Future<JsonObject> exportRogueDetectionToCSV(List<String> selectedIds) {
+        String sql = buildRogueExportSQL(selectedIds);
+
+        return db.query(sql).execute()
+                .compose(rows -> {
+                    JsonArray rogueList = new JsonArray();
+                    for (Row row : rows) {
+                        Date discTs = row.getLocalDateTime("discovered_at") != null ?
+                                java.sql.Timestamp.valueOf(row.getLocalDateTime("discovered_at")) : new Date();
+                        rogueList.add(new JsonObject()
+                                .put("id", row.getLong("id"))
+                                .put("macAddress", safe(row.getString("mac_address")))
+                                .put("ipAddress", safe(row.getString("ip_address")))
+                                .put("discoveredAt", safe(DATE_FORMAT.format(discTs)))
+                                .put("nicType", safe(row.getString("nic_type") != null ? row.getString("nic_type") : "Virtual NIC"))
+                                .put("authenticity", safe(row.getString("authenticity") != null ? row.getString("authenticity") : "UNAUTHORIZED"))
+                                .put("hostName", safe(row.getString("host_name"))));
+                    }
+
+                    JsonObject payload = new JsonObject().put("data", rogueList);
+
+                    LOGGER.info("Dispatching Rogue Detection CSV export to ReportWorkerVerticle (records={})", rogueList.size());
+
+                    return vertx.eventBus().<JsonObject>request(ReportWorkerVerticle.ADDR_GENERATE_ROGUE_CSV, payload)
+                            .map(reply -> {
+                                JsonObject res = reply.body();
+                                LOGGER.info("Rogue Detection CSV exported successfully via ReportWorkerVerticle: {}", res.getString("filename"));
+                                return new JsonObject().put("success", true).put("data", res.getString("filename"));
+                            });
+                })
+                .recover(err -> {
+                    LOGGER.error("Export Rogue Detection CSV failed: {}", err.getMessage());
+                    return Future.succeededFuture(new JsonObject().put("success", false).put("message", err.getMessage()));
+                });
     }
 
     // ==========================================
@@ -522,15 +541,9 @@ public class SubnetIPActionService {
         String filename = "SubnetIP_Sample_Template.csv";
         String filePath = EXPORT_DIR + filename;
 
-        Promise<JsonObject> promise = Promise.promise();
-        vertx.fileSystem().writeFile(filePath, Buffer.buffer(csv.getBytes(StandardCharsets.UTF_8))).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(new JsonObject().put("success", true).put("data", filename));
-            } else {
-                promise.complete(new JsonObject().put("success", false).put("message", ar.cause().getMessage()));
-            }
-        });
-        return promise.future();
+        return vertx.fileSystem().writeFile(filePath, Buffer.buffer(csv.getBytes(StandardCharsets.UTF_8)))
+                .map(v -> new JsonObject().put("success", true).put("data", filename))
+                .recover(err -> Future.succeededFuture(new JsonObject().put("success", false).put("message", err.getMessage())));
     }
 
     // ==========================================
@@ -539,16 +552,8 @@ public class SubnetIPActionService {
 
     // Reads an exported file from disk into a buffer.
     public Future<Buffer> readExportedFile(String filename) {
-        Promise<Buffer> promise = Promise.promise();
         String filePath = EXPORT_DIR + filename;
-        vertx.fileSystem().readFile(filePath).onComplete(ar -> {
-            if (ar.succeeded()) {
-                promise.complete(ar.result());
-            } else {
-                promise.fail("File not found: " + filename);
-            }
-        });
-        return promise.future();
+        return vertx.fileSystem().readFile(filePath);
     }
 
     // ==========================================
@@ -598,6 +603,23 @@ public class SubnetIPActionService {
             }
         }
         return sql.append(" ORDER BY ip_address ASC").toString();
+    }
+
+    // Builds the SQL query for exporting rogue detection records.
+    private String buildRogueExportSQL(List<String> selectedIds) {
+        StringBuilder sql = new StringBuilder(
+                "SELECT id, mac_address, ip_address, discovered_at, nic_type, authenticity, host_name " +
+                        "FROM rogue_detection_details");
+        if (selectedIds != null && !selectedIds.isEmpty()) {
+            List<String> ids = selectedIds.stream()
+                    .map(String::trim)
+                    .filter(id -> id.matches("\\d+"))
+                    .collect(Collectors.toList());
+            if (!ids.isEmpty()) {
+                sql.append(" WHERE id IN (").append(String.join(",", ids)).append(")");
+            }
+        }
+        return sql.append(" ORDER BY id ASC").toString();
     }
 
     // Generates a list of IP addresses between start and end IPs.
