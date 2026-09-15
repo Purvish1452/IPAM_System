@@ -104,12 +104,25 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 String fullCidr = subnetAddress.trim() + "/" + cidr;
                 LOGGER.info("Executing Go Discovery Plugin for subnet {} (id={})", fullCidr, subnetId);
 
+                int concurrency = 250;
+                long timeoutSeconds = 60;
+                if (cidr <= 16) {
+                    concurrency = 2000;
+                    timeoutSeconds = 540; // 9 minutes for /16 (65,536 hosts)
+                } else if (cidr <= 20) {
+                    concurrency = 1000;
+                    timeoutSeconds = 270; // 4.5 minutes for /20 (4,096 hosts)
+                } else if (cidr <= 22) {
+                    concurrency = 500;
+                    timeoutSeconds = 150; // 2.5 minutes for /22 (1,024 hosts)
+                }
+
                 JsonObject goReq = new JsonObject()
                         .put("subnetCidr", fullCidr)
                         .put("timeoutMs", 1000)
-                        .put("concurrency", 250);
+                        .put("concurrency", concurrency);
 
-                JsonObject goResp = executeGoPlugin("discovery", goReq, 60);
+                JsonObject goResp = executeGoPlugin("discovery", goReq, timeoutSeconds);
                 if (goResp == null || !goResp.containsKey("hosts")) {
                     message.fail(500, "Failed to execute Go discovery plugin or received invalid JSON");
                     return;
@@ -139,35 +152,31 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
 
                 final int finalActive = activeCount;
 
-                Runnable finishHandler = () -> {
-                    String updateStats = "UPDATE subnet_details SET " +
-                            "used_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'USED'), " +
-                            "available_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE'), " +
-                            "total_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1), " +
-                            "last_scan_time = CURRENT_TIMESTAMP " +
-                            "WHERE id = $1";
-                    db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).onComplete(stAr -> {
-                        message.reply(new JsonObject()
-                                .put("success", true)
-                                .put("subnetId", subnetId)
-                                .put("totalIps", hosts.size())
-                                .put("activeIps", finalActive)
-                                .put("durationMs", goResp.getLong("durationMs", 0L))
-                                .put("message", "Subnet scan completed via Go plugin. " + finalActive + " active host(s) found.")
-                        );
-                    });
-                };
-
-                if (!batch.isEmpty()) {
-                    db.preparedQuery(sql).executeBatch(batch).onComplete(batchAr -> {
-                        if (batchAr.failed()) {
-                            LOGGER.error("Batch insert failed for subnet {}: {}", subnetId, batchAr.cause().getMessage());
-                        }
-                        finishHandler.run();
-                    });
-                } else {
-                    finishHandler.run();
-                }
+                executeBatchInChunks(sql, batch, 2000)
+                        .compose(v -> {
+                            String updateStats = "UPDATE subnet_details SET " +
+                                    "used_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'USED'), " +
+                                    "available_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE'), " +
+                                    "total_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1), " +
+                                    "last_scan_time = CURRENT_TIMESTAMP " +
+                                    "WHERE id = $1";
+                            return db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).mapEmpty();
+                        })
+                        .onComplete(ar -> {
+                            if (ar.succeeded()) {
+                                message.reply(new JsonObject()
+                                        .put("success", true)
+                                        .put("subnetId", subnetId)
+                                        .put("totalIps", hosts.size())
+                                        .put("activeIps", finalActive)
+                                        .put("durationMs", goResp.getLong("durationMs", 0L))
+                                        .put("message", "Subnet scan completed via Go plugin. " + finalActive + " active host(s) found.")
+                                );
+                            } else {
+                                LOGGER.error("Subnet scan persistence failed for subnet {}: {}", subnetId, ar.cause().getMessage());
+                                message.fail(500, "Subnet scan persistence failed: " + ar.cause().getMessage());
+                            }
+                        });
             } catch (Exception e) {
                 LOGGER.error("Subnet scan failed: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
@@ -556,6 +565,23 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 ((mask >> 16) & 0xff) + "." +
                 ((mask >> 8) & 0xff) + "." +
                 (mask & 0xff);
+    }
+
+    // Executes large batch queries in manageable chunks to avoid database connection exhaustion.
+    private Future<Void> executeBatchInChunks(String sql, List<Tuple> batch, int chunkSize) {
+        if (batch == null || batch.isEmpty()) {
+            return Future.succeededFuture();
+        }
+        List<List<Tuple>> chunks = new ArrayList<>();
+        for (int i = 0; i < batch.size(); i += chunkSize) {
+            chunks.add(batch.subList(i, Math.min(i + chunkSize, batch.size())));
+        }
+
+        Future<Void> future = Future.succeededFuture();
+        for (List<Tuple> chunk : chunks) {
+            future = future.compose(v -> db.preparedQuery(sql).executeBatch(chunk).mapEmpty());
+        }
+        return future;
     }
 }
 

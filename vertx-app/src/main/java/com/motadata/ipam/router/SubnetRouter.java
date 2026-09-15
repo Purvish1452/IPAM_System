@@ -285,8 +285,18 @@ public class SubnetRouter {
         String pageSizeStr = ctx.request().getParam("pageSize");
 
         Long subnetId = (subnetIdStr != null) ? Long.parseLong(subnetIdStr) : 1L;
+        if (pageStr == null && pageSizeStr == null) {
+            subnetService.getAllIpDetails(subnetId).onComplete(ar -> {
+                JsonObject result = new JsonObject()
+                        .put("data", ar.succeeded() ? ar.result() : new JsonArray())
+                        .put("success", true);
+                ctx.response().putHeader("Content-Type", "application/json;charset=UTF-8").end(result.encode());
+            });
+            return;
+        }
+
         Integer page = (pageStr != null) ? Integer.parseInt(pageStr) : 1;
-        Integer pageSize = (pageSizeStr != null) ? Integer.parseInt(pageSizeStr) : 10000;
+        Integer pageSize = (pageSizeStr != null) ? Integer.parseInt(pageSizeStr) : 100000;
 
         subnetService.getIpDetails(subnetId, page, pageSize).onComplete(ar -> {
             JsonObject result = new JsonObject()
@@ -304,9 +314,8 @@ public class SubnetRouter {
             if (pathParam != null) subnetId = Long.parseLong(pathParam);
         } catch (Exception ignored) {}
 
-        // The UI uses client-side Kendo paging — all records must be returned at once.
-        // Page=1 with a very large pageSize fetches all rows without artificial truncation.
-        subnetService.getIpDetails(subnetId, 1, 10000).onComplete(ar -> {
+        // The UI uses client-side Kendo paging — all records are returned without artificial truncation.
+        subnetService.getAllIpDetails(subnetId).onComplete(ar -> {
             JsonObject result = new JsonObject()
                     .put("data", ar.succeeded() ? ar.result() : new JsonArray())
                     .put("success", true);

@@ -5,6 +5,7 @@ import com.motadata.ipam.verticle.ReportWorkerVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
@@ -39,10 +40,11 @@ public class SubnetIPActionService {
     private final DiscoveryService discoveryService;
     private final AlertService alertService;
 
-    // Track running scans to prevent duplicate scans
+    // Track running scans to prevent duplicate scans (10 min max timeout)
     private static final AtomicBoolean scanRunning = new AtomicBoolean(false);
     private static volatile String lastScanSubnetAddress = null;
     private static volatile long lastScanStartTime = 0L;
+    private static final long MAX_SCAN_DURATION_MS = 600_000L; // 10 minutes
 
     // Constructs SubnetIPActionService with default discovery and alert dependencies.
     public SubnetIPActionService(Vertx vertx, Pool db) {
@@ -54,7 +56,7 @@ public class SubnetIPActionService {
         this(vertx, db, discoveryService, null);
     }
 
-    // Constructs SubnetIPActionService with full Vert.x, database, discovery, and alert dependencies.
+    // Constructs SubnetIPActionService with explicit discovery and alert service dependencies.
     public SubnetIPActionService(Vertx vertx, Pool db, DiscoveryService discoveryService, AlertService alertService) {
         this.vertx = vertx;
         this.db = db;
@@ -71,12 +73,12 @@ public class SubnetIPActionService {
     // 1. Scan Subnet (Dispatched to NetworkWorkerVerticle via EventBus)
     // ==========================================
 
-    // Dispatches a subnet scanning job to NetworkWorkerVerticle via EventBus.
+    // Dispatches a subnet scanning job to NetworkWorkerVerticle via EventBus with CIDR-aware timeout.
     public Future<JsonObject> startScanSubnet(Long subnetId) {
         long now = System.currentTimeMillis();
         if (scanRunning.get()) {
-            if (now - lastScanStartTime > 60000) {
-                LOGGER.warn("Forcing reset of stuck scan state in startScanSubnet");
+            if (now - lastScanStartTime > MAX_SCAN_DURATION_MS) {
+                LOGGER.warn("Forcing reset of stuck scan state in startScanSubnet (exceeded 10 minutes)");
                 scanRunning.set(false);
                 lastScanSubnetAddress = null;
             } else {
@@ -115,8 +117,12 @@ public class SubnetIPActionService {
                     .put("subnetAddress", subnetAddress)
                     .put("cidr", cidr);
 
+            // Compute dynamic timeout based on CIDR size (e.g. /16 has 65k IPs -> 10 min timeout)
+            long scanTimeoutMs = calculateScanTimeout(cidr);
+            DeliveryOptions deliveryOptions = new DeliveryOptions().setSendTimeout(scanTimeoutMs);
+
             // Send non-blocking request to NetworkWorkerVerticle via EventBus in background
-            vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_SCAN, scanPayload)
+            vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_SCAN, scanPayload, deliveryOptions)
                     .onComplete(replyAr -> {
                         scanRunning.set(false);
                         lastScanSubnetAddress = null;
@@ -135,12 +141,25 @@ public class SubnetIPActionService {
         });
     }
 
+    // Calculates appropriate EventBus send timeout based on subnet CIDR size.
+    private long calculateScanTimeout(int cidr) {
+        if (cidr <= 16) {
+            return 600_000L; // 10 minutes for /16 (65,536 hosts)
+        } else if (cidr <= 20) {
+            return 300_000L; // 5 minutes for /20 (4,096 hosts)
+        } else if (cidr <= 22) {
+            return 180_000L; // 3 minutes for /22 (1,024 hosts)
+        } else {
+            return 120_000L; // 2 minutes for /24 or smaller
+        }
+    }
+
     // Returns current running status and target address of active network scans.
     public Future<JsonObject> getScanStatus() {
         long now = System.currentTimeMillis();
         if (scanRunning.get()) {
-            if (now - lastScanStartTime > 60000) {
-                LOGGER.warn("Auto-clearing stuck scan status lock");
+            if (now - lastScanStartTime > MAX_SCAN_DURATION_MS) {
+                LOGGER.warn("Auto-clearing stuck scan status lock (exceeded 10 minutes)");
                 scanRunning.set(false);
                 lastScanSubnetAddress = null;
                 return Future.succeededFuture(new JsonObject()
@@ -210,7 +229,7 @@ public class SubnetIPActionService {
                             .put("concurrency", 64);
 
                     // Send non-blocking request to NetworkWorkerVerticle via EventBus in background
-                    vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_DISCOVERY_SCAN, scanPayload)
+                    vertx.eventBus().<JsonObject>request(NetworkWorkerVerticle.ADDR_DISCOVERY_SCAN, scanPayload, new DeliveryOptions().setSendTimeout(180_000L))
                             .onComplete(res -> {
                                 scanRunning.set(false);
                                 lastScanSubnetAddress = null;
@@ -602,7 +621,7 @@ public class SubnetIPActionService {
                 sql.append(" AND id IN (").append(String.join(",", ids)).append(")");
             }
         }
-        return sql.append(" ORDER BY ip_address ASC").toString();
+        return sql.append(" ORDER BY ip_address::inet ASC").toString();
     }
 
     // Builds the SQL query for exporting rogue detection records.

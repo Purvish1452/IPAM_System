@@ -184,8 +184,29 @@ public class SubnetService {
     // 2. Subnet IP Details
     // ==========================================
 
+    // Retrieves all IP address details for a given subnet without artificial pagination limits.
+    public Future<JsonArray> getAllIpDetails(Long subnetId) {
+        String sql = "SELECT ip.id, ip.ip_address, ip.mac_address, ip.host_name, ip.status, ip.device_type, ip.vendor, " +
+                "ip.location, ip.system_description, ip.dns_status, ip.ip_reserved, ip.alias_name, ip.subnet_id, ip.last_scan_time, " +
+                "s.subnet_name, s.subnet_address " +
+                "FROM subnet_ip_details ip " +
+                "LEFT JOIN subnet_details s ON ip.subnet_id = s.id " +
+                "WHERE ip.subnet_id = $1 ORDER BY ip.ip_address::inet ASC";
+
+        return db.preparedQuery(sql).execute(Tuple.of(subnetId))
+                .map(rows -> mapIpDetailsRows(rows, subnetId))
+                .recover(err -> {
+                    LOGGER.error("Failed to query all IP details for subnetId={}: {}", subnetId, err.getMessage());
+                    return Future.succeededFuture(new JsonArray());
+                });
+    }
+
     // Retrieves paginated IP address details for a given subnet.
     public Future<JsonArray> getIpDetails(Long subnetId, Integer page, Integer pageSize) {
+        if (page == null && (pageSize == null || pageSize <= 0 || pageSize >= 100000)) {
+            return getAllIpDetails(subnetId);
+        }
+
         int p = (page == null || page < 1) ? 1 : page;
         int size = (pageSize == null || pageSize < 1) ? 50 : pageSize;
         int offset = (p - 1) * size;
@@ -195,50 +216,53 @@ public class SubnetService {
                 "s.subnet_name, s.subnet_address " +
                 "FROM subnet_ip_details ip " +
                 "LEFT JOIN subnet_details s ON ip.subnet_id = s.id " +
-                "WHERE ip.subnet_id = $1 ORDER BY ip.id ASC LIMIT $2 OFFSET $3";
+                "WHERE ip.subnet_id = $1 ORDER BY ip.ip_address::inet ASC LIMIT $2 OFFSET $3";
 
         return db.preparedQuery(sql).execute(Tuple.of(subnetId, size, offset))
-                .map(rows -> {
-                    JsonArray result = new JsonArray();
-                    for (Row row : rows) {
-                        String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
-                                (row.getString("subnet_address") != null ? row.getString("subnet_address") + "/24" : "Subnet-" + subnetId);
-                        String sAddr = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0";
-
-                        JsonObject subnetObj = new JsonObject()
-                                .put("id", row.getLong("subnet_id"))
-                                .put("subnetName", sName)
-                                .put("subnetAddress", sAddr);
-
-                        JsonObject ip = new JsonObject()
-                                .put("id", row.getLong("id"))
-                                .put("ipAddress", row.getString("ip_address"))
-                                .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
-                                .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "-")
-                                .put("status", row.getString("status") != null ? row.getString("status") : "AVAILABLE")
-                                .put("deviceType", row.getString("device_type") != null ? row.getString("device_type") : "-")
-                                .put("vendor", row.getString("vendor") != null ? row.getString("vendor") : "-")
-                                .put("location", row.getString("location") != null ? row.getString("location") : "HQ DC")
-                                .put("systemDescription", row.getString("system_description") != null ? row.getString("system_description") : "-")
-                                .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK")
-                                .put("ipReserved", row.getBoolean("ip_reserved") != null && row.getBoolean("ip_reserved"))
-                                .put("aliasName", row.getString("alias_name") != null ? row.getString("alias_name") : "-")
-                                .put("subnetId", subnetObj)
-                                .put("subnetName", sName)
-                                .put("ipToDns", "Forward OK")
-                                .put("dnsToIp", "Reverse OK")
-                                .put("authenticity", "TRUSTED")
-                                .put("lastAliveTime", "2026-09-02 10:00:00")
-                                .put("lastScanTime", "2026-09-02 10:00:00")
-                                .put("customColumns", new JsonObject());
-                        result.add(ip);
-                    }
-                    return result;
-                })
+                .map(rows -> mapIpDetailsRows(rows, subnetId))
                 .recover(err -> {
                     LOGGER.error("Failed to query IP details for subnetId={}: {}", subnetId, err.getMessage());
                     return Future.succeededFuture(new JsonArray());
                 });
+    }
+
+    // Helper to map PostgreSQL rows to frontend JSON format for IP details.
+    private JsonArray mapIpDetailsRows(io.vertx.sqlclient.RowSet<Row> rows, Long subnetId) {
+        JsonArray result = new JsonArray();
+        for (Row row : rows) {
+            String sName = row.getString("subnet_name") != null ? row.getString("subnet_name") :
+                    (row.getString("subnet_address") != null ? row.getString("subnet_address") + "/24" : "Subnet-" + subnetId);
+            String sAddr = row.getString("subnet_address") != null ? row.getString("subnet_address") : "192.168.10.0";
+
+            JsonObject subnetObj = new JsonObject()
+                    .put("id", row.getLong("subnet_id"))
+                    .put("subnetName", sName)
+                    .put("subnetAddress", sAddr);
+
+            JsonObject ip = new JsonObject()
+                    .put("id", row.getLong("id"))
+                    .put("ipAddress", row.getString("ip_address"))
+                    .put("macAddress", row.getString("mac_address") != null ? row.getString("mac_address") : "-")
+                    .put("hostName", row.getString("host_name") != null ? row.getString("host_name") : "-")
+                    .put("status", row.getString("status") != null ? row.getString("status") : "AVAILABLE")
+                    .put("deviceType", row.getString("device_type") != null ? row.getString("device_type") : "-")
+                    .put("vendor", row.getString("vendor") != null ? row.getString("vendor") : "-")
+                    .put("location", row.getString("location") != null ? row.getString("location") : "HQ DC")
+                    .put("systemDescription", row.getString("system_description") != null ? row.getString("system_description") : "-")
+                    .put("dnsStatus", row.getString("dns_status") != null ? row.getString("dns_status") : "Forward & Reverse OK")
+                    .put("ipReserved", row.getBoolean("ip_reserved") != null && row.getBoolean("ip_reserved"))
+                    .put("aliasName", row.getString("alias_name") != null ? row.getString("alias_name") : "-")
+                    .put("subnetId", subnetObj)
+                    .put("subnetName", sName)
+                    .put("ipToDns", "Forward OK")
+                    .put("dnsToIp", "Reverse OK")
+                    .put("authenticity", "TRUSTED")
+                    .put("lastAliveTime", "2026-09-02 10:00:00")
+                    .put("lastScanTime", "2026-09-02 10:00:00")
+                    .put("customColumns", new JsonObject());
+            result.add(ip);
+        }
+        return result;
     }
 
     // ==========================================

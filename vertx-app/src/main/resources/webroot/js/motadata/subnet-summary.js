@@ -245,11 +245,20 @@ var subnetSummary =
                         });
                     },
                     EventId: subnetSummary.SubnetIPAddresses,
-                    PageSize: 20,
+                    PageSize: 50,
                     pageable: {
                         refresh: true,
-                        pageSizes: [10, 20, 50, 100],
-                        buttonCount: 10
+                        pageSizes: [10, 20, 50, 100, 250, 500, 1000],
+                        buttonCount: 5,
+                        input: true,
+                        numeric: true,
+                        info: true,
+                        messages: {
+                            display: "{0} - {1} of {2} items",
+                            empty: "No items to display",
+                            page: "Page",
+                            of: "of {0}"
+                        }
                     },
                     group: {
                         field: "ipAddress",
