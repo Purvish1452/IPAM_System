@@ -37,11 +37,43 @@ public class ReportWorkerVerticle extends AbstractVerticle {
     private static final String EXPORT_DIR = "file-uploads/exports/";
 
     public static final String ADDR_GENERATE_SUBNET_PDF = "ipam.worker.report.subnet.pdf";
+    public static final String ADDR_GENERATE_SUBNET_CSV = "ipam.worker.report.subnet.csv";
     public static final String ADDR_GENERATE_VENDOR_PDF = "ipam.worker.report.vendor.pdf";
     public static final String ADDR_DYNAMIC_JASPER_PDF = "ipam.worker.report.dynamic.pdf";
+    public static final String ADDR_GENERATE_CSV = "ipam.worker.report.generic.csv";
 
     static {
-        System.setProperty("net.sf.jasperreports.awt.ignore.missing.font", "true");
+        silenceThirdPartyLoggers();
+    }
+
+    /**
+     * Programmatically silences verbose JUL (java.util.logging) loggers from DynamicJasper,
+     * JasperReports, and Commons-Logging to ensure clean terminal and log output.
+     */
+    public static void silenceThirdPartyLoggers() {
+        try {
+            System.setProperty("net.sf.jasperreports.awt.ignore.missing.font", "true");
+            String[] silencedLoggers = {
+                    "",
+                    "ar.com.fdvs.dj",
+                    "ar.com.fdvs.dj.core",
+                    "ar.com.fdvs.dj.core.DynamicJasperHelper",
+                    "ar.com.fdvs.dj.core.DJJRDesignHelper",
+                    "ar.com.fdvs.dj.core.layout.ClassicLayoutManager",
+                    "net.sf.jasperreports",
+                    "net.sf.jasperreports.engine",
+                    "org.apache.commons.logging"
+            };
+            for (String loggerName : silencedLoggers) {
+                java.util.logging.Logger jul = java.util.logging.Logger.getLogger(loggerName);
+                if (jul != null) {
+                    jul.setLevel(java.util.logging.Level.WARNING);
+                    for (java.util.logging.Handler h : jul.getHandlers()) {
+                        h.setLevel(java.util.logging.Level.WARNING);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private final Pool db;
@@ -49,6 +81,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
     // Constructs ReportWorkerVerticle and ensures export directories exist.
     public ReportWorkerVerticle(Pool db) {
         this.db = db;
+        silenceThirdPartyLoggers();
         try {
             Files.createDirectories(Paths.get(EXPORT_DIR));
         } catch (Exception e) {
@@ -56,17 +89,22 @@ public class ReportWorkerVerticle extends AbstractVerticle {
         }
     }
 
-    // Registers EventBus consumers for subnet PDF, vendor summary PDF, and DynamicJasper PDF rendering.
+    // Registers EventBus consumers for subnet PDF/CSV, vendor summary PDF, and DynamicJasper PDF rendering.
     @Override
     public void start(Promise<Void> startPromise) {
+        silenceThirdPartyLoggers();
         LOGGER.info("Starting ReportWorkerVerticle on Worker Thread Pool: {}", Thread.currentThread().getName());
 
         // 1. Subnet IP PDF Generation (File-backed)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_SUBNET_PDF, message -> {
+            long startTime = System.currentTimeMillis();
             try {
                 JsonObject body = message.body();
                 JsonArray data = body.getJsonArray("data", new JsonArray());
                 String subLabel = body.getString("subLabel", "All");
+
+                LOGGER.info("ReportWorkerVerticle [{}] generating Subnet IP PDF report for subLabel={}, records={}",
+                        Thread.currentThread().getName(), subLabel, data.size());
 
                 List<JsonObject> list = new ArrayList<>();
                 for (int i = 0; i < data.size(); i++) {
@@ -78,47 +116,113 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 byte[] pdfBytes = generateSimplePdf(list, subLabel);
                 Files.write(Paths.get(filePath), pdfBytes);
 
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully generated Subnet IP PDF report '{}' ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), filename, pdfBytes.length, list.size(), duration);
+
                 message.reply(new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
                         .put("size", pdfBytes.length));
             } catch (Exception e) {
-                LOGGER.error("Error generating Subnet IP PDF report: {}", e.getMessage(), e);
+                LOGGER.error("ReportWorkerVerticle [{}] error generating Subnet IP PDF report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
                 message.fail(500, e.getMessage());
             }
         });
 
-        // 2. Vendor Summary PDF Generation (File-backed)
-        vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_VENDOR_PDF, message -> {
+        // 2. Subnet IP CSV Generation (File-backed)
+        vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_SUBNET_CSV, message -> {
+            long startTime = System.currentTimeMillis();
             try {
                 JsonObject body = message.body();
                 JsonArray data = body.getJsonArray("data", new JsonArray());
                 String subLabel = body.getString("subLabel", "All");
+
+                LOGGER.info("ReportWorkerVerticle [{}] generating Subnet IP CSV report for subLabel={}, records={}",
+                        Thread.currentThread().getName(), subLabel, data.size());
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("IP Address,MAC Address,Host Name,Status,Device Type,DNS Status,Last Alive Time,Location,Description\n");
+
+                for (int i = 0; i < data.size(); i++) {
+                    JsonObject row = data.getJsonObject(i);
+                    sb.append(csvEscape(row.getString("ipAddress"))).append(",")
+                            .append(csvEscape(row.getString("macAddress"))).append(",")
+                            .append(csvEscape(row.getString("hostName"))).append(",")
+                            .append(csvEscape(row.getString("status"))).append(",")
+                            .append(csvEscape(row.getString("deviceType"))).append(",")
+                            .append(csvEscape(row.getString("dnsStatus"))).append(",")
+                            .append(csvEscape(row.getString("lastAliveTime", "N/A"))).append(",")
+                            .append(csvEscape(row.getString("location"))).append(",")
+                            .append(csvEscape(row.getString("description"))).append("\n");
+                }
+
+                String filename = "SubnetIP_Export_" + subLabel + "_" + System.currentTimeMillis() + ".csv";
+                String filePath = EXPORT_DIR + filename;
+                byte[] csvBytes = sb.toString().getBytes(StandardCharsets.UTF_8);
+                Files.write(Paths.get(filePath), csvBytes);
+
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully generated Subnet IP CSV report '{}' ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), filename, csvBytes.length, data.size(), duration);
+
+                message.reply(new JsonObject()
+                        .put("success", true)
+                        .put("filename", filename)
+                        .put("filePath", filePath)
+                        .put("size", csvBytes.length));
+            } catch (Exception e) {
+                LOGGER.error("ReportWorkerVerticle [{}] error generating Subnet IP CSV report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
+                message.fail(500, e.getMessage());
+            }
+        });
+
+        // 3. Vendor Summary PDF Generation (File-backed)
+        vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_VENDOR_PDF, message -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                JsonObject body = message.body();
+                JsonArray data = body.getJsonArray("data", new JsonArray());
+                String subLabel = body.getString("subLabel", "All");
+
+                LOGGER.info("ReportWorkerVerticle [{}] generating Vendor Summary PDF report for subLabel={}, records={}",
+                        Thread.currentThread().getName(), subLabel, data.size());
 
                 String filename = "Vendor_Summary_Export_" + subLabel + "_" + System.currentTimeMillis() + ".pdf";
                 String filePath = EXPORT_DIR + filename;
                 byte[] pdfBytes = generateVendorSummaryPdf(data, subLabel);
                 Files.write(Paths.get(filePath), pdfBytes);
 
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully generated Vendor Summary PDF report '{}' ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), filename, pdfBytes.length, data.size(), duration);
+
                 message.reply(new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
                         .put("size", pdfBytes.length));
             } catch (Exception e) {
-                LOGGER.error("Error generating Vendor Summary PDF report: {}", e.getMessage(), e);
+                LOGGER.error("ReportWorkerVerticle [{}] error generating Vendor Summary PDF report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
                 message.fail(500, e.getMessage());
             }
         });
 
-        // 3. DynamicJasper PDF Generation (In-Memory Buffer)
+        // 4. DynamicJasper PDF Generation (In-Memory Buffer)
         vertx.eventBus().<JsonObject>consumer(ADDR_DYNAMIC_JASPER_PDF, message -> {
+            long startTime = System.currentTimeMillis();
             try {
                 JsonObject body = message.body();
                 String title = body.getString("title", "Report");
                 JsonArray data = body.getJsonArray("data", new JsonArray());
                 JsonArray columns = body.getJsonArray("columns", new JsonArray());
+
+                LOGGER.info("ReportWorkerVerticle [{}] compiling DynamicJasper PDF report '{}' (records={}, columns={})",
+                        Thread.currentThread().getName(), title, data.size(), columns.size());
 
                 FastReportBuilder frb = new FastReportBuilder();
                 frb.setTitle(title);
@@ -151,10 +255,59 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 ByteArrayOutputStream pdfOutputStream = new ByteArrayOutputStream();
                 net.sf.jasperreports.engine.JasperExportManager.exportReportToPdfStream(jasperPrint, pdfOutputStream);
 
-                Buffer buffer = Buffer.buffer(pdfOutputStream.toByteArray());
+                byte[] pdfBytes = pdfOutputStream.toByteArray();
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully compiled DynamicJasper PDF report '{}' ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), title, pdfBytes.length, data.size(), duration);
+
+                Buffer buffer = Buffer.buffer(pdfBytes);
                 message.reply(buffer);
             } catch (Exception e) {
-                LOGGER.error("Error generating DynamicJasper PDF report: {}", e.getMessage(), e);
+                LOGGER.error("ReportWorkerVerticle [{}] error generating DynamicJasper PDF report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
+                message.fail(500, e.getMessage());
+            }
+        });
+
+        // 5. Generic CSV Generation (In-Memory Buffer)
+        vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_CSV, message -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                JsonObject body = message.body();
+                String title = body.getString("title", "Report");
+                String subLabel = body.getString("subLabel", "All");
+                JsonArray data = body.getJsonArray("data", new JsonArray());
+                JsonArray columns = body.getJsonArray("columns", new JsonArray());
+
+                LOGGER.info("ReportWorkerVerticle [{}] generating CSV report '{}' for subLabel={}, records={}, columns={}",
+                        Thread.currentThread().getName(), title, subLabel, data.size(), columns.size());
+
+                StringBuilder csv = new StringBuilder();
+                for (int i = 0; i < columns.size(); i++) {
+                    if (i > 0) csv.append(",");
+                    csv.append(csvEscape(columns.getJsonObject(i).getString("title")));
+                }
+                csv.append("\n");
+
+                for (int i = 0; i < data.size(); i++) {
+                    JsonObject row = data.getJsonObject(i);
+                    for (int j = 0; j < columns.size(); j++) {
+                        if (j > 0) csv.append(",");
+                        String prop = columns.getJsonObject(j).getString("property");
+                        csv.append(csvEscape(String.valueOf(row.getValue(prop, ""))));
+                    }
+                    csv.append("\n");
+                }
+
+                byte[] csvBytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+                long duration = System.currentTimeMillis() - startTime;
+                LOGGER.info("ReportWorkerVerticle [{}] successfully generated CSV report '{}' for subLabel={} ({} bytes, {} records) in {} ms",
+                        Thread.currentThread().getName(), title, subLabel, csvBytes.length, data.size(), duration);
+
+                message.reply(Buffer.buffer(csvBytes));
+            } catch (Exception e) {
+                LOGGER.error("ReportWorkerVerticle [{}] error generating CSV report: {}",
+                        Thread.currentThread().getName(), e.getMessage(), e);
                 message.fail(500, e.getMessage());
             }
         });
@@ -298,5 +451,11 @@ public class ReportWorkerVerticle extends AbstractVerticle {
     // Escapes special characters for PDF text streams.
     private static String sanitize(String s) {
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)");
+    }
+
+    // Escapes special characters for safe inclusion in CSV fields.
+    private static String csvEscape(String val) {
+        if (val == null || "null".equals(val) || val.isEmpty()) return "-";
+        return "\"" + val.replace("\"", "\"\"") + "\"";
     }
 }

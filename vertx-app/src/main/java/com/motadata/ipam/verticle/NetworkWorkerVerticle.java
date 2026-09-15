@@ -117,6 +117,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
 
                 JsonArray hosts = goResp.getJsonArray("hosts", new JsonArray());
                 int activeCount = 0;
+                List<Tuple> batch = new ArrayList<>();
 
                 for (int i = 0; i < hosts.size(); i++) {
                     JsonObject host = hosts.getJsonObject(i);
@@ -126,32 +127,47 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     if (isUp) activeCount++;
                     String hostname = host.getString("hostname", "host-" + ip.replace('.', '-'));
 
-                    String sql = "INSERT INTO subnet_ip_details (ip_address, subnet_id, status, host_name, last_scan_time) " +
-                            "VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) " +
-                            "ON CONFLICT (ip_address) DO UPDATE SET " +
-                            "status = EXCLUDED.status, " +
-                            "host_name = COALESCE(EXCLUDED.host_name, subnet_ip_details.host_name), " +
-                            "last_scan_time = CURRENT_TIMESTAMP";
-                    db.preparedQuery(sql).execute(Tuple.of(ip, subnetId, status, hostname));
+                    batch.add(Tuple.of(ip, subnetId, status, hostname));
                 }
 
-                // Update subnet stats
+                String sql = "INSERT INTO subnet_ip_details (ip_address, subnet_id, status, host_name, last_scan_time) " +
+                        "VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) " +
+                        "ON CONFLICT (ip_address) DO UPDATE SET " +
+                        "status = EXCLUDED.status, " +
+                        "host_name = COALESCE(EXCLUDED.host_name, subnet_ip_details.host_name), " +
+                        "last_scan_time = CURRENT_TIMESTAMP";
+
                 final int finalActive = activeCount;
-                String updateStats = "UPDATE subnet_details SET " +
-                        "used_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'USED'), " +
-                        "available_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE'), " +
-                        "total_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1) " +
-                        "WHERE id = $1";
-                db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).onComplete(stAr -> {
-                    message.reply(new JsonObject()
-                            .put("success", true)
-                            .put("subnetId", subnetId)
-                            .put("totalIps", hosts.size())
-                            .put("activeIps", finalActive)
-                            .put("durationMs", goResp.getLong("durationMs", 0L))
-                            .put("message", "Subnet scan completed via Go plugin. " + finalActive + " active host(s) found.")
-                    );
-                });
+
+                Runnable finishHandler = () -> {
+                    String updateStats = "UPDATE subnet_details SET " +
+                            "used_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'USED'), " +
+                            "available_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1 AND status = 'AVAILABLE'), " +
+                            "total_ip = (SELECT count(*) FROM subnet_ip_details WHERE subnet_id = $1), " +
+                            "last_scan_time = CURRENT_TIMESTAMP " +
+                            "WHERE id = $1";
+                    db.preparedQuery(updateStats).execute(Tuple.of(subnetId)).onComplete(stAr -> {
+                        message.reply(new JsonObject()
+                                .put("success", true)
+                                .put("subnetId", subnetId)
+                                .put("totalIps", hosts.size())
+                                .put("activeIps", finalActive)
+                                .put("durationMs", goResp.getLong("durationMs", 0L))
+                                .put("message", "Subnet scan completed via Go plugin. " + finalActive + " active host(s) found.")
+                        );
+                    });
+                };
+
+                if (!batch.isEmpty()) {
+                    db.preparedQuery(sql).executeBatch(batch).onComplete(batchAr -> {
+                        if (batchAr.failed()) {
+                            LOGGER.error("Batch insert failed for subnet {}: {}", subnetId, batchAr.cause().getMessage());
+                        }
+                        finishHandler.run();
+                    });
+                } else {
+                    finishHandler.run();
+                }
             } catch (Exception e) {
                 LOGGER.error("Subnet scan failed: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
@@ -260,7 +276,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     startRow = 1;
                 }
 
-                int imported = 0;
+                List<Tuple> batch = new ArrayList<>();
                 for (int i = startRow; i < rows.size(); i++) {
                     String[] cols = rows.get(i);
                     if (cols.length == 0 || cols[0].trim().isEmpty()) continue;
@@ -270,21 +286,33 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     String devType = cols.length > 3 ? cols[3].trim() : "";
                     String host = cols.length > 4 ? cols[4].trim() : "";
 
-                    String sql = "INSERT INTO subnet_ip_details (ip_address, status, mac_address, device_type, host_name, subnet_id, last_scan_time) " +
-                            "VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP) " +
-                            "ON CONFLICT (ip_address) DO UPDATE SET " +
-                            "status = EXCLUDED.status, mac_address = EXCLUDED.mac_address, " +
-                            "device_type = EXCLUDED.device_type, host_name = EXCLUDED.host_name, " +
-                            "last_scan_time = CURRENT_TIMESTAMP";
-                    db.preparedQuery(sql).execute(Tuple.of(ip, status, mac, devType, host, subnetId));
-                    imported++;
+                    batch.add(Tuple.of(ip, status, mac, devType, host, subnetId));
                 }
 
-                message.reply(new JsonObject()
-                        .put("success", true)
-                        .put("imported", imported)
-                        .put("message", "Successfully imported " + imported + " IP address(es)")
-                );
+                if (batch.isEmpty()) {
+                    message.reply(new JsonObject().put("success", true).put("imported", 0).put("message", "No records to import"));
+                    return;
+                }
+
+                String sql = "INSERT INTO subnet_ip_details (ip_address, status, mac_address, device_type, host_name, subnet_id, last_scan_time) " +
+                        "VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP) " +
+                        "ON CONFLICT (ip_address) DO UPDATE SET " +
+                        "status = EXCLUDED.status, mac_address = EXCLUDED.mac_address, " +
+                        "device_type = EXCLUDED.device_type, host_name = EXCLUDED.host_name, " +
+                        "last_scan_time = CURRENT_TIMESTAMP";
+
+                db.preparedQuery(sql).executeBatch(batch).onComplete(ar -> {
+                    if (ar.succeeded()) {
+                        message.reply(new JsonObject()
+                                .put("success", true)
+                                .put("imported", batch.size())
+                                .put("message", "Successfully imported " + batch.size() + " IP address(es)")
+                        );
+                    } else {
+                        LOGGER.error("Batch insert failed for CSV import on subnet {}: {}", subnetId, ar.cause().getMessage());
+                        message.fail(500, "Database batch insert failed: " + ar.cause().getMessage());
+                    }
+                });
             } catch (Exception e) {
                 message.fail(500, e.getMessage());
             }
@@ -326,27 +354,30 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 String effectiveGw = (gatewayIp != null && !gatewayIp.isBlank()) ? gatewayIp :
                         (networkAddress.contains(".") ? networkAddress.substring(0, networkAddress.lastIndexOf('.') + 1) + "1" : "192.168.1.1");
 
-                // Clean existing discovered subnet record for this network & gateway
                 String deleteOldSql = "DELETE FROM discovered_subnet WHERE (subnet_address = $1 OR subnet = $1) AND (gateway_id = $2 OR gateway = $3)";
-                db.preparedQuery(deleteOldSql).execute(Tuple.of(networkAddress, gatewayId, effectiveGw)).onComplete(delAr -> {
-                    String insertSql = "INSERT INTO discovered_subnet (subnet, subnet_address, subnet_mask, gateway, gateway_id, discovered_time, status) " +
-                            "VALUES ($1, $1, $2, $3, $4, CURRENT_TIMESTAMP, 'Active')";
-                    db.preparedQuery(insertSql).execute(Tuple.of(networkAddress, subnetMask, effectiveGw, gatewayId)).onComplete(insAr -> {
-                        // Update gateway timestamp
-                        String updateGwSql = "UPDATE gateway SET previous_scan = CURRENT_TIMESTAMP, status = 'Active' WHERE id = $1";
-                        db.preparedQuery(updateGwSql).execute(Tuple.of(gatewayId)).onComplete(gwAr -> {
-                            message.reply(new JsonObject()
-                                    .put("success", true)
-                                    .put("subnetCidr", subnetCidr)
-                                    .put("totalHosts", totalHosts)
-                                    .put("activeCount", activeCount)
-                                    .put("hosts", hostResults)
-                                    .put("durationMs", durationMs)
-                                    .put("message", "Gateway scan completed via Go plugin. Discovered subnet " + networkAddress + "/" + prefix)
-                            );
+                String insertSql = "INSERT INTO discovered_subnet (subnet, subnet_address, subnet_mask, gateway, gateway_id, discovered_time, status) " +
+                        "VALUES ($1, $1, $2, $3, $4, CURRENT_TIMESTAMP, 'Active')";
+                String updateGwSql = "UPDATE gateway SET previous_scan = CURRENT_TIMESTAMP, status = 'Active' WHERE id = $1";
+
+                db.preparedQuery(deleteOldSql).execute(Tuple.of(networkAddress, gatewayId, effectiveGw))
+                        .compose(delRes -> db.preparedQuery(insertSql).execute(Tuple.of(networkAddress, subnetMask, effectiveGw, gatewayId)))
+                        .compose(insRes -> db.preparedQuery(updateGwSql).execute(Tuple.of(gatewayId)))
+                        .onComplete(gwAr -> {
+                            if (gwAr.succeeded()) {
+                                message.reply(new JsonObject()
+                                        .put("success", true)
+                                        .put("subnetCidr", subnetCidr)
+                                        .put("totalHosts", totalHosts)
+                                        .put("activeCount", activeCount)
+                                        .put("hosts", hostResults)
+                                        .put("durationMs", durationMs)
+                                        .put("message", "Gateway scan completed via Go plugin. Discovered subnet " + networkAddress + "/" + prefix)
+                                );
+                            } else {
+                                LOGGER.error("Discovery scan DB persistence failed: {}", gwAr.cause().getMessage());
+                                message.fail(500, "Discovery scan DB persistence failed: " + gwAr.cause().getMessage());
+                            }
                         });
-                    });
-                });
             } catch (Exception e) {
                 LOGGER.error("Discovery scan error via Go plugin: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
@@ -376,7 +407,7 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 JsonArray scopes = goResp.getJsonArray("scopes", new JsonArray());
                 long durationMs = goResp.getLong("durationMs", 0L);
 
-                // Persist DHCP stats if credential provided
+                Future<Void> persistFuture;
                 if (credentialId != null && credentialId > 0 && !scopes.isEmpty()) {
                     JsonObject firstScope = scopes.getJsonObject(0);
                     String scopeName = firstScope.getString("subnetName", host + "-Scope");
@@ -387,23 +418,33 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                     int freeIps = firstScope.getInteger("freeIps", totalIps);
                     double utilization = firstScope.getDouble("utilization", 0.0);
 
-                    db.preparedQuery("DELETE FROM dhcp_utilization WHERE credential_id = $1")
+                    persistFuture = db.preparedQuery("DELETE FROM dhcp_utilization WHERE credential_id = $1")
                             .execute(Tuple.of(credentialId))
                             .compose(r -> db.preparedQuery(
                                     "INSERT INTO dhcp_utilization (scope_name, start_ip, end_ip, total_ip, used_ip, available_ip, used_ip_percentage, credential_id) " +
                                             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
-                                    .execute(Tuple.of(scopeName, startIp, endIp, totalIps, usedIps, freeIps, utilization, credentialId)));
+                                    .execute(Tuple.of(scopeName, startIp, endIp, totalIps, usedIps, freeIps, utilization, credentialId)))
+                            .mapEmpty();
+                } else {
+                    persistFuture = Future.succeededFuture();
                 }
 
-                message.reply(new JsonObject()
-                        .put("hostAddress", host)
-                        .put("serverType", type)
-                        .put("status", goResp.getString("status", "SUCCESS"))
-                        .put("message", goResp.getString("message", "DHCP scan completed"))
-                        .put("scopes", scopes)
-                        .put("scanTime", goResp.getString("scanTime", java.time.Instant.now().toString()))
-                        .put("durationMs", durationMs)
-                );
+                persistFuture.onComplete(pAr -> {
+                    if (pAr.succeeded()) {
+                        message.reply(new JsonObject()
+                                .put("hostAddress", host)
+                                .put("serverType", type)
+                                .put("status", goResp.getString("status", "SUCCESS"))
+                                .put("message", goResp.getString("message", "DHCP scan completed"))
+                                .put("scopes", scopes)
+                                .put("scanTime", goResp.getString("scanTime", java.time.Instant.now().toString()))
+                                .put("durationMs", durationMs)
+                        );
+                    } else {
+                        LOGGER.error("DHCP scan persistence failed: {}", pAr.cause().getMessage());
+                        message.fail(500, "DHCP persistence failed: " + pAr.cause().getMessage());
+                    }
+                });
             } catch (Exception e) {
                 LOGGER.error("DHCP scan error via Go plugin: {}", e.getMessage(), e);
                 message.fail(500, e.getMessage());
@@ -462,12 +503,19 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
      * Resolves the location of compiled Go binaries in the workspace.
      */
     private File findGoBinary(String name) {
+        String userDir = System.getProperty("user.dir", ".");
         String[] possiblePaths = new String[]{
                 "go-services/bin/" + name,
                 "../go-services/bin/" + name,
+                userDir + "/go-services/bin/" + name,
+                userDir + "/../go-services/bin/" + name,
+                "/home/purvish/Documents/IPAM_Real _backup_Real (Copy)/go-services/bin/" + name,
                 "/home/purvish/Documents/IPAM_Real _backup/go-services/bin/" + name,
                 "go-engine/" + name,
                 "../go-engine/" + name,
+                userDir + "/go-engine/" + name,
+                userDir + "/../go-engine/" + name,
+                "/home/purvish/Documents/IPAM_Real _backup_Real (Copy)/go-engine/" + name,
                 "/home/purvish/Documents/IPAM_Real _backup/go-engine/" + name
         };
 

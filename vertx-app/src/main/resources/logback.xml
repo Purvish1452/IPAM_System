@@ -1,0 +1,19 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Silence verbose DynamicJasper / JasperReports / Commons-Logging console output -->
+    <logger name="ar.com.fdvs.dj" level="WARN"/>
+    <logger name="net.sf.jasperreports" level="WARN"/>
+    <logger name="org.apache.commons" level="WARN"/>
+    <logger name="org.apache.commons.logging" level="WARN"/>
+    <logger name="io.vertx" level="INFO"/>
+    <logger name="com.motadata.ipam" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

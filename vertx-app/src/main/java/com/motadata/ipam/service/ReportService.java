@@ -400,35 +400,31 @@ public class ReportService {
     // Generates a CSV report for multiple subnets with status filtering.
     public Future<byte[]> generateSubnetCsvReport(List<Long> subnetIds, String status) {
         String normalizedStatus = normalizeStatus(status);
+        String subLabel = (subnetIds != null && !subnetIds.isEmpty()) ? String.join("_", subnetIds.stream().map(Object::toString).toList()) : "All";
+
         if ("VENDOR SUMMARY".equals(normalizedStatus)) {
-            return getVendorSummaryReport(subnetIds).map(data -> {
-                StringBuilder csv = new StringBuilder("Vendor Name,Vendor Count,Percentage (%)\n");
-                for (int i = 0; i < data.size(); i++) {
-                    JsonObject row = data.getJsonObject(i);
-                    csv.append(csvValue(row.getString("VendorName"))).append(',')
-                            .append(row.getLong("VendorCount")).append(',')
-                            .append(row.getDouble("VendorPercentage")).append('\n');
-                }
-                return csv.toString().getBytes(StandardCharsets.UTF_8);
+            return getVendorSummaryReport(subnetIds).compose(data -> {
+                JsonArray columns = new JsonArray()
+                        .add(new JsonObject().put("property", "VendorName").put("title", "Vendor Name"))
+                        .add(new JsonObject().put("property", "VendorCount").put("title", "Vendor Count"))
+                        .add(new JsonObject().put("property", "VendorPercentage").put("title", "Percentage (%)"));
+                return exportReportToCsv("Vendor Summary CSV Report", subLabel, data, columns);
             });
         }
 
-        return getSubnetIpByReportTimeline(subnetIds, status).map(data -> {
-            StringBuilder csv = new StringBuilder("ID,IP Address,Scope,Status,MAC Address,Vendor,Host Name,DNS Status,Authenticity,Last Seen\n");
-            for (int i = 0; i < data.size(); i++) {
-                JsonObject row = data.getJsonObject(i);
-                csv.append(row.getLong("id")).append(',')
-                        .append(csvValue(row.getString("ipAddress"))).append(',')
-                        .append(csvValue(row.getString("subnetName"))).append(',')
-                        .append(csvValue(row.getString("status"))).append(',')
-                        .append(csvValue(row.getString("macAddress"))).append(',')
-                        .append(csvValue(row.getString("deviceType"))).append(',')
-                        .append(csvValue(row.getString("hostName"))).append(',')
-                        .append(csvValue(row.getString("dnsStatus"))).append(',')
-                        .append(csvValue(row.getString("authenticity"))).append(',')
-                        .append(csvValue(row.getString("lastSeen"))).append('\n');
-            }
-            return csv.toString().getBytes(StandardCharsets.UTF_8);
+        return getSubnetIpByReportTimeline(subnetIds, status).compose(data -> {
+            JsonArray columns = new JsonArray()
+                    .add(new JsonObject().put("property", "id").put("title", "ID"))
+                    .add(new JsonObject().put("property", "ipAddress").put("title", "IP Address"))
+                    .add(new JsonObject().put("property", "subnetName").put("title", "Scope"))
+                    .add(new JsonObject().put("property", "status").put("title", "Status"))
+                    .add(new JsonObject().put("property", "macAddress").put("title", "MAC Address"))
+                    .add(new JsonObject().put("property", "deviceType").put("title", "Vendor"))
+                    .add(new JsonObject().put("property", "hostName").put("title", "Host Name"))
+                    .add(new JsonObject().put("property", "dnsStatus").put("title", "DNS Status"))
+                    .add(new JsonObject().put("property", "authenticity").put("title", "Authenticity"))
+                    .add(new JsonObject().put("property", "lastSeen").put("title", "Last Seen"));
+            return exportReportToCsv("Subnet IP Timeline CSV Report", subLabel, data, columns);
         });
     }
 
@@ -495,25 +491,23 @@ public class ReportService {
         return promise.future();
     }
 
-    // Serializes arbitrary tabular dataset and columns definition to CSV bytes.
+    // Serializes arbitrary tabular dataset and columns definition to CSV bytes via ReportWorkerVerticle.
     public Future<byte[]> exportReportToCsv(String title, JsonArray data, JsonArray columns) {
-        StringBuilder csv = new StringBuilder();
-        for (int i = 0; i < columns.size(); i++) {
-            if (i > 0) csv.append(",");
-            csv.append(csvValue(columns.getJsonObject(i).getString("title")));
-        }
-        csv.append("\n");
+        return exportReportToCsv(title, "All", data, columns);
+    }
 
-        for (int i = 0; i < data.size(); i++) {
-            JsonObject row = data.getJsonObject(i);
-            for (int j = 0; j < columns.size(); j++) {
-                if (j > 0) csv.append(",");
-                String prop = columns.getJsonObject(j).getString("property");
-                csv.append(csvValue(String.valueOf(row.getValue(prop, ""))));
-            }
-            csv.append("\n");
-        }
-        return Future.succeededFuture(csv.toString().getBytes(StandardCharsets.UTF_8));
+    // Serializes arbitrary tabular dataset and columns definition to CSV bytes via ReportWorkerVerticle with subLabel.
+    public Future<byte[]> exportReportToCsv(String title, String subLabel, JsonArray data, JsonArray columns) {
+        JsonObject payload = new JsonObject()
+                .put("title", title)
+                .put("subLabel", subLabel != null ? subLabel : "All")
+                .put("data", data)
+                .put("columns", columns);
+
+        LOGGER.info("Dispatching CSV report generation to ReportWorkerVerticle: '{}' for subLabel={} (records={})", title, subLabel, data.size());
+
+        return vertx.eventBus().<Buffer>request(ReportWorkerVerticle.ADDR_GENERATE_CSV, payload)
+                .map(msg -> msg.body().getBytes());
     }
 
     // Dispatches dynamic Jasper PDF compilation request to ReportWorkerVerticle.
@@ -522,6 +516,8 @@ public class ReportService {
                 .put("title", title)
                 .put("data", data)
                 .put("columns", columns);
+
+        LOGGER.info("Dispatching DynamicJasper PDF report generation to ReportWorkerVerticle: '{}' (records={})", title, data.size());
 
         return vertx.eventBus().<Buffer>request(ReportWorkerVerticle.ADDR_DYNAMIC_JASPER_PDF, payload)
                 .map(msg -> msg.body().getBytes());

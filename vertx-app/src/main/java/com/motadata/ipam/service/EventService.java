@@ -1,7 +1,10 @@
 package com.motadata.ipam.service;
 
+import com.motadata.ipam.verticle.ReportWorkerVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
@@ -22,10 +25,17 @@ public class EventService {
     private static final Logger LOGGER = LoggerFactory.getLogger(EventService.class);
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
+    private final Vertx vertx;
     private final Pool db;
 
     // Constructs EventService with the specified database connection pool.
     public EventService(Pool db) {
+        this(null, db);
+    }
+
+    // Constructs EventService with Vertx instance and database connection pool.
+    public EventService(Vertx vertx, Pool db) {
+        this.vertx = vertx;
         this.db = db;
     }
 
@@ -101,9 +111,9 @@ public class EventService {
         return promise.future();
     }
 
-    // Generates a CSV audit report byte array for the specified timeline.
+    // Generates a CSV audit report byte array for the specified timeline via ReportWorkerVerticle.
     public Future<byte[]> generateEventCsvReport(String exportTimeline) {
-        StringBuilder csv = new StringBuilder("ID,Event Type,Context,Description,User,Timestamp\n");
+        Promise<byte[]> promise = Promise.promise();
         String whereClause = "";
         if ("0".equals(exportTimeline)) {
             whereClause = " WHERE timestamp >= CURRENT_DATE ";
@@ -113,19 +123,65 @@ public class EventService {
             whereClause = " WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days' ";
         }
         String sql = "SELECT id, event_type, event_context, message, user_name, timestamp FROM event" + whereClause + " ORDER BY id DESC";
-        return db.query(sql).execute().map(rows -> {
-            for (Row row : rows) {
+        db.query(sql).execute().onComplete(ar -> {
+            if (ar.failed()) {
+                promise.fail(ar.cause());
+                return;
+            }
+
+            JsonArray data = new JsonArray();
+            for (Row row : ar.result()) {
                 Date ts = row.getLocalDateTime("timestamp") != null ?
                         java.sql.Timestamp.valueOf(row.getLocalDateTime("timestamp")) : new Date();
-                csv.append(row.getLong("id")).append(',')
-                        .append(csvValue(row.getString("event_type"))).append(',')
-                        .append(csvValue(row.getString("event_context"))).append(',')
-                        .append(csvValue(row.getString("message"))).append(',')
-                        .append(csvValue(row.getString("user_name"))).append(',')
-                        .append(csvValue(DATE_FORMAT.format(ts))).append('\n');
+                data.add(new JsonObject()
+                        .put("id", row.getLong("id"))
+                        .put("eventType", row.getString("event_type") != null ? row.getString("event_type") : "")
+                        .put("context", row.getString("event_context") != null ? row.getString("event_context") : "")
+                        .put("description", row.getString("message") != null ? row.getString("message") : "")
+                        .put("user", row.getString("user_name") != null ? row.getString("user_name") : "")
+                        .put("timestamp", DATE_FORMAT.format(ts)));
             }
-            return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+            JsonArray columns = new JsonArray()
+                    .add(new JsonObject().put("property", "id").put("title", "ID"))
+                    .add(new JsonObject().put("property", "eventType").put("title", "Event Type"))
+                    .add(new JsonObject().put("property", "context").put("title", "Context"))
+                    .add(new JsonObject().put("property", "description").put("title", "Description"))
+                    .add(new JsonObject().put("property", "user").put("title", "User"))
+                    .add(new JsonObject().put("property", "timestamp").put("title", "Timestamp"));
+
+            String subLabel = "Timeline_" + (exportTimeline != null ? exportTimeline : "all");
+            JsonObject payload = new JsonObject()
+                    .put("title", "Event Audit Log Report")
+                    .put("subLabel", subLabel)
+                    .put("data", data)
+                    .put("columns", columns);
+
+            if (vertx != null) {
+                LOGGER.info("Dispatching Event CSV report to ReportWorkerVerticle (records={})", data.size());
+                vertx.eventBus().<Buffer>request(ReportWorkerVerticle.ADDR_GENERATE_CSV, payload).onComplete(replyAr -> {
+                    if (replyAr.succeeded()) {
+                        promise.complete(replyAr.result().body().getBytes());
+                    } else {
+                        promise.fail(replyAr.cause());
+                    }
+                });
+            } else {
+                StringBuilder csv = new StringBuilder("ID,Event Type,Context,Description,User,Timestamp\n");
+                for (int i = 0; i < data.size(); i++) {
+                    JsonObject r = data.getJsonObject(i);
+                    csv.append(r.getLong("id")).append(',')
+                            .append(csvValue(r.getString("eventType"))).append(',')
+                            .append(csvValue(r.getString("context"))).append(',')
+                            .append(csvValue(r.getString("description"))).append(',')
+                            .append(csvValue(r.getString("user"))).append(',')
+                            .append(csvValue(r.getString("timestamp"))).append('\n');
+                }
+                promise.complete(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
         });
+
+        return promise.future();
     }
 
     // Escapes special characters for safe inclusion in CSV fields.

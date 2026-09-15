@@ -48,7 +48,7 @@ public class HttpServerVerticle extends AbstractVerticle {
         SubnetService subnetService = new SubnetService(db);
         DhcpService dhcpService = new DhcpService(vertx, db);
         AlertService alertService = new AlertService(db);
-        EventService eventService = new EventService(db);
+        EventService eventService = new EventService(vertx, db);
         SettingsService settingsService = new SettingsService(db);
         DiscoveryService discoveryService = new DiscoveryService(vertx, db);
         ReportService reportService = new ReportService(vertx, db);

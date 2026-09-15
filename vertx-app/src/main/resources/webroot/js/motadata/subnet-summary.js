@@ -554,18 +554,20 @@ var subnetSummary =
 
         setRunningDiscoveryBlinkHTML:function ()
         {
-            //$('#discovery-title').remove();
+            $('#discovery-title').remove();
 
-            $('body').append('<div class="discoveryPositionSection" id="discovery-title"><div class="discoveryMiddle"> <span id ="discovery-progress" class="fa fa-spinner fa-spin discovery-progress txt-color-white" data-original-title="Discovery Progress" rel="tooltip"></span><div class="discovery-title"> <span class="label bg-color-blue discoveryTextSubnet" rel="tooltip" title="Scan is Running for @@@">Scan is Running for @@@</span></div></div></div>'.replace(/@@@/g,subnetSummary.subnetScopeAddress));
+            var scopeText = subnetSummary.subnetScopeAddress || "Network";
+
+            $('body').append('<div class="discoveryPositionSection" id="discovery-title"><div class="discoveryMiddle"> <span id ="discovery-progress" class="fa fa-spinner fa-spin discovery-progress txt-color-white" data-original-title="Discovery Progress" rel="tooltip"></span><div class="discovery-title"> <span class="label bg-color-blue discoveryTextSubnet" rel="tooltip" title="Scan is Running for @@@">Scan is Running for @@@</span></div></div></div>'.replace(/@@@/g, scopeText));
         },
 
         afterSubnetScanned : function (callbackContexts)
         {
-            if(callbackContexts && callbackContexts.json.success == true)
+            if(callbackContexts && callbackContexts.json && callbackContexts.json.success == true)
             {
                 clearInterval(subnetSummary.checkScanStatus);
 
-                subnetSummary.subnetScopeAddress = callbackContexts.scopeAddress;
+                subnetSummary.subnetScopeAddress = callbackContexts.scopeAddress || (callbackContexts.json && callbackContexts.json.scopeAddress);
 
                 subnetSummary.setRunningDiscoveryBlinkHTML();
 
@@ -575,19 +577,20 @@ var subnetSummary =
 
                 }, 5000);
 
-                notification.showNotification({notificationTitle: callbackContexts.json.message, notificationType:"info"});
+                var msg = (callbackContexts.json && callbackContexts.json.message) ? callbackContexts.json.message : "Scan started successfully";
+                notification.showNotification({notificationTitle: msg, notificationType:"info"});
             }
             else
             {
-                if(callbackContexts.json.message == "Please wait for some time, Import is running")
+                var errorMsg = (callbackContexts && callbackContexts.json && callbackContexts.json.message) ? callbackContexts.json.message : "Scan failed to start";
+                if(errorMsg == "Please wait for some time, Import is running" || errorMsg.indexOf("Please wait") !== -1)
                 {
-                    notification.showNotification({notificationTitle: callbackContexts.json.message, notificationType:"info"});
+                    notification.showNotification({notificationTitle: errorMsg, notificationType:"info"});
                 }
                 else
                 {
-                    notification.showNotification({notificationTitle: callbackContexts.json.message, notificationType:"error"});
+                    notification.showNotification({notificationTitle: errorMsg, notificationType:"error"});
                 }
-
             }
         },
 

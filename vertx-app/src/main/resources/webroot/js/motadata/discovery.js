@@ -431,17 +431,23 @@ var discovery =
 
             if(context.json.success === true)
             {
-                notification.showNotification({notificationTitle:context.json.message,notificationType:"success"});
+                var msg = context.json.message || "Gateway discovery scan started";
+                notification.showNotification({notificationTitle: msg, notificationType:"info"});
 
                 flux.refreshKendoGrid({gridId : gatewayTable});
 
                 flux.refreshKendoGrid({gridId : discoveredSubnetTable});
 
+                if (typeof subnetSummary !== 'undefined' && subnetSummary.initRunningSubnetTracking)
+                {
+                    subnetSummary.initRunningSubnetTracking();
+                }
+
                 appManager.executeGETRequest({url: '/statusScanGateway/', callback: discovery.handleScanStatusResponse});
             }
             else
             {
-                notification.showNotification({notificationTitle:context.json.message,notificationType:"error"});
+                notification.showNotification({notificationTitle: context.json.message || "Failed to start gateway scan", notificationType:"error"});
             }
 
             loaderUtil.hideModalLoader();
@@ -583,6 +589,11 @@ var discovery =
             flux.refreshKendoGrid({gridId : gatewayTable});
 
             flux.refreshKendoGrid({gridId : discoveredSubnetTable});
+
+            if (callbackContext.intervalFunctionCall === true)
+            {
+                notification.showNotification({notificationTitle: "Gateway Scan Completed Successfully", notificationType: "success"});
+            }
         }
     },
 

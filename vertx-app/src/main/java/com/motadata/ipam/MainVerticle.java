@@ -32,6 +32,7 @@ public class MainVerticle extends AbstractVerticle {
 
     // Create Vert.x and deploy the main application verticle.
     public static void main(String[] args) {
+        ReportWorkerVerticle.silenceThirdPartyLoggers();
         io.vertx.core.Vertx vertx = io.vertx.core.Vertx.vertx();
         vertx.deployVerticle(new MainVerticle()).onComplete(ar -> {
             if (ar.succeeded()) {
@@ -46,6 +47,7 @@ public class MainVerticle extends AbstractVerticle {
     // Initializes configurations, database pool, scheduler, and deploys all application verticles.
     @Override
     public void start(Promise<Void> startPromise) {
+        ReportWorkerVerticle.silenceThirdPartyLoggers();
         LOGGER.info("Starting Vert.x IPAM Main Deployer (Reactive EventBus Engine)...");
 
         AppConfig.load(vertx).onComplete(configAr -> {
