@@ -1,8 +1,6 @@
 package com.motadata.ipam;
 
-import com.motadata.ipam.model.User;
-import com.motadata.ipam.model.UserRole;
-import com.motadata.ipam.security.JwtAuthProvider;
+import com.motadata.ipam.feature.auth.JwtAuthProvider;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
@@ -13,6 +11,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -80,9 +80,7 @@ public class MainVerticleTest {
     // Tests permission validation endpoint using a signed JWT token.
     @Test
     public void testValidatePermissionEndpoint(VertxTestContext testContext) {
-        User user = new User(1L, "admin", "admin@motadata.com", true);
-        user.setUserRoleId(new UserRole(1L, "ROLE_ADMIN", "Administrator"));
-        String token = jwtAuthProvider.generateToken(user);
+        String token = jwtAuthProvider.generateToken("admin", List.of("ROLE_ADMIN"));
 
         webClient.get(TEST_PORT, "localhost", "/validatePermission/")
                 .putHeader("accessToken", token)

@@ -33,7 +33,7 @@
               <transformers>
                 <transformer>
                   <manifestEntries>
-                    <Main-Class>com.motadata.ipam.MainVerticle</Main-Class>
+                    <Main-Class>com.motadata.ipam.IpamApplication</Main-Class>
                     <Main-Verticle>${main.verticle}</Main-Verticle>
                   </manifestEntries>
                 </transformer>

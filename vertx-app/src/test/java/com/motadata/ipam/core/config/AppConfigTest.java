@@ -1,0 +1,47 @@
+package com.motadata.ipam.core.config;
+
+import io.vertx.core.Vertx;
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@ExtendWith(VertxExtension.class)
+public class AppConfigTest {
+
+    // Tests loading application configuration from JSON or fallback defaults.
+    @Test
+    public void testLoadAppConfig(Vertx vertx, VertxTestContext testContext) {
+        AppConfig.load(vertx).onComplete(testContext.succeeding(config -> {
+            testContext.verify(() -> {
+                assertNotNull(config);
+                assertEquals(8080, config.getServerPort());
+                assertEquals("localhost", config.getServerHost());
+                assertTrue("127.0.0.1".equals(config.getDbHost()) || "localhost".equals(config.getDbHost()));
+                assertEquals(5432, config.getDbPort());
+                assertEquals("ipam_db", config.getDbName());
+                testContext.completeNow();
+            });
+        }));
+    }
+
+    // Tests loading application configuration with custom overrides.
+    @Test
+    public void testLoadAppConfigWithOverrides(Vertx vertx, VertxTestContext testContext) {
+        io.vertx.core.json.JsonObject overrides = new io.vertx.core.json.JsonObject()
+                .put("server-port", 9999)
+                .put("db-host", "postgres.custom.internal");
+
+        AppConfig.load(vertx, overrides).onComplete(testContext.succeeding(config -> {
+            testContext.verify(() -> {
+                assertNotNull(config);
+                assertEquals(9999, config.getServerPort());
+                assertEquals("postgres.custom.internal", config.getDbHost());
+                assertEquals(5432, config.getDbPort());
+                testContext.completeNow();
+            });
+        }));
+    }
+}
