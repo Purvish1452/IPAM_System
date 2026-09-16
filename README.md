@@ -1,23 +1,24 @@
 # Motadata IPAM (IP Address Management)
 
+![Motadata IPAM Logo](Images/logo.png)
+
 **Motadata IPAM** is an enterprise-grade, high-performance web-based IP Address Management system designed to discover, track, allocate, monitor, and audit IPv4 subnets, IP addresses, DHCP servers, and rogue network devices.
 
-The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive **Multi-Reactor & Worker Verticle Architecture** backed by **PostgreSQL** (`vertx-pg-client`), with high-speed **Go microservices** for network subnet discovery and DHCP collection.
+The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive **Multi-Reactor & Dedicated Worker Pool Architecture** backed by **PostgreSQL** (`vertx-pg-client`), with high-speed **Go Native Plugins** for network subnet discovery and DHCP collection.
 
 ---
 
 ## Table of Contents
 - [Key Features](#key-features)
 - [Architecture & Concurrency Model](#architecture--concurrency-model)
-- [Threading & Worker Pool Design](#threading--worker-pool-design)
+- [Threading & Dedicated Worker Pool Design](#threading--dedicated-worker-pool-design)
+- [Modular Project Structure](#modular-project-structure)
 - [Technology Stack](#technology-stack)
-- [Project Directory Structure](#project-directory-structure)
 - [Prerequisites](#prerequisites)
 - [Configuration](#configuration)
 - [Database Setup & Migrations](#database-setup--migrations)
 - [Build & Run Instructions](#build--run-instructions)
 - [REST API Reference](#rest-api-reference)
-- [Go Microservices](#go-microservices)
 - [Testing & Verification](#testing--verification)
 
 ---
@@ -25,22 +26,22 @@ The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive
 ## Key Features
 
 ### 1. Subnet & Supernet Management
-- **Hierarchy & Allocation**: Organize subnets by Supernet, Gateway, and Category.
+- **Hierarchy & Organization**: Group subnets by Supernet, Gateway, and Category.
 - **Real-Time Utilization**: Live tracking of `TOTAL`, `USED`, `AVAILABLE`, `RESERVED`, and `TRANSIENT` IP counts with visual utilization gauges.
 - **Bulk Operations**: Add IP ranges, batch-edit statuses, reserve IP blocks, and delete ranges reactively.
 - **CSV Import / Export**: Import subnet allocations from CSV files; export complete IP tables to CSV and PDF.
 
 ### 2. IP Request & Approval Workflow
 - **Self-Service Portal**: Internal teams can submit static IP allocation requests specifying Device Type (Server, VM, Container, Router, Switch, Firewall, AP, IoT), Allocation Duration (Permanent, 30/60/90 Days, 6 Months, 1 Year, Temporary), Quantity, and Business Justification.
-- **Admin Review Queue**: Network administrators can review, modify subnet assignments, select specific available IPs from interactive grids, enter approval/rejection remarks, and trigger one-click IP reservation.
+- **Admin Review Queue**: Network administrators review requests, modify subnet assignments, select specific available IPs from interactive grids, enter approval/rejection remarks, and trigger one-click IP reservation.
 - **Automated Lifecycle**: Approved requests automatically transition target IPs to `USED`, update subnet utilization metrics, and write immutable audit records to the event log.
 
 ### 3. Network Discovery & Live Probing
-- **High-Speed ICMP Scans**: Concurrent subnet ping sweeps with real-time status updates.
+- **High-Speed ICMP Scans**: Concurrent subnet ping sweeps with real-time status updates via native Go plugins.
 - **TCP Port Probing**: Multi-port scanning (e.g. ports 21, 22, 23, 25, 53, 80, 443, 3306, 3389, 5432, 8080).
 - **DNS & Reverse DNS**: Automatic hostname discovery and reverse DNS resolution.
 - **Traceroute**: Network path inspection and hop-by-hop latency measurement.
-- **Go Discovery Engine**: Standalone high-concurrency Go microservice for massive CIDR sweeps.
+- **Go Discovery Engine**: Standalone high-concurrency Go binary plugin for massive CIDR sweeps.
 
 ### 4. Rogue Device & Threat Detection
 - **Unauthorized IP Identification**: Flags unknown MAC addresses and unauthorized devices on active subnets.
@@ -59,7 +60,7 @@ The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive
 
 ### 7. Document Reporting & Scheduling
 - **Custom PDF Reports**: Generated using DynamicJasper and OpenPDF layout engines.
-- **Spreadsheet Exports**: CSV and Excel (.xlsx) export streams for Subnets, Alerts, Events, and DHCP data.
+- **Spreadsheet Exports**: CSV export streams for Subnets, Alerts, Events, and DHCP data.
 - **Report Schedulers**: Cron-based automated report delivery with recipient email lists.
 
 ### 8. Security & RBAC
@@ -69,9 +70,9 @@ The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive
 
 ---
 
-## Deep-Dive: Vert.x Reactive Architecture, Verticles & Thread Pools
+## Architecture & Concurrency Model
 
-The application is architected around **Eclipse Vert.x 5** and **Netty**, adopting a **Decoupled Multi-Verticle & Multi-Reactor Pattern**.
+The application is architected around **Eclipse Vert.x 5** and **Netty**, adopting a **Decoupled Multi-Verticle & Dedicated Bulkhead Worker Pattern**.
 
 ```mermaid
 flowchart TD
@@ -90,14 +91,16 @@ flowchart TD
         EB["Vert.x EventBus (Non-Blocking Message Queue)"]
     end
 
-    subgraph NetworkWorker["4. Worker Verticle: NetworkWorkerVerticle"]
-        NetPool["Network Worker Pool (30 Threads)"]
-        NetTasks["ICMP Ping Sweeps<br/>TCP Port Probing<br/>DNS Lookups & CSV Parsing"]
+    subgraph NetworkWorker["4. Dedicated Network Worker Pool (30 Threads, 30 Instances)"]
+        NetPool["ipam-network-worker-pool (30 Threads)"]
+        NetInstances["NetworkWorkerVerticle (30 Instances)"]
+        GoIPC["Native Go Plugins (discovery, dhcp)"]
     end
 
-    subgraph ReportWorker["5. Worker Verticle: ReportWorkerVerticle"]
-        RepPool["Report Worker Pool (5 Threads)"]
-        RepTasks["DynamicJasper Compilation<br/>OpenPDF Layout Export<br/>Excel Data Streams"]
+    subgraph ReportWorker["5. Dedicated Report Bulkhead Pool (5 Threads, 5 Instances)"]
+        RepPool["ipam-report-worker-pool (5 Threads)"]
+        RepInstances["ReportWorkerVerticle (5 Instances)"]
+        RepTasks["DynamicJasper Compilation<br/>OpenPDF Layout Export<br/>CSV Data Streams"]
     end
 
     subgraph DatabaseLayer["6. Persistent Storage"]
@@ -110,71 +113,48 @@ flowchart TD
     Services --> PgDriver
     PgDriver <-->|"Non-Blocking SQL"| DB
 
-    Router -->|"Asynchronous Request"| EB
+    Router -->|"Asynchronous EventBus Msg"| EB
     EB -->|"Dispatch Network Tasks"| NetPool
-    NetPool --> NetTasks
-    NetTasks -.->|"Async Result Reply"| Router
+    NetPool --> NetInstances
+    NetInstances --> GoIPC
+    GoIPC -.->|"Async Result Reply"| Router
 
     EB -->|"Dispatch Report Tasks"| RepPool
-    RepPool --> RepTasks
-    RepTasks -.->|"Async Buffer Reply"| Router
+    RepPool --> RepInstances
+    RepInstances --> RepTasks
+    RepTasks -.->|"Async File Reply"| Router
 ```
 
 ---
 
-### 1. The Verticles in the System
+## Threading & Dedicated Worker Pool Design
 
-| Verticle | Threading Model | Purpose & Responsibilities |
-| :--- | :--- | :--- |
-| **`MainVerticle`** | Standard (Deployer) | Primary startup orchestrator. Loads `AppConfig`, initializes `PgClientProvider` and database schema via `DatabaseInit`, starts `JobScheduler`, and deploys the sub-verticles with specialized deployment options. |
-| **`HttpServerVerticle`** | Standard (Event Loop) | Runs strictly on Netty Event Loop threads. Mounts HTTP Server on port `8080`, manages JWT/Session filters, serves static web assets from `webroot`, and handles all fast REST API CRUD endpoints via non-blocking `PgPool`. |
-| **`NetworkWorkerVerticle`** | `ThreadingModel.WORKER` | Deployed with `setWorkerPoolName("ipam-network-worker-pool")` and size `30`. Consumes EventBus messages for ICMP ping sweeps, TCP port probing, reverse DNS lookups, traceroute probes, and CSV import parsing. |
-| **`ReportWorkerVerticle`** | `ThreadingModel.WORKER` | Deployed with `setWorkerPoolName("ipam-report-worker-pool")` and size `5`. Consumes EventBus messages to compile DynamicJasper reports, OpenPDF documents, and Excel spreadsheets in an isolated, memory-safe thread pool. |
+### 1. Verticles & Concurrency Breakdown
 
----
-
-### 2. How the Event Loop Works
-
-- **The Multi-Reactor Pattern**: Vert.x assigns each incoming TCP socket connection to one of `2 * CPU Cores` Event Loop threads (e.g. `vert.x-eventloop-thread-0` to `15`).
-- **The Golden Rule**: *"Never block the Event Loop thread."*
-- **Non-Blocking Execution**: When a client requests subnet records (`GET /subnet/`):
-  1. The Event Loop thread executes `SubnetRouter` and calls `SubnetService.getAllSubnets()`.
-  2. `SubnetService` issues a query via `PgPool.query().execute()`.
-  3. **The Event Loop thread NEVER waits or sleeps for PostgreSQL**. It registers an asynchronous callback (`Future`) and immediately moves on to process subsequent concurrent requests from other clients.
-  4. When PostgreSQL returns the query results over the network socket, Netty notifies the Event Loop, which formats the JSON response and sends it back to the client.
+| Verticle | Threading Model | Worker Pool Name | Pool Size | Instances | Purpose & Responsibilities |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`MainVerticle`** | Standard | EventLoop | 1 | 1 | Bootstrap deployer. Initializes `AppConfig`, `PgClientProvider`, `DatabaseInit`, `JobScheduler`, and deploys application verticles. |
+| **`HttpServerVerticle`** | Standard | EventLoop | `2 * Cores` | `2 * Cores` | Runs strictly on Netty Event Loop threads. Mounts HTTP Server on port `8080`, manages JWT auth, serves static web assets, and handles REST CRUD endpoints via non-blocking `PgPool`. |
+| **`NetworkWorkerVerticle`** | `ThreadingModel.WORKER` | `ipam-network-worker-pool` | **30** | **30** | Consumes EventBus messages for ICMP ping sweeps, TCP port probing, reverse DNS lookups, traceroute probes, and Go plugin execution. 30 instances ensure all 30 threads run in parallel. |
+| **`ReportWorkerVerticle`** | `ThreadingModel.WORKER` | `ipam-report-worker-pool` | **5** | **5** | Consumes EventBus messages to compile DynamicJasper reports, OpenPDF documents, and CSV exports in an isolated bulkhead pool strictly capped at 5 threads to protect JVM heap. |
 
 ---
 
-### 3. How Worker Pools & Bulkheading Work
+### 2. Bulkhead Isolation (Anti-Starvation)
 
-Certain tasks cannot be performed reactively (e.g., waiting for OS ICMP echo replies, socket connect timeouts, or rasterizing 50-page PDF documents).
+| Feature | `ipam-network-worker-pool` (30 Threads) | `ipam-report-worker-pool` (5 Threads) |
+|---|---|---|
+| **Core Tasks** | Native Go CIDR Discovery, ICMP Pings, Port Scans, DNS, CSV Imports | DynamicJasper Compilation, OpenPDF Rendering, CSV Disk Exports |
+| **Scaling Goal** | Maximized for high network concurrency (30 parallel scans) | Strictly capped at 5 to protect JVM Heap from OOM |
+| **Isolation** | Heavy PDF generation can never block network discovery | Network scan traffic cannot starve export threads |
 
-Instead of running these on the Event Loop or competing for a single generic thread pool, the architecture implements the **Bulkhead Pattern** using isolated worker pools:
-
-```
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                              Worker Isolation                                 │
-├───────────────────────────────────────┬───────────────────────────────────────┤
-│    ipam-network-worker-pool (30)      │      ipam-report-worker-pool (5)      │
-├───────────────────────────────────────┼───────────────────────────────────────┤
-│ • ICMP Ping Sweeps (isReachable)      │ • DynamicJasper Compilation           │
-│ • TCP Port Probing (Socket.connect)   │ • OpenPDF Layout Rendering            │
-│ • Reverse DNS Hostname Resolution     │ • Large Excel (.xlsx) Exports         │
-│ • CSV Bulk File Parsing               │                                       │
-│ ➔ Scaled for high network concurrency │ ➔ Capped at 5 to protect JVM Heap     │
-└───────────────────────────────────────┴───────────────────────────────────────┘
-```
-
-#### Why This Prevents System Outages:
-1. **Zero Worker Starvation**: If multiple users generate large PDF reports, they only occupy threads in `ipam-report-worker-pool`. Network discovery scans and ping sweeps running in `ipam-network-worker-pool` continue running at full speed.
-2. **Zero Event Loop Latency Spikes**: Because all blocking code is isolated on worker threads, the HTTP web server remains 100% responsive with sub-millisecond response times for REST APIs.
-3. **Memory Protection (OOM Guard)**: PDF generation requires substantial heap memory. Restricting the report worker pool to 5 threads guarantees that simultaneous export requests cannot exhaust JVM memory.
+1. **Zero Thread Starvation**: Heavy PDF rendering tasks never consume threads needed for network discovery.
+2. **Zero Event Loop Latency**: All blocking code (file I/O, subprocess execution, PDF compilation) is isolated from the Netty Event Loop.
+3. **Memory Protection (OOM Guard)**: Capping the report pool at 5 threads prevents out-of-memory errors during bursts of report requests.
 
 ---
 
-### 4. EventBus Messaging Protocol
-
-Communication between the Event Loop Verticle (`HttpServerVerticle`) and the Worker Verticles occurs exclusively via the **Vert.x EventBus**:
+### 3. EventBus Messaging Protocol
 
 | EventBus Address | Message Payload (Input) | Reply Payload (Output) | Consumer Verticle |
 | :--- | :--- | :--- | :--- |
@@ -191,73 +171,63 @@ Communication between the Event Loop Verticle (`HttpServerVerticle`) and the Wor
 
 ---
 
-### 5. Thread Pools & Resource Summary
+## Modular Project Structure
 
-| Pool Name | Managed By | Default Size | Purpose |
-| :--- | :--- | :--- | :--- |
-| `vert.x-eventloop-thread-*` | Netty / Vert.x Core | `2 * CPU Cores` | Non-blocking HTTP sockets, routing, JWT parsing, and reactive SQL. |
-| `ipam-network-worker-pool-*`| Dedicated Worker Pool | `30` Threads | ICMP ping sweeps, port scans, DNS lookups, CSV parsing. |
-| `ipam-report-worker-pool-*` | Dedicated Worker Pool | `5` Threads | DynamicJasper and OpenPDF report compilation. |
-| `vert.x-internal-blocking-*`| Vert.x Core | `20` Threads | Internal Vert.x file operations (`StaticHandler`). |
-| `PgPool` Connection Pool | `vertx-pg-client` | `20` Sockets | Asynchronous PostgreSQL database wire connections. |
+```text
+IPAM_Real/
+├── config/
+│   └── ipm-conf.yml                     # Central application YAML configuration
+├── database/
+│   └── migrations/                      # Versioned SQL schema migration scripts (Flyway)
+├── go-engine/
+│   ├── go.mod
+│   └── ping.go                          # Standalone CLI ping utility
+├── go-services/
+│   ├── common/                          # Shared Go network and CIDR utilities
+│   ├── discovery/                       # Subnet Auto-Discovery Plugin
+│   ├── dhcp/                            # DHCP Collector Plugin
+│   └── go.mod
+├── vertx-app/
+│   ├── pom.xml                          # Maven build configuration
+│   ├── src/main/java/com/motadata/ipam/
+│   │   ├── IpamApplication.java         # Main Process Bootstrap Entry Point
+│   │   ├── MainVerticle.java            # Deployer & Orchestrator Verticle
+│   │   ├── core/                        # Infrastructure & Core Services
+│   │   │   ├── config/                  # AppConfig loader
+│   │   │   ├── db/                      # PgClientProvider & DatabaseInit
+│   │   │   ├── scheduler/               # JobScheduler & VertxScheduledJob
+│   │   │   └── verticle/                # HttpServerVerticle, NetworkWorkerVerticle, ReportWorkerVerticle
+│   │   └── feature/                     # Domain Feature Modules (Model, Service, Router)
+│   │       ├── alert/                   # AlertService, AlertRouter, AlertCleanupJob
+│   │       ├── auth/                    # JwtAuthProvider, JwtAuthHandler, AuthRouter, UserService
+│   │       ├── dhcp/                    # DhcpService, DhcpRouter, DhcpScanJob
+│   │       ├── discovery/               # DiscoveryService, SubnetScanJob
+│   │       ├── event/                   # EventService, EventRouter
+│   │       ├── report/                  # ReportService, ReportRouter, ReportSchedulerJob
+│   │       ├── settings/                # SettingsService, SettingsRouter
+│   │       └── subnet/                  # SubnetService, SubnetRouter, SubnetIPActionService
+│   ├── src/main/resources/
+│   │   ├── db/init_ipam_postgres.sql    # PostgreSQL schema & initial seed data
+│   │   ├── log4j2.xml                   # Logging configuration
+│   │   └── webroot/                     # Web UI, Kendo UI grids, controllers & CSS
+│   └── src/test/java/com/motadata/ipam/ # JUnit 5 test suite
+├── pom.xml                              # Root Maven project POM
+└── README.md                            # Comprehensive project documentation
+```
 
 ---
-
-
 
 ## Technology Stack
 
 | Domain | Technologies |
 | :--- | :--- |
 | **Backend Core** | Java 21, Eclipse Vert.x 5.0.0 (`vertx-core`, `vertx-web`, `vertx-auth-jwt`, `vertx-sql-client`, `vertx-pg-client`) |
-| **Database** | PostgreSQL 12+, Flyway migrations, Vert.x Reactive PgPool |
-| **Security** | JWT (HS256), BCrypt, PBAC/RBAC permission interceptors |
+| **Database** | PostgreSQL 12+, Flyway schema scripts, Vert.x Reactive PgPool |
+| **Security** | JWT (HS256), BCrypt, PBAC/RBAC route permission handlers |
 | **Document Generation** | DynamicJasper 5.0.9, JasperReports 6.3.0, OpenPDF 1.3.30 |
 | **Frontend** | HTML5, CSS3, JavaScript (ES6+), jQuery, Kendo UI, Bootstrap |
-| **Microservices** | Go 1.20 (HTTP REST Discovery & DHCP services), Go 1.18 (CLI Ping Engine) |
+| **Native Plugins** | Go 1.20+ (Discovery & DHCP CLI plugins via JSON IPC) |
 | **Build & Test** | Maven 3.8+, JUnit 5, Vert.x JUnit 5 Extension, Mockito, AssertJ |
-
----
-
-## Project Directory Structure
-
-```text
-IPAM_Real/
-├── config/
-│   └── ipm-conf.yml                     # Central application configuration
-├── database/
-│   └── migrations/                      # Versioned SQL schema migration scripts
-├── go-engine/
-│   ├── go.mod
-│   └── ping.go                          # Standalone high-speed CLI ping utility
-├── go-services/
-│   ├── common/                          # Shared Go network and CIDR utilities
-│   ├── discovery/                       # Subnet Auto-Discovery Microservice (:8081)
-│   ├── dhcp/                            # DHCP Collector Microservice (:8082)
-│   └── go.mod
-├── vertx-app/
-│   ├── pom.xml                          # Maven build configuration
-│   ├── src/main/java/com/motadata/ipam/
-│   │   ├── MainVerticle.java            # Startup deployer & verticle orchestrator
-│   │   ├── config/                      # YAML config parser (AppConfig)
-│   │   ├── db/                          # PgPool provider & schema initializer
-│   │   ├── model/                       # Domain models (SubnetDetails, IpRequest, etc.)
-│   │   ├── router/                      # HTTP Routers (Auth, Subnet, Alert, Report, etc.)
-│   │   ├── scheduler/                   # Vert.x background periodic timers & cron jobs
-│   │   ├── security/                    # JWT Auth provider & PermissionHandler
-│   │   ├── service/                     # Reactive business services
-│   │   └── verticle/                    # Event Loop & Worker Verticles:
-│   │       ├── HttpServerVerticle.java  # Non-blocking web/REST verticle
-│   │       ├── NetworkWorkerVerticle.java # Network probing & scanning worker
-│   │       └── ReportWorkerVerticle.java  # PDF & Jasper report worker
-│   ├── src/main/resources/
-│   │   ├── db/init_ipam_postgres.sql    # PostgreSQL schema & seed dataset
-│   │   ├── log4j2.xml                   # Logging configuration
-│   │   └── webroot/                     # Frontend UI, JS controllers & CSS
-│   └── src/test/                        # Unit and integration test suite
-├── pom.xml                              # Root Maven project POM
-└── README.md                            # Comprehensive project documentation
-```
 
 ---
 
@@ -268,15 +238,7 @@ Ensure the following tools are installed on your system:
 - **JDK 21** or later (`openjdk-21-jdk`)
 - **Maven 3.8.0** or later
 - **PostgreSQL 12+**
-- **Go 1.20+** (for Go microservices)
-
-Verify tool installations:
-```bash
-java -version
-mvn -version
-psql --version
-go version
-```
+- **Go 1.20+** (for Go discovery/DHCP plugins)
 
 ---
 
@@ -291,7 +253,7 @@ min-memory: 1024
 max-memory: 2048
 
 # PostgreSQL Database Configuration
-db-host: localhost
+db-host: 127.0.0.1
 db-port: 5432
 db-name: ipam_db
 db-user: postgres
@@ -314,7 +276,7 @@ process-request-timeout: 1200
    ```
 
 2. **Automatic Initialization**:
-   Upon startup, [`DatabaseInit.java`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/java/com/motadata/ipam/db/DatabaseInit.java) automatically executes [`init_ipam_postgres.sql`](file:///home/purvish/Documents/IPAM_Real/vertx-app/src/main/resources/db/init_ipam_postgres.sql) and applies incremental migrations (such as adding `device_type`, `duration`, and `preferred_subnet` columns to `ip_requests`).
+   Upon startup, `DatabaseInit.java` automatically executes `init_ipam_postgres.sql` and applies schema migrations reactively.
 
 ---
 
@@ -342,9 +304,6 @@ The web application is accessible at:
 ```text
 http://localhost:8080
 ```
-
-**Single Port Unified Architecture**:
-All services (REST APIs, Web UI, Network Discovery Scans, ICMP sweeps, TCP Probing, DHCP collection, and PDF/CSV Reporting) execute natively within the Vert.x process on **Port 8080** via dedicated worker verticle thread pools (`ipam-network-worker-pool` and `ipam-report-worker-pool`). Separate microservice ports are eliminated.
 
 **Default Credentials**:
 - **Username**: `admin`
@@ -395,40 +354,26 @@ All services (REST APIs, Web UI, Network Discovery Scans, ICMP sweeps, TCP Probi
 | `POST` | `/reports/schedulers` | Creates/updates report schedule cron definition |
 | `GET` | `/exportsubnetIpByReportTimeline/` | Generates on-demand timeline report (PDF / CSV) |
 
-## Unified In-Built Architecture (Single Port 8080)
-
-All networking, discovery, DHCP processing, and reporting functionalities run directly inside Vert.x Worker Verticles on single port `8080`:
-
-### In-Built Network Worker (`ipam-network-worker-pool`)
-- **ICMP Ping & Sweep**: High-concurrency ping sweep engine.
-- **Subnet Auto-Discovery**: Automatic CIDR sweeps and gateway probing (`/scanGateway/:id`).
-- **DHCP Collector**: Collects DHCP lease tables and scope utilization.
-- **Port Probing & DNS**: Asynchronous multi-port scanning and reverse DNS resolution.
-
-### In-Built Report Worker (`ipam-report-worker-pool`)
-- **Dynamic PDF Rendering**: Isolated compilation using DynamicJasper & OpenPDF.
-- **CSV & Excel Streaming**: High-throughput file export streams (`/exportsubnetIpByReportTimeline/`, `/exportsubnetIpCsvByReportTimeline/`).
-
 ---
 
 ## Testing & Verification
 
-Run the comprehensive unit and integration test suite:
+Run the comprehensive test suite:
 
 ```bash
-# Run all unit and integration tests
+# Run all unit tests
 mvn test
 
 # Run specific test classes
-mvn test -Dtest=ModelTest,AppConfigTest,SchedulerTest,SecurityTest,MainVerticleTest
+mvn test -Dtest=SecurityTest,JsonPayloadTest,AppConfigTest,SchedulerTest,MainVerticleTest
 ```
 
 Test coverage includes:
-- **`MainVerticleTest`**: Verticle deployment, HTTP routing pipeline, login redirects, and permission handlers.
-- **`SecurityTest`**: JWT token generation, claims extraction, and BCrypt verification.
-- **`SchedulerTest`**: Vert.x timer lifecycle, job scheduling, and cron parsing.
-- **`ModelTest`**: JSON serialization and model binding for IPAM domain entities.
+- **`SecurityTest`**: JWT token generation, expiration, claims extraction, and BCrypt password validation.
+- **`SchedulerTest`**: Vert.x timer lifecycle, job scheduling, and cron expression validation.
+- **`JsonPayloadTest`**: JSON serialization and model binding for IPAM domain entities.
 - **`AppConfigTest`**: YAML configuration loading and default fallbacks.
+- **`MainVerticleTest`**: Verticle deployment, HTTP routing pipeline, login redirects, and permission handlers.
 
 ---
 
