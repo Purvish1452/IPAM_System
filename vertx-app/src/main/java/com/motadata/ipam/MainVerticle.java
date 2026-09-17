@@ -50,13 +50,13 @@ public class MainVerticle extends AbstractVerticle {
             return DatabaseInit.initSchema(vertx, db).compose(v -> {
                 // 1. Deploy Network Discovery Verticle (2 Instances on EventLoop, dispatches to dedicated 30-thread WorkerExecutor)
                 DeploymentOptions networkWorkerOpts = new DeploymentOptions()
-                        .setInstances(30);
+                        .setInstances(Runtime.getRuntime().availableProcessors() * 2);
 
                 Future<String> deployNetworkWorker = vertx.deployVerticle(() -> new NetworkWorkerVerticle(db), networkWorkerOpts);
 
                 // 2. Deploy Report Verticle (1 Instance on EventLoop, dispatches to dedicated 5-thread WorkerExecutor)
                 DeploymentOptions reportWorkerOpts = new DeploymentOptions()
-                        .setInstances(5);
+                        .setInstances(Runtime.getRuntime().availableProcessors() * 2);
 
                 Future<String> deployReportWorker = vertx.deployVerticle(() -> new ReportWorkerVerticle(db), reportWorkerOpts);
 
