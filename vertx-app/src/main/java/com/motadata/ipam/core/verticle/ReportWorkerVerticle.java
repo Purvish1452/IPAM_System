@@ -9,6 +9,7 @@ import ar.com.fdvs.dj.domain.builders.FastReportBuilder;
 import ar.com.fdvs.dj.domain.constants.Font;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
+import io.vertx.core.WorkerExecutor;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -27,10 +28,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Dedicated Worker Verticle for Document Generation and Heavy Reporting.
- * Runs on the dedicated 5-thread Bulkhead Worker Pool (ipam-report-worker-pool) with 5 instances.
- * Completely isolates CPU/heap-intensive PDF and spreadsheet rendering from the HTTP Event Loop
- * and protects JVM heap memory against Out-Of-Memory (OOM) spikes.
+ * Dedicated Verticle for Document Generation and Heavy Reporting.
+ * Uses vertx.executeBlocking(..., false) to isolate CPU/heap-intensive PDF compilation
+ * and disk file exports across the worker pool without blocking the Event Loop.
  */
 public class ReportWorkerVerticle extends AbstractVerticle {
 
@@ -81,6 +81,7 @@ public class ReportWorkerVerticle extends AbstractVerticle {
     }
 
     private final Pool db;
+    private WorkerExecutor reportExecutor;
 
     // Constructs ReportWorkerVerticle and ensures export directories exist.
     public ReportWorkerVerticle(Pool db) {
@@ -97,16 +98,17 @@ public class ReportWorkerVerticle extends AbstractVerticle {
     @Override
     public void start(Promise<Void> startPromise) {
         silenceThirdPartyLoggers();
-        LOGGER.info("Starting ReportWorkerVerticle on dedicated bulkhead pool: {}", Thread.currentThread().getName());
+        LOGGER.info("Starting ReportWorkerVerticle: {}", Thread.currentThread().getName());
+        reportExecutor = vertx.createSharedWorkerExecutor("ipam-report-worker-pool", 5);
 
         // 1. Subnet IP PDF Generation (File-backed)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_SUBNET_PDF, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            JsonArray data = body.getJsonArray("data", new JsonArray());
+            String subLabel = body.getString("subLabel", "All");
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                JsonArray data = body.getJsonArray("data", new JsonArray());
-                String subLabel = body.getString("subLabel", "All");
 
+            reportExecutor.<JsonObject>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] generating Subnet IP PDF report for subLabel={}, records={}",
                         Thread.currentThread().getName(), subLabel, data.size());
 
@@ -124,26 +126,27 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully generated Subnet IP PDF report '{}' ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), filename, pdfBytes.length, list.size(), duration);
 
-                message.reply(new JsonObject()
+                return new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
-                        .put("size", pdfBytes.length));
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating Subnet IP PDF report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                        .put("size", pdfBytes.length);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating Subnet IP PDF report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         // 2. Subnet IP CSV Generation (File-backed)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_SUBNET_CSV, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            JsonArray data = body.getJsonArray("data", new JsonArray());
+            String subLabel = body.getString("subLabel", "All");
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                JsonArray data = body.getJsonArray("data", new JsonArray());
-                String subLabel = body.getString("subLabel", "All");
 
+            reportExecutor.<JsonObject>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] generating Subnet IP CSV report for subLabel={}, records={}",
                         Thread.currentThread().getName(), subLabel, data.size());
 
@@ -172,26 +175,27 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully generated Subnet IP CSV report '{}' ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), filename, csvBytes.length, data.size(), duration);
 
-                message.reply(new JsonObject()
+                return new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
-                        .put("size", csvBytes.length));
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating Subnet IP CSV report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                        .put("size", csvBytes.length);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating Subnet IP CSV report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         // 3. Vendor Summary PDF Generation (File-backed)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_VENDOR_PDF, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            JsonArray data = body.getJsonArray("data", new JsonArray());
+            String subLabel = body.getString("subLabel", "All");
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                JsonArray data = body.getJsonArray("data", new JsonArray());
-                String subLabel = body.getString("subLabel", "All");
 
+            reportExecutor.<JsonObject>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] generating Vendor Summary PDF report for subLabel={}, records={}",
                         Thread.currentThread().getName(), subLabel, data.size());
 
@@ -204,27 +208,28 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully generated Vendor Summary PDF report '{}' ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), filename, pdfBytes.length, data.size(), duration);
 
-                message.reply(new JsonObject()
+                return new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
-                        .put("size", pdfBytes.length));
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating Vendor Summary PDF report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                        .put("size", pdfBytes.length);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating Vendor Summary PDF report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         // 4. DynamicJasper PDF Generation (In-Memory Buffer)
         vertx.eventBus().<JsonObject>consumer(ADDR_DYNAMIC_JASPER_PDF, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            String title = body.getString("title", "Report");
+            JsonArray data = body.getJsonArray("data", new JsonArray());
+            JsonArray columns = body.getJsonArray("columns", new JsonArray());
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                String title = body.getString("title", "Report");
-                JsonArray data = body.getJsonArray("data", new JsonArray());
-                JsonArray columns = body.getJsonArray("columns", new JsonArray());
 
+            reportExecutor.<Buffer>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] compiling DynamicJasper PDF report '{}' (records={}, columns={})",
                         Thread.currentThread().getName(), title, data.size(), columns.size());
 
@@ -264,25 +269,25 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully compiled DynamicJasper PDF report '{}' ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), title, pdfBytes.length, data.size(), duration);
 
-                Buffer buffer = Buffer.buffer(pdfBytes);
-                message.reply(buffer);
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating DynamicJasper PDF report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                return Buffer.buffer(pdfBytes);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating DynamicJasper PDF report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         // 5. Generic CSV Generation (In-Memory Buffer)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_CSV, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            String title = body.getString("title", "Report");
+            String subLabel = body.getString("subLabel", "All");
+            JsonArray data = body.getJsonArray("data", new JsonArray());
+            JsonArray columns = body.getJsonArray("columns", new JsonArray());
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                String title = body.getString("title", "Report");
-                String subLabel = body.getString("subLabel", "All");
-                JsonArray data = body.getJsonArray("data", new JsonArray());
-                JsonArray columns = body.getJsonArray("columns", new JsonArray());
 
+            reportExecutor.<Buffer>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] generating CSV report '{}' for subLabel={}, records={}, columns={}",
                         Thread.currentThread().getName(), title, subLabel, data.size(), columns.size());
 
@@ -308,21 +313,22 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully generated CSV report '{}' for subLabel={} ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), title, subLabel, csvBytes.length, data.size(), duration);
 
-                message.reply(Buffer.buffer(csvBytes));
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating CSV report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                return Buffer.buffer(csvBytes);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating CSV report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         // 6. Rogue Detection PDF Generation (File-backed)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_ROGUE_PDF, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            JsonArray data = body.getJsonArray("data", new JsonArray());
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                JsonArray data = body.getJsonArray("data", new JsonArray());
 
+            reportExecutor.<JsonObject>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] generating Rogue Detection PDF report (records={})",
                         Thread.currentThread().getName(), data.size());
 
@@ -340,25 +346,26 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully generated Rogue Detection PDF report '{}' ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), filename, pdfBytes.length, list.size(), duration);
 
-                message.reply(new JsonObject()
+                return new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
-                        .put("size", pdfBytes.length));
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating Rogue Detection PDF report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                        .put("size", pdfBytes.length);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating Rogue Detection PDF report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         // 7. Rogue Detection CSV Generation (File-backed)
         vertx.eventBus().<JsonObject>consumer(ADDR_GENERATE_ROGUE_CSV, message -> {
+            JsonObject body = message.body() != null ? message.body() : new JsonObject();
+            JsonArray data = body.getJsonArray("data", new JsonArray());
             long startTime = System.currentTimeMillis();
-            try {
-                JsonObject body = message.body() != null ? message.body() : new JsonObject();
-                JsonArray data = body.getJsonArray("data", new JsonArray());
 
+            reportExecutor.<JsonObject>executeBlocking(() -> {
                 LOGGER.info("ReportWorkerVerticle [{}] generating Rogue Detection CSV report (records={})",
                         Thread.currentThread().getName(), data.size());
 
@@ -384,16 +391,17 @@ public class ReportWorkerVerticle extends AbstractVerticle {
                 LOGGER.info("ReportWorkerVerticle [{}] successfully generated Rogue Detection CSV report '{}' ({} bytes, {} records) in {} ms",
                         Thread.currentThread().getName(), filename, csvBytes.length, data.size(), duration);
 
-                message.reply(new JsonObject()
+                return new JsonObject()
                         .put("success", true)
                         .put("filename", filename)
                         .put("filePath", filePath)
-                        .put("size", csvBytes.length));
-            } catch (Exception e) {
-                LOGGER.error("ReportWorkerVerticle [{}] error generating Rogue Detection CSV report: {}",
-                        Thread.currentThread().getName(), e.getMessage(), e);
-                message.fail(500, e.getMessage());
-            }
+                        .put("size", csvBytes.length);
+            }, false)
+            .onSuccess(message::reply)
+            .onFailure(err -> {
+                LOGGER.error("ReportWorkerVerticle error generating Rogue Detection CSV report: {}", err.getMessage(), err);
+                message.fail(500, err.getMessage());
+            });
         });
 
         LOGGER.info("ReportWorkerVerticle consumers successfully initialized on EventBus.");
@@ -606,5 +614,14 @@ public class ReportWorkerVerticle extends AbstractVerticle {
     private static String csvEscape(String val) {
         if (val == null || "null".equals(val) || val.isEmpty()) return "-";
         return "\"" + val.replace("\"", "\"\"") + "\"";
+    }
+
+    // Closes the shared report worker executor pool on verticle stop.
+    @Override
+    public void stop(Promise<Void> stopPromise) {
+        if (reportExecutor != null) {
+            reportExecutor.close();
+        }
+        stopPromise.complete();
     }
 }

@@ -48,20 +48,14 @@ public class MainVerticle extends AbstractVerticle {
 
             // Initialize PostgreSQL Schema & Seed Data
             return DatabaseInit.initSchema(vertx, db).compose(v -> {
-                // 1. Deploy Network Discovery Worker Verticle (Dedicated Pool: 30 Threads, 30 Instances)
+                // 1. Deploy Network Discovery Verticle (2 Instances on EventLoop, dispatches to dedicated 30-thread WorkerExecutor)
                 DeploymentOptions networkWorkerOpts = new DeploymentOptions()
-                        .setThreadingModel(io.vertx.core.ThreadingModel.WORKER)
-                        .setWorkerPoolName("ipam-network-worker-pool")
-                        .setWorkerPoolSize(30)
                         .setInstances(30);
 
                 Future<String> deployNetworkWorker = vertx.deployVerticle(() -> new NetworkWorkerVerticle(db), networkWorkerOpts);
 
-                // 2. Deploy Report Worker Verticle (Dedicated Bulkhead Pool: 5 Threads, 5 Instances for Heap Safety)
+                // 2. Deploy Report Verticle (1 Instance on EventLoop, dispatches to dedicated 5-thread WorkerExecutor)
                 DeploymentOptions reportWorkerOpts = new DeploymentOptions()
-                        .setThreadingModel(io.vertx.core.ThreadingModel.WORKER)
-                        .setWorkerPoolName("ipam-report-worker-pool")
-                        .setWorkerPoolSize(5)
                         .setInstances(5);
 
                 Future<String> deployReportWorker = vertx.deployVerticle(() -> new ReportWorkerVerticle(db), reportWorkerOpts);
