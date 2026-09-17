@@ -4,14 +4,14 @@
 
 **Motadata IPAM** is an enterprise-grade, high-performance web-based IP Address Management system designed to discover, track, allocate, monitor, and audit IPv4 subnets, IP addresses, DHCP servers, and rogue network devices.
 
-The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive **Multi-Reactor & Dedicated Worker Pool Architecture** backed by **PostgreSQL** (`vertx-pg-client`), with high-speed **Go Native Plugins** for network subnet discovery and DHCP collection.
+The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive **Multi-Reactor & Dedicated WorkerExecutor Bulkhead Architecture** backed by **PostgreSQL** (`vertx-pg-client`), with high-speed **Go Native Plugins** for network subnet discovery and DHCP collection.
 
 ---
 
 ## Table of Contents
 - [Key Features](#key-features)
 - [Architecture & Concurrency Model](#architecture--concurrency-model)
-- [Threading & Dedicated Worker Pool Design](#threading--dedicated-worker-pool-design)
+- [Multi-Reactor & Dedicated WorkerExecutor Design](#multi-reactor--dedicated-workerexecutor-design)
 - [Modular Project Structure](#modular-project-structure)
 - [Technology Stack](#technology-stack)
 - [Prerequisites](#prerequisites)
@@ -72,7 +72,7 @@ The system is built on **Eclipse Vert.x 5** using a fully asynchronous, reactive
 
 ## Architecture & Concurrency Model
 
-The application is architected around **Eclipse Vert.x 5** and **Netty**, adopting a **Decoupled Multi-Verticle & Dedicated Bulkhead Worker Pattern**.
+The application is architected around **Eclipse Vert.x 5** and **Netty**, adopting a **Multi-Reactor Event Loop Layer with Dedicated WorkerExecutor Bulkhead Pools**.
 
 ```mermaid
 flowchart TD
@@ -80,27 +80,28 @@ flowchart TD
         C["Web Browsers & REST Clients"]
     end
 
-    subgraph EventLoopLayer["2. Event Loop Layer: HttpServerVerticle"]
+    subgraph EventLoopLayer["2. Multi-Reactor Event Loop Layer (2 * Cores Instances)"]
         EL["Netty Event Loop Threads (2 x Cores)"]
+        HTTP["HttpServerVerticle (2 * Cores Instances)"]
         Router["HTTP Router & JWT Auth Middleware"]
         Services["Reactive Services (SubnetService, UserService)"]
-        PgDriver["PgPool Reactive Driver (20 Sockets)"]
+        PgDriver["PgPool Reactive Driver (20-50 Sockets)"]
+        NW_Disp["NetworkWorkerVerticle (2 * Cores Dispatchers)"]
+        RW_Disp["ReportWorkerVerticle (2 * Cores Dispatchers)"]
     end
 
     subgraph EventBusLayer["3. Messaging Backbone"]
         EB["Vert.x EventBus (Non-Blocking Message Queue)"]
     end
 
-    subgraph NetworkWorker["4. Dedicated Network Worker Pool (30 Threads, 30 Instances)"]
-        NetPool["ipam-network-worker-pool (30 Threads)"]
-        NetInstances["NetworkWorkerVerticle (30 Instances)"]
-        GoIPC["Native Go Plugins (discovery, dhcp)"]
+    subgraph DedicatedWorkerPools["4. Dedicated WorkerExecutor Bulkhead Pools"]
+        NetExec["networkExecutor<br/>'ipam-network-worker-pool'<br/>(30 Threads)"]
+        RepExec["reportExecutor<br/>'ipam-report-worker-pool'<br/>(5 Threads Bulkhead)"]
     end
 
-    subgraph ReportWorker["5. Dedicated Report Bulkhead Pool (5 Threads, 5 Instances)"]
-        RepPool["ipam-report-worker-pool (5 Threads)"]
-        RepInstances["ReportWorkerVerticle (5 Instances)"]
-        RepTasks["DynamicJasper Compilation<br/>OpenPDF Layout Export<br/>CSV Data Streams"]
+    subgraph NativeGoIPC["5. Native Go Binary Plugins"]
+        GoDisc["discovery (High-Speed CIDR ICMP Sweeps)"]
+        GoDHCP["dhcp (DHCP Scope & Lease Collector)"]
     end
 
     subgraph DatabaseLayer["6. Persistent Storage"]
@@ -108,49 +109,61 @@ flowchart TD
     end
 
     C -->|"HTTP Requests"| EL
-    EL --> Router
+    EL --> HTTP
+    HTTP --> Router
     Router --> Services
     Services --> PgDriver
     PgDriver <-->|"Non-Blocking SQL"| DB
 
-    Router -->|"Asynchronous EventBus Msg"| EB
-    EB -->|"Dispatch Network Tasks"| NetPool
-    NetPool --> NetInstances
-    NetInstances --> GoIPC
-    GoIPC -.->|"Async Result Reply"| Router
+    Router -->|"EventBus Address: ADDR_SCAN, PING"| EB
+    EB --> NW_Disp
+    NW_Disp -->|"networkExecutor.executeBlocking(..., false)"| NetExec
+    NetExec --> GoDisc & GoDHCP
+    GoDisc -.->|"JSON IPC Stdout"| NW_Disp
+    NW_Disp -.->|"EventBus Reply"| Router
 
-    EB -->|"Dispatch Report Tasks"| RepPool
-    RepPool --> RepInstances
-    RepInstances --> RepTasks
-    RepTasks -.->|"Async File Reply"| Router
+    Router -->|"EventBus Address: ADDR_GENERATE_*"| EB
+    EB --> RW_Disp
+    RW_Disp -->|"reportExecutor.executeBlocking(..., false)"| RepExec
+    RepExec -->|"DynamicJasper / OpenPDF / CSV"| EXPORT["file-uploads/exports/*.pdf, *.csv"]
+    RW_Disp -.->|"File Metadata Reply"| Router
 ```
 
 ---
 
-## Threading & Dedicated Worker Pool Design
+## Multi-Reactor & Dedicated WorkerExecutor Design
 
 ### 1. Verticles & Concurrency Breakdown
 
-| Verticle | Threading Model | Worker Pool Name | Pool Size | Instances | Purpose & Responsibilities |
+| Component | Threading Layer | Instances (Dispatchers) | WorkerExecutor Pool | Pool Size | Purpose & Responsibilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`MainVerticle`** | Standard | EventLoop | 1 | 1 | Bootstrap deployer. Initializes `AppConfig`, `PgClientProvider`, `DatabaseInit`, `JobScheduler`, and deploys application verticles. |
-| **`HttpServerVerticle`** | Standard | EventLoop | `2 * Cores` | `2 * Cores` | Runs strictly on Netty Event Loop threads. Mounts HTTP Server on port `8080`, manages JWT auth, serves static web assets, and handles REST CRUD endpoints via non-blocking `PgPool`. |
-| **`NetworkWorkerVerticle`** | `ThreadingModel.WORKER` | `ipam-network-worker-pool` | **30** | **30** | Consumes EventBus messages for ICMP ping sweeps, TCP port probing, reverse DNS lookups, traceroute probes, and Go plugin execution. 30 instances ensure all 30 threads run in parallel. |
-| **`ReportWorkerVerticle`** | `ThreadingModel.WORKER` | `ipam-report-worker-pool` | **5** | **5** | Consumes EventBus messages to compile DynamicJasper reports, OpenPDF documents, and CSV exports in an isolated bulkhead pool strictly capped at 5 threads to protect JVM heap. |
+| **`HttpServerVerticle`** | Netty Event Loop | `2 * Cores` | — | — | Serves Web UI & handles REST CRUD endpoints reactively via non-blocking `PgPool`. |
+| **`NetworkWorkerVerticle`** | Netty Event Loop | `2 * Cores` | `ipam-network-worker-pool` | **30 Threads** | Dispatches ICMP ping sweeps, TCP port probing, reverse DNS lookups, and Go plugin execution across 30 dedicated threads. |
+| **`ReportWorkerVerticle`** | Netty Event Loop | `2 * Cores` | `ipam-report-worker-pool` | **5 Threads** | Dispatches DynamicJasper compilation, OpenPDF generation, and CSV file disk writes across 5 bulkhead threads. |
+| **`MainVerticle`** | Netty Event Loop | `1` | — | — | Primary startup orchestrator. Initializes `AppConfig`, `PgClientProvider`, database schema via `DatabaseInit`, and background `JobScheduler`. |
 
 ---
 
 ### 2. Bulkhead Isolation (Anti-Starvation)
 
-| Feature | `ipam-network-worker-pool` (30 Threads) | `ipam-report-worker-pool` (5 Threads) |
-|---|---|---|
-| **Core Tasks** | Native Go CIDR Discovery, ICMP Pings, Port Scans, DNS, CSV Imports | DynamicJasper Compilation, OpenPDF Rendering, CSV Disk Exports |
-| **Scaling Goal** | Maximized for high network concurrency (30 parallel scans) | Strictly capped at 5 to protect JVM Heap from OOM |
-| **Isolation** | Heavy PDF generation can never block network discovery | Network scan traffic cannot starve export threads |
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                     Dedicated WorkerExecutor Isolation                        │
+├───────────────────────────────────────┬───────────────────────────────────────┤
+│    ipam-network-worker-pool (30)      │      ipam-report-worker-pool (5)      │
+├───────────────────────────────────────┼───────────────────────────────────────┤
+│ • Native Go CIDR Discovery Sweeps     │ • DynamicJasper PDF Compilation       │
+│ • ICMP Ping Probing (Go Subprocess)   │ • OpenPDF Layout Rendering            │
+│ • TCP Port Probing & DNS Resolution   │ • CSV File Disk Exports               │
+│ • Bulk CSV IP Import Processing       │                                       │
+│ ➔ Sized for high network concurrency  │ ➔ Capped at 5 to protect JVM Heap     │
+└───────────────────────────────────────┴───────────────────────────────────────┘
+```
 
-1. **Zero Thread Starvation**: Heavy PDF rendering tasks never consume threads needed for network discovery.
-2. **Zero Event Loop Latency**: All blocking code (file I/O, subprocess execution, PDF compilation) is isolated from the Netty Event Loop.
-3. **Memory Protection (OOM Guard)**: Capping the report pool at 5 threads prevents out-of-memory errors during bursts of report requests.
+1. **Zero Thread Starvation**: Heavy PDF rendering tasks are strictly isolated to `ipam-report-worker-pool` and can never block or exhaust threads needed for network discovery.
+2. **Zero Event Loop Latency**: All blocking tasks (file I/O, subprocess execution, PDF compilation) are offloaded to `WorkerExecutor` threads with `ordered=false` (unordered concurrency).
+3. **Memory Protection (OOM Guard)**: Capping the report pool at 5 threads prevents out-of-memory errors during bursts of large PDF report requests.
+4. **Hardware Auto-Scaling**: Tying dispatcher instances to `Runtime.getRuntime().availableProcessors() * 2` ensures all CPU cores accept incoming EventBus and HTTP traffic with sub-microsecond latency.
 
 ---
 
@@ -168,6 +181,8 @@ flowchart TD
 | `ipam.worker.report.subnet.pdf`| `{"data": [...], "subLabel": "192.168.1.0"}` | `{"success": true, "filename": "SubnetIP_Export_1.pdf", "size": 18240}` | `ReportWorkerVerticle` |
 | `ipam.worker.report.vendor.pdf`| `{"data": [...], "subLabel": "All"}` | `{"success": true, "filename": "Vendor_Summary_1.pdf", "size": 12400}` | `ReportWorkerVerticle` |
 | `ipam.worker.report.dynamic.pdf`| `{"title": "...", "data": [...], "columns": [...]}` | `Buffer` (Raw PDF binary stream) | `ReportWorkerVerticle` |
+| `ipam.worker.report.rogue.pdf` | `{"data": [...]}` | `{"success": true, "filename": "Rogue_Devices_1.pdf", "size": 14200}` | `ReportWorkerVerticle` |
+| `ipam.worker.report.generic.csv`| `{"csvData": "...", "filename": "export.csv"}` | `{"success": true, "filename": "export.csv", "size": 8192}` | `ReportWorkerVerticle` |
 
 ---
 
