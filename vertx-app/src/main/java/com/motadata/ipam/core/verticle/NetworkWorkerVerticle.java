@@ -104,7 +104,8 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
             }
 
             String fullCidr = subnetAddress.trim() + "/" + cidr;
-            LOGGER.info("Executing Go Discovery Plugin for subnet {} (id={})", fullCidr, subnetId);
+            LOGGER.info("NetworkWorkerVerticle [{}] received scan request for subnet {} (id={})",
+                    Thread.currentThread().getName(), fullCidr, subnetId);
 
             int concurrency = 250;
             long timeoutSeconds = 60;
@@ -471,6 +472,8 @@ public class NetworkWorkerVerticle extends AbstractVerticle {
                 LOGGER.error("Go binary for plugin '{}' not found!", pluginName);
                 return null;
             }
+
+            LOGGER.info("Executing Go plugin '{}' on dedicated worker thread [{}]", pluginName, Thread.currentThread().getName());
 
             ProcessBuilder pb = new ProcessBuilder(binary.getAbsolutePath(), "--json", inputJson.encode());
             pb.redirectError(ProcessBuilder.Redirect.DISCARD);
