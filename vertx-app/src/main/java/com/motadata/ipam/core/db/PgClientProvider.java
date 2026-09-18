@@ -46,8 +46,8 @@ public class PgClientProvider {
 
         // Configure connection pool size and waiting queue
         PoolOptions poolOptions = new PoolOptions()
-                .setMaxSize(20)
-                .setMaxWaitQueueSize(100);
+                .setMaxSize(60)
+                .setMaxWaitQueueSize(500);
 
         // Create the connection pool with all details
         this.pool = PgBuilder.pool()

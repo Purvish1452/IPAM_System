@@ -139,7 +139,7 @@ public class AppConfig {
 
     // Returns the database pool maximum size.
     public int getDbPoolMaxSize() {
-        return config.getInteger("db-pool-max-size", 20);
+        return config.getInteger("db-pool-max-size", 60);
     }
 
     // Returns the ping check timeout in milliseconds.

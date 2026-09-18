@@ -138,9 +138,9 @@ flowchart TD
 | Component | Threading Layer | Instances (Dispatchers) | WorkerExecutor Pool | Pool Size | Purpose & Responsibilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`HttpServerVerticle`** | Netty Event Loop | `2 * Cores` | — | — | Serves Web UI & handles REST CRUD endpoints reactively via non-blocking `PgPool`. |
-| **`NetworkWorkerVerticle`** | Netty Event Loop | `2 * Cores` | `ipam-network-worker-pool` | **30 Threads** | Dispatches ICMP ping sweeps, TCP port probing, reverse DNS lookups, and Go plugin execution across 30 dedicated threads. |
-| **`ReportWorkerVerticle`** | Netty Event Loop | `2 * Cores` | `ipam-report-worker-pool` | **5 Threads** | Dispatches DynamicJasper compilation, OpenPDF generation, and CSV file disk writes across 5 bulkhead threads. |
-| **`MainVerticle`** | Netty Event Loop | `1` | — | — | Primary startup orchestrator. Initializes `AppConfig`, `PgClientProvider`, database schema via `DatabaseInit`, and background `JobScheduler`. |
+| **`NetworkWorkerVerticle`** | Dedicated Worker Thread | `2 * Cores` | `ipam-network-worker-pool` | **30 Threads** | Dispatches ICMP ping sweeps, TCP port probing, reverse DNS lookups, and Go plugin execution across 30 dedicated worker threads. |
+| **`ReportWorkerVerticle`** | Dedicated Worker Thread | `2 * Cores` | `ipam-report-worker-pool` | **5 Threads** | Dispatches DynamicJasper compilation, OpenPDF generation, and CSV file disk writes across 5 bulkhead worker threads. |
+| **`IpamApplication`** | JVM Main Process | `1` | — | — | Primary startup bootstrapper. Initializes `AppConfig`, `PgClientProvider`, database schema via `DatabaseInit`, deploys all verticles via `Future.all()`, and starts `JobScheduler`. |
 
 ---
 

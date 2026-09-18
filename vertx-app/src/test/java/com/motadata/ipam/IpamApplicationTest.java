@@ -18,25 +18,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(VertxExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class MainVerticleTest {
+public class IpamApplicationTest {
 
     private static final int TEST_PORT = 8089;
     private WebClient webClient;
     private JwtAuthProvider jwtAuthProvider;
-    private String deploymentId;
+    private IpamApplication.AppContext appContext;
 
-    // Deploys MainVerticle and initializes the test HTTP WebClient and JWT provider.
+    // Bootstraps IpamApplication and initializes the test HTTP WebClient and JWT provider.
     @BeforeAll
     public void setUpAll(Vertx vertx, VertxTestContext testContext) {
         webClient = WebClient.create(vertx);
         jwtAuthProvider = new JwtAuthProvider(vertx);
 
-        io.vertx.core.DeploymentOptions options = new io.vertx.core.DeploymentOptions()
-                .setConfig(new JsonObject().put("server-port", TEST_PORT));
+        JsonObject configOverrides = new JsonObject().put("server-port", TEST_PORT);
 
-        vertx.deployVerticle(new MainVerticle(), options).onComplete(ar -> {
+        IpamApplication.bootstrap(vertx, configOverrides).onComplete(ar -> {
             if (ar.succeeded()) {
-                deploymentId = ar.result();
+                appContext = ar.result();
                 testContext.completeNow();
             } else {
                 testContext.failNow(ar.cause());
@@ -44,17 +43,16 @@ public class MainVerticleTest {
         });
     }
 
-    // Closes the WebClient and undeploys MainVerticle after all tests complete.
+    // Closes the WebClient and stops the application context after all tests complete.
     @AfterAll
     public void tearDownAll(Vertx vertx, VertxTestContext testContext) {
         if (webClient != null) {
             webClient.close();
         }
-        if (deploymentId != null) {
-            vertx.undeploy(deploymentId).onComplete(ar -> testContext.completeNow());
-        } else {
-            testContext.completeNow();
+        if (appContext != null) {
+            appContext.close();
         }
+        testContext.completeNow();
     }
 
     // Tests accessing the root index page and verifying the HTML title content.
